@@ -30,6 +30,7 @@ impl Provider for Calc {
             glyph: "\u{f1ec}".into(),
             action: Action::Copy(shown),
             score: 10_000,
+            ..Default::default()
         }]
     }
 }

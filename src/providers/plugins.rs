@@ -97,6 +97,7 @@ impl Provider for Plugins {
                     action,
                     score: score + cx.history.boost(&id),
                     id,
+                    ..Default::default()
                 })
             })
             .collect()
@@ -134,13 +135,14 @@ impl Call {
                 let score = -(i as i64);
                 match serde_json::from_str::<Line>(line) {
                     Ok(l) => Item {
-                        id: String::new(),
+                        id: format!("plugin:{}:{}", self.plugin.name, l.title),
                         title: l.title,
                         subtitle: l.subtitle,
                         hint: l.hint,
                         glyph: l.glyph.unwrap_or_else(|| self.plugin.glyph.clone()),
                         action: l.action,
                         score,
+                        ..Default::default()
                     },
                     Err(_) => Item {
                         title: line.to_owned(),

@@ -1,6 +1,7 @@
 //! The overlay: a full-screen dimmed layer surface with a terminal-styled panel in the middle.
 
 use std::cell::RefCell;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::rc::Rc;
 use std::time::Duration;
@@ -16,6 +17,8 @@ use crate::ipc;
 
 const PANEL_WIDTH: i32 = 820;
 const LIST_HEIGHT: i32 = 460;
+const PREVIEW_WIDTH: i32 = 420;
+const ICON_SIZE: i32 = 20;
 
 struct State {
     engine: Engine,
@@ -36,8 +39,18 @@ struct Ui {
     list: gtk::ListBox,
     scroll: gtk::ScrolledWindow,
     status: gtk::Label,
+    preview: Preview,
     state: RefCell<State>,
     plugin_tx: async_channel::Sender<(u64, String, Vec<Item>)>,
+    capture_tx: async_channel::Sender<String>,
+}
+
+/// Right-hand pane in ALT+TAB mode: a screenshot of the selected window.
+struct Preview {
+    pane: gtk::Box,
+    picture: gtk::Picture,
+    title: gtk::Label,
+    meta: gtk::Label,
 }
 
 pub fn run(initial: Option<&'static str>) -> ExitCode {
@@ -138,14 +151,21 @@ impl Ui {
             footer.append(&label(desc, "desc"));
         }
 
+        let preview = Preview::new();
+        let body = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        scroll.set_hexpand(true);
+        body.append(&scroll);
+        body.append(&preview.pane);
+
         panel.append(&prompt);
         panel.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
-        panel.append(&scroll);
+        panel.append(&body);
         panel.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
         panel.append(&footer);
         window.set_child(Some(&panel));
 
         let (plugin_tx, plugin_rx) = async_channel::unbounded();
+        let (capture_tx, capture_rx) = async_channel::unbounded::<String>();
         let ui = Rc::new(Ui {
             window,
             panel,
@@ -153,6 +173,7 @@ impl Ui {
             list,
             scroll,
             status,
+            preview,
             state: RefCell::new(State {
                 engine: Engine::new(),
                 windows: Vec::new(),
@@ -163,8 +184,23 @@ impl Ui {
                 seq: 0,
             }),
             plugin_tx,
+            capture_tx,
         });
         ui.connect();
+
+        // a fresh screenshot landed: redraw if it belongs to the selected window
+        let ui2 = ui.clone();
+        glib::spawn_future_local(async move {
+            while let Ok(id) = capture_rx.recv().await {
+                let selected = {
+                    let s = ui2.state.borrow();
+                    s.items.get(s.selected).and_then(|i| i.preview.clone())
+                };
+                if selected.as_deref() == Some(id.as_str()) {
+                    ui2.show_preview();
+                }
+            }
+        });
 
         let ui2 = ui.clone();
         glib::spawn_future_local(async move {
@@ -283,10 +319,14 @@ impl Ui {
             let mut s = self.state.borrow_mut();
             s.switch = switch;
             s.windows = windows::list();
-            if !switch {
+            if switch {
+                capture_all(&s.windows, &self.capture_tx);
+            } else {
                 s.engine.reload();
             }
         }
+        let width = if switch { PANEL_WIDTH + PREVIEW_WIDTH } else { PANEL_WIDTH };
+        self.panel.set_size_request(width, -1);
         self.entry.set_text("");
         self.refresh();
         self.window.present();
@@ -362,7 +402,11 @@ impl Ui {
             old.set_text("▏");
         }
         s.selected = i;
-        let Some((row, marker)) = s.rows.get(i) else { return };
+        let Some((row, marker)) = s.rows.get(i) else {
+            drop(s);
+            self.show_preview();
+            return;
+        };
         marker.set_text("▌");
         self.list.select_row(Some(row));
         // keep the selection in view (the first item also reveals its heading)
@@ -377,6 +421,26 @@ impl Ui {
                 adj.set_value(y + h - adj.page_size());
             }
         }
+        drop(s);
+        self.show_preview();
+    }
+
+    fn show_preview(&self) {
+        let s = self.state.borrow();
+        let item = s.items.get(s.selected).filter(|_| s.switch);
+        let Some((item, id)) = item.and_then(|i| Some((i, i.preview.as_ref()?))) else {
+            self.preview.pane.set_visible(false);
+            return;
+        };
+        let path = preview_path(id);
+        if path.exists() {
+            self.preview.picture.set_filename(Some(&path));
+        } else {
+            self.preview.picture.set_paintable(None::<&gdk::Paintable>);
+        }
+        self.preview.title.set_text(&item.title);
+        self.preview.meta.set_text(&format!("{}  ·  {}", item.subtitle, item.hint));
+        self.preview.pane.set_visible(true);
     }
 
     fn activate(&self, i: usize) {
@@ -394,6 +458,72 @@ impl Ui {
         // run after the surface is gone so focus lands where the action puts it
         glib::idle_add_local_once(move || item.action.execute());
     }
+}
+
+impl Preview {
+    fn new() -> Self {
+        let pane = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        pane.add_css_class("preview");
+        pane.set_size_request(PREVIEW_WIDTH, -1);
+        pane.set_visible(false);
+        let picture = gtk::Picture::new();
+        picture.set_content_fit(gtk::ContentFit::Contain);
+        picture.set_can_shrink(true);
+        picture.set_vexpand(true);
+        let title = label("", "preview-title");
+        title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        let meta = label("", "preview-meta");
+        meta.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        pane.append(&picture);
+        pane.append(&title);
+        pane.append(&meta);
+        Preview { pane, picture, title, meta }
+    }
+}
+
+fn preview_path(id: &str) -> PathBuf {
+    dirs::runtime_dir().unwrap_or_else(std::env::temp_dir).join("zunder-previews").join(format!("{id}.jpg"))
+}
+
+/// Screenshot every window in the background (`grim -T`, works across workspaces).
+/// The previous capture stays on screen until the new one is written.
+fn capture_all(windows: &[Client], tx: &async_channel::Sender<String>) {
+    let ids: Vec<String> = windows.iter().map(|c| c.stable_id.clone()).filter(|id| !id.is_empty()).collect();
+    if let Some(dir) = preview_path("x").parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    for id in ids {
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            let path = preview_path(&id);
+            let tmp = path.with_extension("tmp");
+            let ok = std::process::Command::new("grim")
+                .args(["-T", &id, "-s", "0.3", "-t", "jpeg", "-q", "80"])
+                .arg(&tmp)
+                .stderr(std::process::Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success());
+            if ok && std::fs::rename(&tmp, &path).is_ok() {
+                let _ = tx.send_blocking(id);
+            }
+        });
+    }
+}
+
+fn icon(item: &Item) -> Option<gtk::Image> {
+    let icon = item.icon.as_str();
+    if icon.is_empty() {
+        return None;
+    }
+    let image = if icon.starts_with('/') {
+        Path::new(icon).exists().then(|| gtk::Image::from_file(icon))?
+    } else {
+        let theme = gtk::IconTheme::for_display(&gdk::Display::default()?);
+        theme.has_icon(icon).then(|| gtk::Image::from_icon_name(icon))?
+    };
+    image.set_pixel_size(ICON_SIZE);
+    image.add_css_class("icon");
+    Some(image)
 }
 
 fn alt_held(window: &gtk::ApplicationWindow) -> bool {
@@ -418,8 +548,15 @@ fn item_row(item: &Item) -> (gtk::ListBoxRow, gtk::Label) {
     let b = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     b.add_css_class("item");
     let marker = label("▏", "marker");
-    let glyph = label(&item.glyph, "glyph");
-    glyph.set_width_chars(2);
+    let glyph: gtk::Widget = match icon(item) {
+        Some(image) => image.upcast(),
+        None => {
+            let glyph = label(&item.glyph, "glyph");
+            glyph.set_xalign(0.5);
+            glyph.upcast()
+        }
+    };
+    glyph.set_size_request(ICON_SIZE, -1);
     let title = label(&item.title, "title");
     title.set_ellipsize(gtk::pango::EllipsizeMode::End);
     title.set_max_width_chars(52);
@@ -427,7 +564,9 @@ fn item_row(item: &Item) -> (gtk::ListBoxRow, gtk::Label) {
     sub.set_hexpand(true);
     sub.set_ellipsize(gtk::pango::EllipsizeMode::End);
     let hint = label(&item.hint, "hint");
-    for w in [&marker, &glyph, &title, &sub, &hint] {
+    b.append(&marker);
+    b.append(&glyph);
+    for w in [&title, &sub, &hint] {
         b.append(w);
     }
     (gtk::ListBoxRow::builder().child(&b).build(), marker)

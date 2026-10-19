@@ -37,6 +37,7 @@ impl Provider for System {
                     glyph: (*glyph).into(),
                     action: Action::Run((*cmd).into()),
                     score: score + cx.history.boost(&format!("sys:{title}")),
+                    ..Default::default()
                 })
             })
             .collect()

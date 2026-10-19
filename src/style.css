@@ -83,3 +83,11 @@ row:selected .hint   { color: @muted; }
 .footer { padding: 10px 24px 0; }
 .key    { color: @muted; margin-right: 6px; }
 .desc   { color: @faint; margin-right: 18px; }
+
+/* ── window preview (ALT+TAB) ─────────── */
+.preview       { border-left: 1px solid @ghost; padding: 14px 18px 14px; }
+.preview picture { border-radius: 6px; }
+.preview-title { color: @fg; font-weight: bold; margin-top: 12px; }
+.preview-meta  { color: @faint; margin-top: 2px; }
+
+.icon { margin-right: 10px; }

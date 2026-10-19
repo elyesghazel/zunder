@@ -1,10 +1,11 @@
 use std::process::{Command, Stdio};
 use std::thread;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// One selectable result row.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Item {
     /// Stable key for frecency, e.g. `app:firefox.desktop`.
     pub id: String,
@@ -15,12 +16,18 @@ pub struct Item {
     pub hint: String,
     /// A Nerd Font glyph shown before the title.
     pub glyph: String,
+    /// Icon theme name or absolute path; replaces the glyph when it resolves.
+    pub icon: String,
+    /// Hyprland `stableId` of a window to show a live preview of.
+    #[serde(skip)]
+    pub preview: Option<String>,
     pub action: Action,
+    #[serde(skip)]
     pub score: i64,
 }
 
 /// What Enter does. Plugins emit the same shape as JSON, e.g. `{"open": "https://…"}`.
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Action {
     /// Run a shell command in the background.

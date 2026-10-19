@@ -15,6 +15,9 @@ pub struct App {
     pub comment: String,
     pub keywords: String,
     pub exec: String,
+    pub icon: String,
+    pub wm_class: String,
+    pub categories: String,
     pub terminal: bool,
 }
 
@@ -38,8 +41,10 @@ impl Apps {
             subtitle,
             hint: "app".into(),
             glyph: "\u{f135}".into(),
+            icon: app.icon.clone(),
             action: Action::Run(cmd),
             score,
+            ..Default::default()
         }
     }
 }
@@ -92,7 +97,7 @@ fn data_dirs() -> Vec<PathBuf> {
     dirs
 }
 
-fn scan_all() -> Vec<App> {
+pub fn scan_all() -> Vec<App> {
     let mut seen = HashSet::new();
     let mut apps = Vec::new();
     for dir in data_dirs() {
@@ -156,6 +161,9 @@ fn parse(path: &Path, id: String) -> Option<App> {
         comment: get("Comment"),
         keywords: get("Keywords").replace(';', " "),
         exec: clean_exec(fields.get("Exec")?),
+        icon: get("Icon"),
+        wm_class: get("StartupWMClass"),
+        categories: get("Categories"),
         terminal: flag("Terminal"),
     })
 }

@@ -13,7 +13,7 @@ use crate::engine::Provider;
 pub fn all() -> Vec<Box<dyn Provider>> {
     vec![
         Box::new(calc::Calc),
-        Box::new(windows::Windows),
+        Box::new(windows::Windows::load()),
         Box::new(apps::Apps::load()),
         Box::new(system::System),
         Box::new(shell::Shell),
