@@ -680,7 +680,7 @@ impl Ui {
         self.scroll.set_max_content_height(height);
         // back to the list, keeping the selection on the changed row
         let selected = self.state.borrow().selected;
-        if value.is_some() {
+        if value.is_some() && self.entry.text().starts_with("settings") {
             self.entry.set_text("settings ");
             self.entry.set_position(-1);
         } else {
