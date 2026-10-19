@@ -94,6 +94,10 @@ impl Engine {
             p.reload();
         }
         self.plugins.reload();
+        // files other processes (settings window, `zunder import`) may have changed
+        self.history = History::load();
+        self.favorites = Favorites::load();
+        self.binds = Binds::load();
     }
 
     pub fn search(&self, query: &str, windows: &[Client], switch: bool) -> (Vec<Section>, Vec<(String, Job)>) {

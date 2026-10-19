@@ -56,19 +56,23 @@ impl Apps {
     }
 
     fn item(&self, app: &App, score: i64) -> Item {
-        let cmd = if app.terminal { format!("{} -e {}", terminal(), app.exec) } else { app.exec.clone() };
-        let subtitle = [&app.comment, &app.generic].into_iter().find(|s| !s.is_empty()).cloned().unwrap_or_default();
-        Item {
-            id: format!("app:{}", app.id),
-            title: app.name.clone(),
-            subtitle,
-            hint: "app".into(),
-            glyph: "\u{f135}".into(),
-            icon: app.icon.clone(),
-            action: Action::Run(cmd),
-            score,
-            ..Default::default()
-        }
+        Item { score, ..item(app) }
+    }
+}
+
+/// The result row for an app.
+pub fn item(app: &App) -> Item {
+    let cmd = if app.terminal { format!("{} -e {}", terminal(), app.exec) } else { app.exec.clone() };
+    let subtitle = [&app.comment, &app.generic].into_iter().find(|s| !s.is_empty()).cloned().unwrap_or_default();
+    Item {
+        id: format!("app:{}", app.id),
+        title: app.name.clone(),
+        subtitle,
+        hint: "app".into(),
+        glyph: "\u{f135}".into(),
+        icon: app.icon.clone(),
+        action: Action::Run(cmd),
+        ..Default::default()
     }
 }
 

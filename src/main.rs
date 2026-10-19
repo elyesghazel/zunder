@@ -1,6 +1,7 @@
 mod config;
 mod engine;
 mod history;
+mod import;
 mod ipc;
 mod item;
 mod providers;
@@ -24,6 +25,7 @@ usage:
   zunder settings [page] open the settings window, e.g. `zunder settings appearance`
   zunder run <key>       run a saved keybind (what the generated Hyprland binds call)
   zunder reload          rescan apps and plugins
+  zunder import vicinae  take over favorites and launch counts from vicinae
   zunder quit            stop the server";
 
 fn main() -> ExitCode {
@@ -33,6 +35,23 @@ fn main() -> ExitCode {
         None => match ipc::send("toggle") {
             Ok(()) => ExitCode::SUCCESS,
             Err(_) => ui::run(Some("show")),
+        },
+        Some("import") => match args.get(1).map(String::as_str) {
+            Some("vicinae") => match import::vicinae() {
+                Ok(report) => {
+                    println!("{report}");
+                    let _ = ipc::send("reload");
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("zunder: {e}");
+                    ExitCode::FAILURE
+                }
+            },
+            _ => {
+                eprintln!("zunder: usage: zunder import vicinae");
+                ExitCode::FAILURE
+            }
         },
         Some("-V" | "--version" | "version") => {
             println!("zunder {}", env!("CARGO_PKG_VERSION"));

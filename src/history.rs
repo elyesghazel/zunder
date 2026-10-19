@@ -37,6 +37,16 @@ impl History {
             return;
         }
         *self.counts.entry(id.to_owned()).or_default() += 1;
+        self.save();
+    }
+
+    /// At least `n` launches, for imports (running it twice doesn't double anything).
+    pub fn raise_to(&mut self, id: &str, n: u32) {
+        let count = self.counts.entry(id.to_owned()).or_default();
+        *count = (*count).max(n);
+    }
+
+    pub fn save(&self) {
         if let Some(dir) = self.path.parent() {
             let _ = fs::create_dir_all(dir);
         }
