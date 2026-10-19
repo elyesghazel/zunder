@@ -48,7 +48,8 @@ impl Provider for Files {
         let (term, limit) = match prefixed(cx.query) {
             Some(term) if !term.is_empty() => (term.to_owned(), FULL),
             Some(_) => return None,
-            None if cx.query.chars().count() >= 3 && !cx.switch && !cx.query.starts_with('>') => {
+            // inline only for word-like queries: `30c` or `2+2` shouldn't dig through files
+            None if cx.query.chars().count() >= 3 && !cx.switch && cx.query.starts_with(char::is_alphabetic) => {
                 (cx.query.trim().to_owned(), INLINE)
             }
             None => return None,
