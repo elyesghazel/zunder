@@ -1,0 +1,85 @@
+/* Graphite palette, same as waybar/scripts/gcal. Override in ~/.config/zunder/style.css */
+@define-color bg     #0e0e14;
+@define-color fg     #e6e6ee;
+@define-color muted  #9a9aac;
+@define-color faint  #5a5a6a;
+@define-color ghost  #34343f;
+@define-color accent #b4befe;
+@define-color green  #a6e3a1;
+@define-color sel    #262636;
+@define-color hover  #1b1b27;
+
+window.zunder {
+  background: alpha(black, 0.35);
+}
+
+.panel {
+  background: @bg;
+  color: @fg;
+  border: 1px solid @ghost;
+  border-radius: 10px;
+  padding: 16px 0 10px;
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 11pt;
+  box-shadow: 0 24px 64px alpha(black, 0.55);
+}
+
+.panel separator {
+  background: @ghost;
+  min-height: 1px;
+}
+
+/* ── prompt ───────────────────────────── */
+.prompt { padding: 0 24px 14px; }
+.caret  { color: @accent; font-weight: bold; margin-right: 12px; }
+.status { color: @faint; margin-left: 12px; }
+
+entry.query,
+entry.query:focus-within {
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  min-height: 0;
+  color: @fg;
+  caret-color: @accent;
+}
+entry.query > text > placeholder { color: @faint; }
+entry.query > text > selection   { background: @sel; color: @fg; }
+
+/* ── results ──────────────────────────── */
+scrolledwindow { background: none; }
+list.results   { background: none; padding: 4px 0 10px; }
+
+list.results > row {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+}
+list.results > row:hover               { background: @hover; }
+list.results > row:selected            { background: @sel; }
+
+.heading       { padding: 12px 24px 4px; }
+.heading-title { color: @accent; font-weight: bold; margin-right: 10px; }
+.heading separator { background: @ghost; }
+
+.item   { padding: 3px 24px 3px 22px; }
+.marker { color: @ghost; margin-right: 8px; }
+.glyph  { color: @faint; margin-right: 10px; }
+.title  { color: @fg; margin-right: 14px; }
+.sub    { color: @faint; }
+.hint   { color: @faint; margin-left: 14px; }
+.empty  { color: @muted; padding: 14px 24px; }
+
+row:selected .marker { color: @accent; }
+row:selected .glyph  { color: @accent; }
+row:selected .title  { font-weight: bold; }
+row:selected .hint   { color: @muted; }
+
+/* ── footer ───────────────────────────── */
+.footer { padding: 10px 24px 0; }
+.key    { color: @muted; margin-right: 6px; }
+.desc   { color: @faint; margin-right: 18px; }
