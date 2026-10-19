@@ -1,1 +1,3 @@
+mod ipc;
+
 fn main() {}
