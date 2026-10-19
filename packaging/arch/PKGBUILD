@@ -1,0 +1,45 @@
+# Maintainer: Elyes Ghazel <elyes@elyesghazel.ch>
+pkgname=zunder
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Terminal-styled launcher and ALT+TAB window switcher for Hyprland'
+arch=('x86_64' 'aarch64')
+url='https://github.com/elyesghazel/zunder'
+license=('MIT')
+depends=('gtk4' 'gtk4-layer-shell' 'wl-clipboard' 'hyprland')
+makedepends=('cargo')
+optdepends=(
+  'grim: window previews in ALT+TAB'
+  'cliphist: clipboard history'
+  'ttf-jetbrains-mono-nerd: default font and glyphs'
+)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo test --frozen
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 target/release/zunder "$pkgdir/usr/bin/zunder"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  cp -r docs "$pkgdir/usr/share/doc/$pkgname/"
+  install -Dm755 -t "$pkgdir/usr/share/$pkgname/plugins" examples/plugins/*
+}
