@@ -11,6 +11,7 @@ use gtk4 as gtk;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 
 use crate::config;
+use crate::store;
 use crate::engine::{Engine, Section};
 use crate::item::Item;
 use crate::providers::windows::{self, Client};
@@ -493,6 +494,7 @@ impl Ui {
         }
         self.hide();
         self.state.borrow_mut().engine.history.bump(&item.id);
+        store::log_launch(&item);
         // run after the surface is gone so focus lands where the action puts it
         glib::idle_add_local_once(move || item.action.execute());
     }
