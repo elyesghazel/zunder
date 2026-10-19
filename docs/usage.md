@@ -30,7 +30,7 @@ instead. You can turn release-to-switch off in the settings.
 | `time in ny`, `tokyo time` | world clock |
 | `time in 2h in london`, `in 90 min in la` | the time there, later |
 | `3pm in ny`, `9am tokyo`, `3pm ny in zurich` | time conversion |
-| `clip`, `clip ssh` | clipboard history |
+| `clip`, `clip ssh` | clipboard history, by day (today, yesterday, last week…) |
 | `history`, `history firefox` | everything you ran from zunder |
 | `> htop` | run a command |
 | `theme`, `theme nord` | color schemes, Enter applies live and keeps the list open |
