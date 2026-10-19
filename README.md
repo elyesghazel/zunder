@@ -2,7 +2,7 @@
 
 A launcher and ALT+TAB window switcher for Hyprland that looks like a terminal.
 
-![zunder](assets/screenshot.png)
+![zunder demo](assets/demo.gif)
 
 zunder runs as a small daemon. A keybind sends it a command over a unix socket, and it shows a
 layer-shell overlay on top of everything: one prompt, results grouped in sections, monospace,
