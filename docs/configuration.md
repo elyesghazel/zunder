@@ -10,7 +10,7 @@ straight on a page. Changes are saved right away and most apply immediately.
 | General | terminal, web search engine |
 | Switcher | release Alt to switch, window previews |
 | Start screen | show windows, number of apps |
-| Appearance | icons, font, font size, accent, backdrop dim, width, height |
+| Appearance | icons, font, font size, theme, accent, backdrop dim, width, height |
 | Providers | turn sections like Web, System or Clipboard on and off |
 | Favorites | everything you pinned, with remove buttons |
 | Shortcuts | every global shortcut, with remove buttons |
@@ -27,6 +27,7 @@ settings; for values, Enter types `settings <key> ` and you add the value, e.g.
 editing by hand, run `zunder reload`.
 
 ```toml
+theme = "graphite"                           # see `theme` in the launcher for the list
 terminal = ""                                # empty = $TERMINAL, then kitty
 search_url = "https://duckduckgo.com/?q={q}"
 font = "JetBrainsMono Nerd Font"
@@ -45,6 +46,7 @@ disabled = []                                # e.g. ["Web", "System"]
 
 | Key | Type | What it does |
 |-----|------|--------------|
+| `theme` | text | color scheme: a built-in or a file in `~/.config/zunder/themes/` |
 | `terminal` | text | terminal for `>` commands and `Terminal=true` apps, called as `<terminal> -e sh -c …` |
 | `search_url` | text | web search fallback, `{q}` is replaced by the URL-encoded query |
 | `font` | text | panel font, any installed family |
@@ -58,7 +60,7 @@ disabled = []                                # e.g. ["Web", "System"]
 | `alt_release` | on/off | releasing Alt switches windows |
 | `start_windows` | on/off | windows on the start screen |
 | `start_apps` | number | apps on the start screen |
-| `disabled` | list | section titles to hide: `Calculator`, `Time`, `Windows`, `Apps`, `System`, `Shell`, `Clipboard`, `History`, `Web`, `Plugins` |
+| `disabled` | list | section titles to hide: `Calculator`, `Time`, `Windows`, `Apps`, `System`, `Shell`, `Clipboard`, `History`, `Themes`, `Web`, `Plugins` |
 
 Search engines for `search_url`:
 
@@ -76,6 +78,7 @@ https://kagi.com/search?q={q}
 |------|------|
 | `~/.config/zunder/config.toml` | settings |
 | `~/.config/zunder/style.css` | your CSS on top of the theme |
+| `~/.config/zunder/themes/` | your own color themes |
 | `~/.config/zunder/plugins/` | plugins |
 | `~/.config/zunder/favorites.json` | favorites |
 | `~/.config/zunder/binds.json` | global shortcuts, source of the Hyprland file |

@@ -7,34 +7,96 @@ A launcher and ALT+TAB window switcher for Hyprland that looks like a terminal.
 zunder runs as a small daemon. A keybind sends it a command over a unix socket, and it shows a
 layer-shell overlay on top of everything: one prompt, results grouped in sections, monospace,
 colored app icons. Open windows, apps, a calculator, a world clock, clipboard history, shell
-commands, power actions and your own scripts all live in the same list. ALT+TAB shows a live
-screenshot of each window, even ones on other workspaces. Anything in the list can be pinned to
-the start screen or get its own global shortcut. Plugins are just executables that print lines,
-so you can write them in whatever language you like.
+commands, power actions and your own scripts all live in the same list.
 
-Written in Rust with GTK4 and gtk4-layer-shell. Built and tested on Arch with Hyprland (Lua config).
+ALT+TAB shows a live screenshot of each window, even ones on other workspaces. Anything in the
+list can be pinned to the start screen or get its own global shortcut, and everything you launch
+is kept in a history that never gets cleared. Plugins are executables that print lines, so you
+can write them in whatever language you like.
+
+Written in Rust with GTK4 and gtk4-layer-shell. Built and tested on Arch with Hyprland 0.56
+(Lua config); the classic `hyprland.conf` works too.
+
+**Docs:** [installation](docs/installation.md) · [setup](docs/setup.md) ·
+[usage](docs/usage.md) · [configuration](docs/configuration.md) · [plugins](docs/plugins.md) ·
+[development](docs/development.md) · [troubleshooting](docs/troubleshooting.md)
+
+## Features
+
+| | |
+|---|---|
+| **Window switcher** | ALT+TAB with app icons and a live preview of the selected window, any workspace |
+| **App launcher** | every `.desktop` app (flatpak too), fuzzy matched on name, keywords and binary |
+| **Start screen** | favorites, open windows, your most used apps, suggestions so it's never empty |
+| **Favorites** | `Ctrl+F` pins any result to the start screen |
+| **Global shortcuts** | `Ctrl+B` gives any result a system-wide Hyprland keybind |
+| **Launch history** | `history`: everything you ever ran, searchable, never cleared |
+| **World clock** | `time in ny`, `time in 2h in tokyo`, `3pm ny in zurich` |
+| **Calculator** | `2^10/3`, `sqrt(2)*pi`, Enter copies |
+| **Clipboard** | `clip`: cliphist history with fuzzy search, images too |
+| **Shell** | `> cmd` runs in your terminal or in the background |
+| **System** | lock, suspend, reboot, shut down, log out |
+| **Web search** | fallback for anything, engine of your choice |
+| **Plugins** | any script that prints lines, e.g. `kill zen` |
+| **Themes** | 12 built in (catppuccin, rose-pine, gruvbox, tokyo-night, nord…), or your own |
+| **Settings** | a settings window with a sidebar, plus `settings` inside the launcher |
 
 ## Install
 
-Needs `gtk4`, `gtk4-layer-shell`, `wl-clipboard` and a Nerd Font. `grim` 1.5+ for window
-previews and `cliphist` for clipboard history are optional. JetBrainsMono is the default font,
-change it in the settings if you use another one.
+### Arch Linux
+
+Prebuilt package from the [latest release](https://github.com/elyesghazel/zunder/releases):
+
+```sh
+sudo pacman -U https://github.com/elyesghazel/zunder/releases/download/v0.1.0/zunder-0.1.0-1-x86_64.pkg.tar.zst
+sudo pacman -S --needed grim cliphist ttf-jetbrains-mono-nerd   # previews, clipboard, font
+```
+
+Or build the package yourself from the [PKGBUILD](packaging/arch/PKGBUILD):
+
+```sh
+git clone https://github.com/elyesghazel/zunder
+cd zunder/packaging/arch && makepkg -si
+```
+
+### Other distros
+
+You need GTK 4.14+ and gtk4-layer-shell from your distro (Fedora: `gtk4 gtk4-layer-shell`).
+Then use the release tarball:
+
+```sh
+curl -LO https://github.com/elyesghazel/zunder/releases/download/v0.1.0/zunder-0.1.0-x86_64-linux.tar.gz
+tar xf zunder-0.1.0-x86_64-linux.tar.gz && cd zunder-0.1.0
+./install.sh --plugins
+```
+
+### From source
 
 ```sh
 sudo pacman -S --needed rust gtk4 gtk4-layer-shell wl-clipboard ttf-jetbrains-mono-nerd grim cliphist
-
 git clone https://github.com/elyesghazel/zunder
 cd zunder
-cargo build --release
-install -Dm755 target/release/zunder ~/.local/bin/zunder
+./install.sh --plugins      # cargo build --release, copies to ~/.local/bin, links example plugins
 ```
 
-Then start the daemon with Hyprland and bind the keys. In a Lua config:
+| Dependency | For | Required |
+|------------|-----|----------|
+| `gtk4` 4.14+, `gtk4-layer-shell` | the UI | yes |
+| `wl-clipboard` | copying results | yes |
+| a Nerd Font | glyphs, default font | recommended |
+| `grim` 1.5+ | window previews | no |
+| `cliphist` | clipboard history | no |
+
+More in [docs/installation.md](docs/installation.md), including updating and uninstalling.
+
+## Setup
+
+Start the daemon with Hyprland and bind the keys. With a Lua config:
 
 ```lua
--- conf/autostart.lua
+-- conf/autostart.lua, inside hl.on("hyprland.start", function() … end)
 hl.exec_cmd("zunder server")
-hl.exec_cmd("wl-paste --type text --watch cliphist store")   -- for clipboard history
+hl.exec_cmd("wl-paste --type text --watch cliphist store")    -- clipboard history
 
 -- conf/binds.lua
 hl.bind("ALT + TAB",         hl.dsp.exec_cmd("zunder switch"))
@@ -42,232 +104,135 @@ hl.bind("ALT + SHIFT + TAB", hl.dsp.exec_cmd("zunder switch-prev"))
 hl.bind("ALT + SPACE",       hl.dsp.exec_cmd("zunder toggle"))
 hl.bind("SUPER + V",         hl.dsp.exec_cmd("zunder show 'clip '"))
 
--- hyprland.lua, after the binds: shortcuts you set inside zunder
+-- conf/windowrules.lua: settings window floats
+hl.window_rule({ name = "zunder-settings", match = { title = "^zunder settings$" },
+                 float = true, size = "980 660", center = true })
+
+-- hyprland.lua, after your binds: the shortcuts you make with Ctrl+B
 pcall(require, "zunder")
 ```
 
-Old `hyprland.conf` style works the same way: `exec-once = zunder server`,
-`bind = ALT, TAB, exec, zunder switch` and `source = ~/.config/hypr/zunder.conf`.
+With a classic `hyprland.conf`:
+
+```ini
+exec-once = zunder server
+exec-once = wl-paste --type text --watch cliphist store
+bind = ALT, TAB, exec, zunder switch
+bind = ALT SHIFT, TAB, exec, zunder switch-prev
+bind = ALT, SPACE, exec, zunder toggle
+bind = SUPER, V, exec, zunder show 'clip '
+windowrule = float, title:^zunder settings$
+source = ~/.config/hypr/zunder.conf
+```
+
+Then `hyprctl reload`, start `zunder server` once by hand (or log out and in) and press
+ALT+SPACE. [docs/setup.md](docs/setup.md) has more binds and notes for moving over from vicinae,
+rofi or wofi.
 
 ## Usage
-
-```sh
-zunder                  # toggle; starts the daemon first if it isn't running
-zunder server           # run the daemon (autostart)
-zunder toggle           # show / hide the launcher
-zunder show             # show
-zunder show 'kill '     # show with the query already typed
-zunder hide
-zunder switch           # window switcher, or next window if it's already open
-zunder switch-prev      # same, backwards
-zunder settings         # open the settings page
-zunder reload           # reread config.toml, rescan apps and plugins
-zunder run <key>        # run a saved shortcut (the generated binds call this)
-zunder quit             # stop the daemon
-```
 
 ### Keys
 
 | Key | What it does |
 |-----|--------------|
-| `ALT+TAB` | open the switcher on the previous window, like every other OS |
-| `Tab` while holding Alt | next window |
+| `ALT+TAB` | switcher, opens on the previous window |
+| `Tab` while holding Alt | next window, `ALT+SHIFT+TAB` goes back |
 | release Alt | switch to the selected window |
 | `↑` `↓` / `Tab` `Shift+Tab` / `Ctrl+J` `Ctrl+K` / `Ctrl+N` `Ctrl+P` | move |
-| `Enter` | run the selected result |
+| `Enter` or click | run the selected result |
 | `Ctrl+F` | add to / remove from favorites |
-| `Ctrl+B` | give it a global shortcut (then press the keys, `⌫` removes it, `Esc` cancels) |
+| `Ctrl+B` | global shortcut: press the keys, `⌫` removes it, `Esc` cancels |
 | `Esc` or click outside | close |
 
-If you type something after ALT+TAB, releasing Alt no longer switches, so you can search instead.
+Typing something after ALT+TAB turns it into a search; releasing Alt then doesn't switch.
 
-## Features
-
-What you type decides what shows up:
+### What you can type
 
 | Type | You get |
 |------|---------|
-| nothing | favorites, open windows, then your most launched apps topped up with suggestions |
-| `firefox` | fuzzy search over windows, apps, system commands and plugins, best section first |
-| `2^10/3`, `sqrt(2)*pi`, `(4+4)*12%5` | calculator, `Enter` copies the result |
-| `time in ny`, `tokyo time`, `time in 2h in london` | the time there, with offset and how far ahead or behind you it is |
-| `3pm in ny`, `9am tokyo`, `3pm ny in zurich` | convert a time between places, "in" alone means from here |
-| `clip`, `clip ssh` | clipboard history, `Enter` copies the entry again |
-| `history`, `history firefox` | everything you ever ran from zunder, newest first |
-| `settings` | the settings page |
-| `theme`, `theme nord` | color schemes, `Enter` switches and keeps the list open |
-| `> htop` | run a command in your terminal (stays open after it exits) or in the background |
-| `kill zen` | a search plugin, `<prefix> <query>` |
-| anything | a "Search on DuckDuckGo" result at the bottom |
+| nothing | favorites, open windows, recent and suggested apps |
+| `firefox` | windows, apps, commands and plugins, best section first |
+| `2^10/3`, `sqrt(2)*pi`, `(4+4)*12%5` | calculator, Enter copies |
+| `time in ny`, `tokyo time` | the time there, UTC offset, how far ahead or behind you |
+| `time in 2h in london`, `in 90 min in la` | the time there, later |
+| `3pm in ny`, `9am tokyo`, `3pm ny in zurich` | convert between places |
+| `clip`, `clip ssh` | clipboard history, Enter copies again |
+| `history`, `history firefox` | everything you ran from zunder, newest first |
+| `> htop` | run in your terminal or in the background |
+| `theme` | pick a color scheme, applies live |
+| `settings` | quick settings; the window is `zunder settings` |
+| `kill zen` | a plugin, `<prefix> <query>` |
+| anything | web search as the last result |
 
-All of it, in short:
-
-- **Window switcher**: every Hyprland window with its app icon, class and workspace, sorted by
-  focus history. `Enter` focuses it and jumps to its workspace. In ALT+TAB mode a screenshot of
-  the selected window sits next to the list. They're taken with `grim -T` in the background every
-  time the switcher opens, so windows on other workspaces work too, and the last screenshot shows
-  until the new one is ready.
-- **App launcher**: reads `.desktop` files from `~/.local/share/applications` and every
-  `$XDG_DATA_DIRS` entry (flatpak too). Matches name, generic name, keywords and the binary name.
-  `Terminal=true` apps open in `$TERMINAL`. Hidden and `NoDisplay` entries are skipped, and
-  duplicates are merged.
-- **Start screen**: favorites, open windows and apps. Apps you launch go first; before you have
-  any history it suggests browsers, terminals, file managers, editors and chat apps from their
-  desktop categories, so it's never empty.
-- **Frecency**: everything you launch gets counted in `~/.local/share/zunder/history.json`, and
-  things you use often rank higher.
-- **Favorites**: `Ctrl+F` on any app, command, plugin result or shell command pins it to the top
-  of the start screen. Saved in `~/.config/zunder/favorites.json`.
-- **Global shortcuts**: `Ctrl+B` on any result, then press e.g. `SUPER+F2`. zunder writes
-  `~/.config/hypr/zunder.lua` (or `zunder.conf`) and reloads Hyprland. The shortcut works from
-  anywhere, zunder doesn't have to be open. Results with a shortcut show it on the right. Pick
-  combos Hyprland doesn't already use, because those never reach zunder.
-- **Launch history**: every launch is appended to `~/.local/share/zunder/launches.jsonl` and
-  nothing ever deletes it. `history` searches it, `Enter` runs an entry again.
-- **World clock**: `time in <place>` for 400+ IANA cities plus short names like `ny`, `la`, `sf`,
-  `uk`, `tunisia`, `cet`. Add a duration (`2h`, `1h30m`, `3 days`) to look ahead, or convert a
-  clock time between places.
-- **Clipboard**: `clip` lists cliphist history, images included, fuzzy searchable.
-- **Calculator**: `+ - * / ^ %`, parentheses, `sqrt sin cos tan ln exp abs floor ceil`,
-  `pi` and `e`.
-- **Shell**: `>` followed by any command. The first result runs it in a terminal, the second
-  runs it silently in the background.
-- **System**: Lock Screen, Suspend, Reboot, Shut Down, Log Out, Reload zunder, Quit zunder.
-- **Web search**: fallback for any query, the engine is a setting.
-- **Plugins**: scripts in any language, see below.
-- **Settings**: `settings` opens a settings page inside zunder, see below.
-- **Themes**: `theme` switches between twelve color schemes, your own are a small CSS file.
-
-Apps are rescanned every time the launcher opens, so new installs show up right away.
-
-## Plugins
-
-A plugin is any executable file in `~/.config/zunder/plugins/`. A few comments near the top
-configure it:
+### Commands
 
 ```sh
-#!/bin/sh
-# @zunder.name   Kill Process
-# @zunder.prefix kill
-# @zunder.glyph  
-# @zunder.mode   search
+zunder                  # toggle; starts the daemon first if it isn't running
+zunder server           # run the daemon (autostart)
+zunder toggle           # show / hide
+zunder show [query]     # show, optionally with the query typed, e.g. zunder show 'time in '
+zunder hide
+zunder switch           # window switcher, or the next window if it's open
+zunder switch-prev      # same, backwards
+zunder settings [page]  # settings window, e.g. zunder settings appearance
+zunder reload           # reread config.toml, rescan apps and plugins
+zunder run <key>        # run a saved shortcut (the generated binds call this)
+zunder quit             # stop the daemon
+zunder --version
 ```
 
-| Key | Default | What it does |
-|-----|---------|--------------|
-| `name` | file name | shown in search and as the section title |
-| `prefix` | file name | typing `<prefix> ` (with the space) hands the query to the plugin |
-| `glyph` | puzzle piece | Nerd Font icon, as the character itself or `\uXXXX` |
-| `mode` | `search` | `search` or `command` |
-
-**search** plugins are run as `script "<query>"` on every keystroke, in the background, and
-results that come back late are thrown away. Each line on stdout is one result. A plain text line
-gets copied when you press Enter, so `ls ~/notes` or `cat list.txt` already work as plugins. For
-more control, print JSON instead:
-
-```json
-{"title": "zen-bin", "subtitle": "pid 4242", "hint": "6% · 712 MB", "action": {"run": "kill 4242"}}
-```
-
-| Action | Enter does |
-|--------|------------|
-| `{"run": "cmd"}` | runs `cmd` with `sh -c`, in the background |
-| `{"term": "cmd"}` | runs `cmd` in a terminal |
-| `{"open": "url or path"}` | `xdg-open` |
-| `{"copy": "text"}` | copies to the clipboard |
-| `{"focus": "0x55a3…"}` | focuses a Hyprland window by address |
-| `{"fill": "text"}` | replaces the query and keeps zunder open, for menus inside a plugin |
-
-`glyph` can be set per line too. If the script fails without printing anything, its last stderr
-line is shown as the result.
-
-**command** plugins show up in the normal search under their name, and `Enter` runs them once.
-Good for one-off actions like "copy my IP" or "toggle VPN".
-
-Two examples are in [`examples/plugins`](examples/plugins):
-
-- `kill`: search your processes by name, sorted by CPU, `Enter` kills one
-- `ip`: command plugin, copies your local IP
-
-```sh
-mkdir -p ~/.config/zunder/plugins
-ln -s $PWD/examples/plugins/* ~/.config/zunder/plugins/
-zunder reload
-```
-
-To give a plugin its own key, open zunder with the prefix already typed:
-
-```lua
-hl.bind("SUPER + X", hl.dsp.exec_cmd("zunder show 'kill '"))
-```
+Every detail is in [docs/usage.md](docs/usage.md).
 
 ## Settings
 
-Type `settings` (or run `zunder settings`). The page is grouped like the list below. `Enter`
-toggles an on/off setting. For values, `Enter` puts `settings <key> ` in the prompt; type the new
-value and press `Enter` again, e.g. `settings font_size 13`.
+`zunder settings` opens the settings window: pages in a sidebar on the left, the settings on the
+right. Changes save right away and most apply immediately.
 
-| Group | Key | Default | What it does |
-|-------|-----|---------|--------------|
-| Switcher | `alt_release` | on | releasing Alt switches to the selected window |
-| | `previews` | on | window screenshots in ALT+TAB |
-| Start screen | `start_windows` | on | list open windows when the query is empty |
-| | `start_apps` | 24 | how many recent and suggested apps |
-| Appearance | `icons` | on | colored app icons instead of glyphs |
-| | `font` | JetBrainsMono Nerd Font | any installed font |
-| | `font_size` | 11 | in pt |
-| | `theme` | graphite | color scheme, see [Themes](#themes) |
-| | `accent` | theme | hex color like `#f9e2af` |
-| | `dim` | 0.35 | backdrop darkness, 0 to 1 |
-| | `width` / `height` | 820 / 460 | panel width, result list height |
-| General | `terminal` | `$TERMINAL`, then kitty | for `>` commands and terminal apps |
-| | `search_url` | DuckDuckGo | web search, `{q}` is the query |
-| Providers | | all on | turn any section off, e.g. Web or System |
+| Page | What's on it |
+|------|--------------|
+| General | terminal, web search engine |
+| Switcher | release Alt to switch, window previews |
+| Start screen | show windows, number of apps |
+| Appearance | icons, font, size, theme, accent, backdrop dim, width, height |
+| Providers | turn whole sections on or off (Web, System, Clipboard…) |
+| Favorites | everything you pinned, with remove buttons |
+| Shortcuts | every global shortcut, with remove buttons |
+| Plugins | installed plugins and how to call them |
+| About | version, open config.toml and style.css |
 
-Under Files there are shortcuts to open `config.toml`, `style.css` and the plugins folder.
-Everything is saved to `~/.config/zunder/config.toml`, which you can also edit by hand and then
-`zunder reload`:
+Everything is stored in `~/.config/zunder/config.toml`, which you can edit by hand too
+(`zunder reload` afterwards):
 
 ```toml
-alt_release = true
-previews = true
-icons = true
+theme = "rose-pine"
+terminal = "ghostty"
+search_url = "https://www.google.com/search?q={q}"
 font = "JetBrainsMono Nerd Font"
 font_size = 11.0
-accent = "#f9e2af"
-search_url = "https://www.google.com/search?q={q}"
+previews = true
+alt_release = true
+start_apps = 24
 disabled = ["Web"]
 ```
 
-## Files
-
-| Path | What |
-|------|------|
-| `~/.config/zunder/config.toml` | settings |
-| `~/.config/zunder/style.css` | your CSS on top of the theme |
-| `~/.config/zunder/themes/` | your own color themes, one `<name>.css` each |
-| `~/.config/zunder/plugins/` | plugins |
-| `~/.config/zunder/favorites.json` | favorites |
-| `~/.config/zunder/binds.json` | global shortcuts, the source for the generated Hyprland file |
-| `~/.config/hypr/zunder.lua` | generated binds, don't edit (`zunder.conf` for classic configs) |
-| `~/.local/share/zunder/history.json` | launch counts for ranking |
-| `~/.local/share/zunder/launches.jsonl` | the full launch history, one JSON line per launch |
-| `$XDG_RUNTIME_DIR/zunder-previews/` | window screenshots, gone after a reboot |
+The full reference, every file zunder writes and the CSS selectors are in
+[docs/configuration.md](docs/configuration.md).
 
 ## Themes
 
+![themes](assets/themes.png)
+
 Type `theme` to list the color schemes. `Enter` applies one right away and keeps the list open,
-so you can step through them. `theme` in the settings (or `theme = "nord"` in `config.toml`)
-does the same.
+so you can step through them. The Theme dropdown in the settings (or `theme = "nord"` in
+`config.toml`) does the same.
 
 Built in: `graphite` (the default), `catppuccin-mocha`, `catppuccin-latte` (light), `rose-pine`,
 `rose-pine-dawn` (light), `gruvbox-dark`, `tokyo-night`, `nord`, `everforest-dark`, `dracula`,
 `kanagawa` and `one-dark`.
 
 Your own theme is a file in `~/.config/zunder/themes/`, named after the theme, with one
-`@define-color` line per color from the table below. It shows up in the list next to the
-built-ins, and a file with a built-in's name replaces that built-in. Colors you leave out stay
-graphite.
+`@define-color` line per color. It shows up in the list next to the built-ins, and a file with a
+built-in's name replaces that built-in. Colors you leave out stay graphite.
 
 ```css
 /* ~/.config/zunder/themes/solarized.css */
@@ -282,54 +247,48 @@ graphite.
 @define-color hover  #07323d;
 ```
 
-The `accent` setting wins over the theme's accent.
-
-## Custom CSS
-
-The layout is [`src/style.css`](src/style.css), and every color in it is one of the names below.
-`~/.config/zunder/style.css` is loaded on top of the theme, so only write what you want to change:
-
-```css
-@define-color accent #f9e2af;
-@define-color bg     #11111b;
-
-.panel { font-family: "FiraCode Nerd Font"; font-size: 12pt; }
-```
-
 | Color | Used for |
 |-------|----------|
-| `bg` | panel background |
+| `bg` | backgrounds |
 | `fg` | titles and the query |
 | `muted` | key hints, selected hint |
 | `faint` | subtitles, placeholder, glyphs |
-| `ghost` | border, separators, row markers |
-| `accent` | prompt, section titles, selection marker |
+| `ghost` | borders, separators, row markers |
+| `accent` | prompt, section titles, selection |
 | `green` | not used by the built-in CSS, there for your own rules |
 | `sel` / `hover` | selected / hovered row |
 
-The overlay covers the whole screen and dims it (`window.zunder`). Font, size, accent and dim are
-easier to change in the settings. Theme changes apply right away; restart the daemon after
-changing `style.css`.
+The `accent` setting wins over the theme's accent. For anything beyond colors,
+`~/.config/zunder/style.css` loads on top of everything; see
+[docs/configuration.md](docs/configuration.md#css) for the selectors.
 
-## Adding a built-in
+## Plugins
 
-For things that need to be fast or keep state, add a provider in Rust. Each one is a file in
-`src/providers/` that implements this trait from `src/engine.rs`:
+A plugin is any executable in `~/.config/zunder/plugins/`. Header comments configure it, and
+every line it prints is a result:
 
-```rust
-pub trait Provider {
-    fn title(&self) -> &str;                            // section title
-    fn search(&self, cx: &Ctx) -> Vec<Item>;            // results for cx.query
-    fn exclusive(&self, _query: &str) -> bool { false } // true = only show this section
-    fn reload(&mut self) {}                             // called when zunder opens
-}
+```sh
+#!/bin/sh
+# @zunder.name   Notes
+# @zunder.prefix note
+# @zunder.glyph  
+grep -ri -- "$1" ~/notes | head -50        # plain lines: Enter copies them
 ```
 
-`cx.score(text)` does the fuzzy matching, `cx.windows` has the open windows and `cx.history` the
-launch counts. `Item.score` sorts results inside a section, and the best score decides the order
-of sections. Give items an `id` so they can be favorited and bound to a key, and an `icon` to
-show an app icon. Setting `group` splits one provider's results into several sections. Register the new provider in `providers::all()` in `src/providers/mod.rs`.
-[`calc.rs`](src/providers/calc.rs) is the shortest one to copy from.
+Typing `note groceries` runs `script "groceries"` in the background on each keystroke. For more
+control, print JSON lines:
+
+```json
+{"title": "zen-bin", "subtitle": "pid 4242", "hint": "6%", "action": {"run": "kill 4242"}}
+```
+
+Actions: `run`, `term`, `open`, `copy`, `focus` and `fill`. Plugins in `command` mode show up
+in normal search and run once. Plugin results can be favorites and get shortcuts like anything
+else.
+
+Two examples come with it, in [`examples/plugins`](examples/plugins): `kill` (search processes,
+Enter kills) and `ip` (copy your local IP). [docs/plugins.md](docs/plugins.md) has the whole
+format and more examples: GitHub repos, quicklinks, menus.
 
 ## How it works
 
@@ -341,17 +300,20 @@ keybind ─► zunder switch ─► $XDG_RUNTIME_DIR/zunder.sock ─► daemon
                      grim -T <window>   ◄─────────────────────┘ ALT+TAB only, in threads
 ```
 
-The daemon keeps GTK and the app index loaded, so opening it is instant. The CLI only writes a
-word to the socket and exits. The overlay is a full-screen layer-shell surface on the overlay
-layer with exclusive keyboard focus, and the panel is centered inside it. Windows are focused
-with `hyprctl dispatch 'hl.dsp.focus({ window = "address:…" })'`, which is the Lua dispatch
-syntax. Window previews use the window's `stableId` from `hyprctl clients -j`, which is the
-identifier grim 1.5 takes for `-T`.
+The daemon keeps GTK and the app index loaded, so opening is instant; the CLI only writes a word
+to the socket. The overlay is a full-screen layer-shell surface with exclusive keyboard focus.
+Results come from providers, one Rust file each in `src/providers/`, and adding one is about 30
+lines. See [docs/development.md](docs/development.md).
 
-## Todo
+## Roadmap
 
 - emoji and symbol picker
-- file search
-- quicklinks with a `{query}` placeholder
-- secondary actions on `Ctrl+Enter` (copy, open in terminal…)
+- file search (fd / plocate)
+- quicklinks with a `{query}` placeholder, as a built-in
+- secondary actions on `Ctrl+Enter` (copy path, open in terminal…)
 - paste right away after picking a clipboard entry
+- AUR package
+
+## License
+
+MIT, see [LICENSE](LICENSE).

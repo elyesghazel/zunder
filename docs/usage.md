@@ -29,6 +29,7 @@ instead. You can turn release-to-switch off in the settings.
 | `clip`, `clip ssh` | clipboard history |
 | `history`, `history firefox` | everything you ran from zunder |
 | `> htop` | run a command |
+| `theme`, `theme nord` | color schemes, Enter applies live and keeps the list open |
 | `settings` | quick settings in the launcher |
 | `<plugin prefix> query` | a plugin, e.g. `kill zen` |
 | anything | web search as the last result |
