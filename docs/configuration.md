@@ -43,6 +43,7 @@ alt_release = true
 start_windows = true
 start_apps = 24
 disabled = []                                # e.g. ["Web", "System"]
+hide_windows = []                            # window classes to leave out, e.g. ["teams-for-linux"]
 ```
 
 | Key | Type | What it does |
@@ -62,6 +63,7 @@ disabled = []                                # e.g. ["Web", "System"]
 | `alt_release` | on/off | releasing Alt switches windows |
 | `start_windows` | on/off | windows on the start screen |
 | `start_apps` | number | apps on the start screen |
+| `hide_windows` | list | window classes the switcher and search never show (`hyprctl clients` shows the class) |
 | `disabled` | list | section titles to hide: `Calculator`, `Time`, `Convert`, `Windows`, `Apps`, `System`, `Shell`, `Clipboard`, `History`, `Themes`, `Emoji`, `Files`, `Web`, `Plugins` |
 
 Search engines for `search_url`:

@@ -38,6 +38,8 @@ pub struct Config {
     pub start_apps: usize,
     /// Section titles of providers that are turned off, e.g. ["Web"].
     pub disabled: Vec<String>,
+    /// Window classes zunder never lists, e.g. ["teams-for-linux"].
+    pub hide_windows: Vec<String>,
 }
 
 impl Default for Config {
@@ -59,6 +61,7 @@ impl Default for Config {
             start_windows: true,
             start_apps: 24,
             disabled: Vec::new(),
+            hide_windows: Vec::new(),
         }
     }
 }

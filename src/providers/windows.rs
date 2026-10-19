@@ -38,7 +38,10 @@ pub fn list() -> Vec<Client> {
         return Vec::new();
     };
     let mut clients: Vec<Client> = serde_json::from_slice(&out.stdout).unwrap_or_default();
-    clients.retain(|c| c.mapped && !(c.class.is_empty() && c.title.is_empty()));
+    let hidden = crate::config::get().hide_windows.clone();
+    clients.retain(|c| {
+        c.mapped && !(c.class.is_empty() && c.title.is_empty()) && !hidden.iter().any(|h| h.eq_ignore_ascii_case(&c.class))
+    });
     clients.sort_by_key(|c| c.focus);
     clients
 }
