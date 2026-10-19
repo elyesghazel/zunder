@@ -5,6 +5,7 @@ pub mod plugins;
 pub mod settings;
 pub mod shell;
 pub mod system;
+pub mod time;
 pub mod web;
 pub mod windows;
 
@@ -15,6 +16,7 @@ use crate::engine::Provider;
 pub fn all() -> Vec<Box<dyn Provider>> {
     vec![
         Box::new(calc::Calc),
+        Box::new(time::Time),
         Box::new(windows::Windows::load()),
         Box::new(apps::Apps::load()),
         Box::new(system::System),
