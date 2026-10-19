@@ -50,6 +50,10 @@ impl Plugins {
         Plugins { list: scan() }
     }
 
+    pub fn list(&self) -> &[Plugin] {
+        &self.list
+    }
+
     /// The search-mode plugin whose `prefix ` the query starts with.
     pub fn call(&self, query: &str) -> Option<Call> {
         self.list.iter().filter(|p| !p.command).find_map(|p| {

@@ -105,6 +105,14 @@ pub fn terminal() -> String {
     std::env::var("TERMINAL").unwrap_or_else(|_| "kitty".into())
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    Bool,
+    Int,
+    Float,
+    Text,
+}
+
 /// One editable setting, as shown on the settings page.
 pub struct Setting {
     pub key: &'static str,
@@ -141,7 +149,16 @@ impl Config {
     }
 
     pub fn is_bool(&self, key: &str) -> bool {
-        matches!(toml::Value::try_from(self).ok().and_then(|v| v.get(key).cloned()), Some(toml::Value::Boolean(_)))
+        self.kind(key) == Kind::Bool
+    }
+
+    pub fn kind(&self, key: &str) -> Kind {
+        match toml::Value::try_from(self).ok().and_then(|v| v.get(key).cloned()) {
+            Some(toml::Value::Boolean(_)) => Kind::Bool,
+            Some(toml::Value::Integer(_)) => Kind::Int,
+            Some(toml::Value::Float(_)) => Kind::Float,
+            _ => Kind::Text,
+        }
     }
 
     /// Set a key from text. `None` toggles a boolean.

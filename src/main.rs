@@ -4,6 +4,7 @@ mod history;
 mod ipc;
 mod item;
 mod providers;
+mod settings_window;
 mod store;
 mod ui;
 
@@ -19,7 +20,7 @@ usage:
   zunder hide
   zunder switch          window switcher: opens on the previous window, next on repeat
   zunder switch-prev     same, backwards
-  zunder settings        open the settings page
+  zunder settings [page] open the settings window, e.g. `zunder settings appearance`
   zunder run <key>       run a saved keybind (what the generated Hyprland binds call)
   zunder reload          rescan apps and plugins
   zunder quit            stop the server";
@@ -38,7 +39,8 @@ fn main() -> ExitCode {
         }
         Some(cmd @ ("toggle" | "show" | "hide" | "switch" | "switch-prev" | "reload" | "quit" | "settings" | "run")) => {
             let line = match (cmd, args.get(1)) {
-                ("settings", _) => "show settings ".to_owned(),
+                ("settings", Some(page)) => format!("open-settings {page}"),
+                ("settings", None) => "open-settings".to_owned(),
                 ("run", Some(key)) => format!("run {key}"),
                 ("show", Some(query)) => format!("show {query}"),
                 _ => cmd.to_owned(),

@@ -75,6 +75,11 @@ impl Engine {
         }
     }
 
+    /// Section titles that can be turned on and off.
+    pub fn provider_titles(&self) -> Vec<String> {
+        self.providers.iter().map(|p| p.title().to_owned()).filter(|t| t != "Settings").chain(["Plugins".to_owned()]).collect()
+    }
+
     pub fn reload(&mut self) {
         for p in &mut self.providers {
             p.reload();

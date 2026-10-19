@@ -1,0 +1,100 @@
+/* Settings window. Uses the palette names from style.css. */
+
+window.zunder-settings {
+  background: @bg;
+  color: @fg;
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 11pt;
+}
+
+.settings-body scrolledwindow { background: none; }
+
+/* ── sidebar ──────────────────────────── */
+.side {
+  border-right: 1px solid @ghost;
+  min-width: 220px;
+  padding: 18px 0 14px;
+}
+.brand      { padding: 0 22px 18px; }
+.brand .caret { color: @accent; font-weight: bold; margin-right: 10px; }
+.brand-name { color: @fg; font-weight: bold; }
+.side-path  { color: @faint; padding: 0 22px; font-size: 9pt; }
+
+list.sidebar { background: none; }
+list.sidebar > row {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  outline: none;
+}
+list.sidebar > row:hover    { background: @hover; }
+list.sidebar > row:selected { background: @sel; }
+
+.side-item  { padding: 6px 22px 6px 18px; }
+.side-item .marker { color: @ghost; margin-right: 8px; }
+.side-item .glyph  { color: @faint; margin-right: 12px; min-width: 16px; }
+.side-title { color: @muted; }
+row:selected .marker, row:selected .glyph { color: @accent; }
+row:selected .side-title { color: @fg; font-weight: bold; }
+
+/* ── pages ────────────────────────────── */
+.page       { padding: 22px 32px 28px; }
+.page-head  { margin-bottom: 6px; }
+.page-title { color: @accent; font-weight: bold; margin-right: 12px; }
+.page-head separator { background: @ghost; min-height: 1px; }
+.page-intro { color: @faint; margin-bottom: 14px; }
+
+.setting {
+  padding: 12px 0;
+  border-bottom: 1px solid alpha(@ghost, 0.5);
+}
+.setting-title { color: @fg; }
+.setting-help  { color: @faint; font-size: 10pt; }
+.empty  { color: @muted; padding: 14px 0; }
+.status { color: @faint; margin-top: 14px; }
+
+/* controls in the same flat terminal look */
+window.zunder-settings entry,
+window.zunder-settings spinbutton {
+  background: @hover;
+  color: @fg;
+  border: 1px solid @ghost;
+  border-radius: 6px;
+  box-shadow: none;
+  caret-color: @accent;
+  min-height: 30px;
+}
+window.zunder-settings entry:focus-within,
+window.zunder-settings spinbutton:focus-within {
+  border-color: @accent;
+  outline: none;
+}
+window.zunder-settings spinbutton button {
+  background: none;
+  color: @muted;
+  border: none;
+  box-shadow: none;
+}
+
+window.zunder-settings switch {
+  background: @ghost;
+  border: none;
+  border-radius: 999px;
+}
+window.zunder-settings switch:checked { background: @accent; }
+window.zunder-settings switch slider {
+  background: @fg;
+  border: none;
+  box-shadow: none;
+}
+window.zunder-settings switch:checked slider { background: @bg; }
+
+.flat-button, window.zunder-settings button.flat-button {
+  background: none;
+  color: @accent;
+  border: 1px solid @ghost;
+  border-radius: 6px;
+  box-shadow: none;
+  padding: 4px 14px;
+}
+.flat-button:hover { background: @sel; }

@@ -52,9 +52,10 @@ impl Provider for Settings {
                 .map(|score| Item {
                     id: "cmd:settings".into(),
                     title: "Zunder Settings".into(),
-                    hint: "settings ␣".into(),
+                    subtitle: "opens the settings window".into(),
+                    hint: "window".into(),
                     glyph: GLYPH.into(),
-                    action: Action::Fill("settings ".into()),
+                    action: Action::Run("zunder settings".into()),
                     score,
                     ..Default::default()
                 })

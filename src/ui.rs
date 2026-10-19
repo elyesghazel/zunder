@@ -11,6 +11,7 @@ use gtk4 as gtk;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 
 use crate::config;
+use crate::settings_window;
 use crate::store;
 use crate::engine::{Engine, Section};
 use crate::item::Item;
@@ -341,6 +342,8 @@ impl Ui {
                 let n = self.state.borrow().items.len();
                 self.select(n.saturating_sub(1));
             }
+            "open-settings" => self.open_settings(None),
+            cmd if cmd.starts_with("open-settings ") => self.open_settings(cmd.strip_prefix("open-settings ")),
             "reload" => {
                 config::reload();
                 apply_config_css();
@@ -580,6 +583,23 @@ fn icon(item: &Item) -> Option<gtk::Image> {
 }
 
 impl Ui {
+    fn open_settings(self: &Rc<Self>, page: Option<&str>) {
+        let Some(app) = self.window.application() else { return };
+        let info = {
+            let s = self.state.borrow();
+            settings_window::Info { providers: s.engine.provider_titles(), plugins: s.engine.plugins.list().to_vec() }
+        };
+        let ui = self.clone();
+        let changed: Rc<dyn Fn()> = Rc::new(move || {
+            apply_config_css();
+            let mut s = ui.state.borrow_mut();
+            s.engine.favorites = store::Favorites::load();
+            s.engine.binds = store::Binds::load();
+        });
+        self.hide();
+        settings_window::open(&app, info, changed, page);
+    }
+
     fn selected_item(&self) -> Option<Item> {
         let s = self.state.borrow();
         s.items.get(s.selected).cloned()
