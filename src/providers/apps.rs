@@ -25,7 +25,33 @@ pub struct Apps {
     apps: Vec<App>,
 }
 
-const RECENT: usize = 8;
+/// Apps on the start screen: most launched first, topped up with suggestions.
+const START: usize = 24;
+
+/// How likely an app is to be wanted when there's no history yet.
+fn suggestion_weight(app: &App) -> i64 {
+    const WEIGHTS: &[(&str, i64)] = &[
+        ("WebBrowser", 60),
+        ("TerminalEmulator", 55),
+        ("FileManager", 50),
+        ("TextEditor", 45),
+        ("IDE", 45),
+        ("InstantMessaging", 40),
+        ("Chat", 40),
+        ("Music", 35),
+        ("Player", 30),
+        ("Development", 20),
+        ("Office", 15),
+        ("Graphics", 10),
+        ("Game", 10),
+        ("Utility", 5),
+        ("Settings", -20),
+        ("System", -15),
+        ("Qt", -5),
+    ];
+    let cats: Vec<&str> = app.categories.split(';').collect();
+    WEIGHTS.iter().filter(|(c, _)| cats.contains(c)).map(|(_, w)| w).sum()
+}
 
 impl Apps {
     pub fn load() -> Self {
@@ -63,14 +89,26 @@ impl Provider for Apps {
             if cx.switch {
                 return Vec::new();
             }
-            let mut recent: Vec<(u32, &App)> = self
+            // launched apps first, then the most "default-looking" apps so it's never empty
+            let mut start: Vec<(i64, &App)> = self
                 .apps
                 .iter()
-                .map(|a| (cx.history.count(&format!("app:{}", a.id)), a))
-                .filter(|(n, _)| *n > 0)
+                .map(|a| {
+                    let launches = i64::from(cx.history.count(&format!("app:{}", a.id)));
+                    (launches * 1000 + suggestion_weight(a), a)
+                })
+                .filter(|(score, _)| *score > 0)
                 .collect();
-            recent.sort_by(|a, b| b.0.cmp(&a.0));
-            return recent.into_iter().take(RECENT).map(|(n, a)| self.item(a, i64::from(n))).collect();
+            start.sort_by(|a, b| b.0.cmp(&a.0));
+            return start
+                .into_iter()
+                .take(START)
+                .map(|(score, a)| {
+                    let mut item = self.item(a, score);
+                    item.hint = if score >= 1000 { "recent".into() } else { "suggested".into() };
+                    item
+                })
+                .collect();
         }
         self.apps
             .iter()
