@@ -1,3 +1,4 @@
+pub mod apps;
 pub mod windows;
 
 use crate::engine::Provider;
@@ -6,5 +7,6 @@ use crate::engine::Provider;
 pub fn all() -> Vec<Box<dyn Provider>> {
     vec![
         Box::new(windows::Windows),
+        Box::new(apps::Apps::load()),
     ]
 }
