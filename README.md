@@ -34,9 +34,9 @@ Written in Rust with GTK4 and gtk4-layer-shell. Built and tested on Arch with Hy
 | **World clock** | `time in ny`, `time in 2h in tokyo`, `3pm ny in zurich` |
 | **Calculator** | `2^10/3`, `sqrt(2)*pi`, Enter copies |
 | **Conversion** | `5 km in mi`, `30c`, `2 gb in mib`, `100 usd in chf`: units and 160 currencies |
-| **Files** | files from your home folder show up as you type; `f name` for only files |
+| **Files** | files from your home folder show up as you type; `f name` for only files, images get a preview |
 | **Emoji** | `fire` already shows 🔥; `:heart` for the whole picker |
-| **Clipboard** | `clip`: cliphist history with fuzzy search, images too |
+| **Clipboard** | `clip`: cliphist history with fuzzy search; full text or image on the right |
 | **Shell** | `> cmd` runs in your terminal or in the background |
 | **System** | lock, suspend, reboot, shut down, log out |
 | **Web search** | fallback for anything, engine of your choice |

@@ -146,6 +146,9 @@ It uses `fd`, so hidden files and anything in a `.gitignore` are skipped, plus `
 `target`, `go/pkg`, `venv`, `vendor`, `dist` and `build`. Exact name matches and shallow paths
 rank first. Enter opens the file with its default app. Files can be favorites and get shortcuts.
 
+Image results (`f png`, `f wallpaper`, or images among the inline results) open a preview pane
+with the picture, its size and format.
+
 ## Emoji
 
 From 3 letters on, the 3 best emoji show up in every search (`fire` → 🔥). `:name` or
@@ -155,7 +158,9 @@ or the GitHub shortcode: `:red hea` → ❤️. Enter copies.
 ## Clipboard
 
 `clip` shows cliphist's history, newest first, images included. Text after `clip ` fuzzy searches
-it. Enter copies the entry again. zunder reads cliphist and doesn't store anything itself, so
+it. Enter copies the entry again. The pane on the right shows the selected entry in full: the
+whole text, scrollable and wrapped, or the image. Both are decoded the first time you select the
+entry, so the list itself opens instantly. zunder reads cliphist and doesn't store anything itself, so
 cliphist's own `-max-items` decides how far back it goes.
 
 ## Shell

@@ -52,6 +52,8 @@ grep -ri -- "$1" ~/notes | head -50
 | `hint` | no | right-aligned text |
 | `glyph` | no | icon for this line, defaults to the plugin's |
 | `icon` | no | icon theme name or absolute path, e.g. `firefox` |
+| `image` | no | path to an image, shown in the preview pane when the line is selected |
+| `preview` | no | text shown in the preview pane, e.g. a whole note or a command's output |
 | `action` | no | what Enter does, see below. Without one, Enter does nothing |
 
 | Action | Enter does |

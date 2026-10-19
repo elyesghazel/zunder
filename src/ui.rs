@@ -34,6 +34,8 @@ struct State {
     sections: Vec<Section>,
     /// Bumped on every query so stale background results are dropped.
     seq: u64,
+    /// The preview column is open (ALT+TAB with previews, or images in the results).
+    preview_column: bool,
     /// Ctrl+B was pressed: the next key combo becomes a global keybind for this item.
     recording: Option<Item>,
 }
@@ -55,6 +57,10 @@ struct Ui {
 struct Preview {
     pane: gtk::Box,
     picture: gtk::Picture,
+    text: gtk::TextView,
+    text_scroll: gtk::ScrolledWindow,
+    /// command → output, so moving through the list doesn't rerun it
+    text_cache: RefCell<std::collections::HashMap<String, String>>,
     title: gtk::Label,
     meta: gtk::Label,
 }
@@ -218,6 +224,7 @@ impl Ui {
                 seq: 0,
                 sections: Vec::new(),
                 recording: None,
+                preview_column: false,
             }),
             plugin_tx,
             capture_tx,
@@ -390,12 +397,11 @@ impl Ui {
         if switch && previews {
             capture_all(&self.state.borrow().windows, &self.capture_tx);
         }
-        // the list keeps its width; the preview gets exactly the extra space
-        self.scroll.set_min_content_width(width);
-        let width = if switch && previews { width + PREVIEW_WIDTH } else { width };
-        self.panel.set_size_request(width, -1);
+        let _ = width;
+        self.fit_panel(switch && previews);
         self.scroll.set_min_content_height(height);
         self.scroll.set_max_content_height(height);
+        self.preview.text_cache.borrow_mut().clear();
         self.entry.set_text("");
         self.refresh();
         self.window.present();
@@ -445,6 +451,9 @@ impl Ui {
             self.list.append(&row);
         }
         let count = items.len();
+        let column = items.iter().any(|i| i.image.is_some() || i.text.is_some())
+            || (self.state.borrow().switch && config::get().previews && items.iter().any(|i| i.preview.is_some()));
+        self.fit_panel(column);
         self.status.set_text(&if count == 1 { "1 result".into() } else { format!("{count} results") });
         let first = {
             let mut s = self.state.borrow_mut();
@@ -501,22 +510,66 @@ impl Ui {
         self.show_preview();
     }
 
+    /// The list keeps the configured width; the preview column gets exactly the extra space.
+    fn fit_panel(&self, column: bool) {
+        let width = config::get().width;
+        // on the list itself: with no horizontal scrollbar GTK ignores min-content-width
+        self.list.set_size_request(width, -1);
+        self.panel.set_size_request(if column { width + PREVIEW_WIDTH } else { width }, -1);
+        self.state.borrow_mut().preview_column = column;
+        if !column {
+            self.preview.pane.set_visible(false);
+        }
+    }
+
     fn show_preview(&self) {
         let s = self.state.borrow();
-        let item = s.items.get(s.selected).filter(|_| s.switch && config::get().previews);
-        let Some((item, id)) = item.and_then(|i| Some((i, i.preview.as_ref()?))) else {
+        if !s.preview_column {
             self.preview.pane.set_visible(false);
             return;
-        };
-        let path = preview_path(id);
-        if path.exists() {
-            self.preview.picture.set_filename(Some(&path));
-        } else {
-            self.preview.picture.set_paintable(None::<&gdk::Paintable>);
         }
+        let Some(item) = s.items.get(s.selected) else { return };
+        if let Some(cmd) = &item.text {
+            let body = self.preview_text(cmd);
+            let lines = body.lines().count();
+            self.preview.text.buffer().set_text(&body);
+            self.preview.text_scroll.vadjustment().set_value(0.0);
+            self.preview.picture.set_visible(false);
+            self.preview.text_scroll.set_visible(true);
+            self.preview.title.set_text(&format!("{} {}", lines, if lines == 1 { "line" } else { "lines" }));
+            self.preview.meta.set_text(&format!("{} characters", body.chars().count()));
+            self.preview.pane.set_visible(true);
+            return;
+        }
+        self.preview.text_scroll.set_visible(false);
+        self.preview.picture.set_visible(true);
+        // an image result, or the window screenshot in ALT+TAB
+        if let (Some(img), Some(cmd)) = (&item.image, &item.image_cmd)
+            && !Path::new(img).exists()
+        {
+            let _ = std::process::Command::new("sh").args(["-c", cmd]).status();
+        }
+        let (path, meta) = match (&item.image, &item.preview) {
+            (Some(img), _) => (Some(PathBuf::from(img)), image_meta(Path::new(img))),
+            (None, Some(id)) if s.switch => (Some(preview_path(id)), format!("{}  ·  {}", item.subtitle, item.hint)),
+            _ => (None, "no preview".to_owned()),
+        };
+        let texture = path.filter(|p| p.exists()).and_then(|p| scaled_texture(&p));
+        self.preview.picture.set_paintable(texture.as_ref());
         self.preview.title.set_text(&item.title);
-        self.preview.meta.set_text(&format!("{}  ·  {}", item.subtitle, item.hint));
+        self.preview.meta.set_text(&meta);
         self.preview.pane.set_visible(true);
+    }
+
+    /// Output of a text-preview command, cut at 50k characters.
+    fn preview_text(&self, cmd: &str) -> String {
+        if let Some(cached) = self.preview.text_cache.borrow().get(cmd) {
+            return cached.clone();
+        }
+        let out = std::process::Command::new("sh").args(["-c", cmd]).output();
+        let text: String = out.map(|o| String::from_utf8_lossy(&o.stdout).chars().take(50_000).collect()).unwrap_or_default();
+        self.preview.text_cache.borrow_mut().insert(cmd.to_owned(), text.clone());
+        text
     }
 
     fn activate(self: &Rc<Self>, i: usize) {
@@ -552,15 +605,55 @@ impl Preview {
         picture.set_content_fit(gtk::ContentFit::Contain);
         picture.set_can_shrink(true);
         picture.set_vexpand(true);
+        // ellipsized labels still ask for their full width; cap it so long titles can't grow the pane
         let title = label("", "preview-title");
         title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        title.set_max_width_chars(36);
         let meta = label("", "preview-meta");
         meta.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        meta.set_max_width_chars(36);
+        let text = gtk::TextView::builder()
+            .editable(false)
+            .cursor_visible(false)
+            .wrap_mode(gtk::WrapMode::WordChar)
+            .monospace(true)
+            .build();
+        text.add_css_class("preview-text");
+        let text_scroll = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vexpand(true)
+            .child(&text)
+            .build();
+        text_scroll.add_css_class("preview-text-box");
         pane.append(&picture);
+        pane.append(&text_scroll);
         pane.append(&title);
         pane.append(&meta);
-        Preview { pane, picture, title, meta }
+        Preview { pane, picture, text, text_scroll, text_cache: RefCell::default(), title, meta }
     }
+}
+
+/// The image shrunk to the preview pane, so big photos don't stall the list.
+fn scaled_texture(path: &Path) -> Option<gdk::Texture> {
+    let pixbuf = gtk::gdk_pixbuf::Pixbuf::from_file_at_scale(path, PREVIEW_WIDTH - 36, 360, true).ok()?;
+    #[allow(deprecated)]
+    Some(gdk::Texture::for_pixbuf(&pixbuf))
+}
+
+/// `1920×1080 · png · 2.4 MB`
+fn image_meta(path: &Path) -> String {
+    let mut parts = Vec::new();
+    if let Some((format, w, h)) = gtk::gdk_pixbuf::Pixbuf::file_info(path) {
+        parts.push(format!("{w}×{h}"));
+        if let Some(name) = format.name() {
+            parts.push(name.to_string());
+        }
+    }
+    if let Ok(meta) = std::fs::metadata(path) {
+        let kb = meta.len() as f64 / 1024.0;
+        parts.push(if kb < 1024.0 { format!("{kb:.0} KB") } else { format!("{:.1} MB", kb / 1024.0) });
+    }
+    parts.join("  ·  ")
 }
 
 fn preview_path(id: &str) -> PathBuf {
@@ -709,11 +802,8 @@ impl Ui {
             None => result = c.set(key, value),
         });
         apply_config_css();
-        let (width, height) = {
-            let cfg = config::get();
-            (cfg.width, cfg.height)
-        };
-        self.panel.set_size_request(width, -1);
+        let height = config::get().height;
+        self.fit_panel(self.state.borrow().preview_column);
         self.scroll.set_min_content_height(height);
         self.scroll.set_max_content_height(height);
         // back to the list, keeping the selection on the changed row

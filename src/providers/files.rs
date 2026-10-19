@@ -108,6 +108,7 @@ fn find(term: &str, limit: usize) -> Vec<Item> {
         .map(|(score, path)| {
             let p = Path::new(&path);
             let is_dir = p.is_dir();
+            let content_type = if is_dir { String::new() } else { gtk4::gio::content_type_guess(Some(&path), None).0.to_string() };
             let parent = p.parent().map(|d| d.to_string_lossy().replacen(&home_str, "~", 1)).unwrap_or_default();
             Item {
                 id: format!("file:{path}"),
@@ -115,7 +116,8 @@ fn find(term: &str, limit: usize) -> Vec<Item> {
                 subtitle: parent,
                 hint: if is_dir { "folder".into() } else { "file".into() },
                 glyph: if is_dir { "\u{f07b}".into() } else { "\u{f15b}".into() },
-                icon: icon_name(&path, is_dir),
+                icon: icon_name(&content_type, is_dir),
+                image: content_type.starts_with("image/").then(|| path.clone()),
                 action: Action::Open(path.clone()),
                 score,
                 ..Default::default()
@@ -124,10 +126,9 @@ fn find(term: &str, limit: usize) -> Vec<Item> {
         .collect()
 }
 
-fn icon_name(path: &str, is_dir: bool) -> String {
+fn icon_name(content_type: &str, is_dir: bool) -> String {
     if is_dir {
         return "folder".into();
     }
-    let (content_type, _) = gtk4::gio::content_type_guess(Some(path), None);
-    gtk4::gio::content_type_get_generic_icon_name(&content_type).map(|s| s.to_string()).unwrap_or_default()
+    gtk4::gio::content_type_get_generic_icon_name(content_type).map(|s| s.to_string()).unwrap_or_default()
 }

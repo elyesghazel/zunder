@@ -1,7 +1,11 @@
 //! `clip`: clipboard history from cliphist. Enter puts the entry back on the clipboard.
 //! Needs `wl-paste --watch cliphist store` running (most Hyprland setups already have it).
 
+use std::path::PathBuf;
 use std::process::Command;
+use std::sync::LazyLock;
+
+use regex::Regex;
 
 use crate::engine::{Ctx, Provider};
 use crate::item::{Action, Item, shell_quote};
@@ -66,9 +70,13 @@ impl Provider for Clipboard {
             .map(|(i, (score, id, preview, line))| {
                 let image = preview.starts_with("[[ binary data");
                 Item {
-                    title: preview.trim().replace('\t', " "),
+                    title: if image { image_title(preview) } else { preview.trim().replace('\t', " ") },
+                    image: image.then(|| image_path(id, preview)).flatten(),
+                    image_cmd: image.then(|| decode_cmd(id, preview, line)).flatten(),
+                    text: (!image).then(|| format!("printf '%s' {} | cliphist decode", shell_quote(line))),
                     hint: format!("#{id}"),
                     glyph: if image { "\u{f03e}".into() } else { GLYPH.into() },
+                    subtitle: if image { "image".into() } else { String::new() },
                     // cliphist decode takes the whole list line on stdin
                     action: Action::Run(format!("printf '%s' {} | cliphist decode | wl-copy", shell_quote(line))),
                     score: score * 1000 - i as i64,
@@ -77,4 +85,34 @@ impl Provider for Clipboard {
             })
             .collect()
     }
+}
+
+static BINARY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"binary data ([\d.]+ \w+) (\w+) (\d+x\d+)").unwrap());
+
+/// `[[ binary data 120 KiB png 800x600 ]]` → `png 800×600 · 120 KiB`
+fn image_title(preview: &str) -> String {
+    match BINARY.captures(preview) {
+        Some(c) => format!("{} {} · {}", &c[2], c[3].replace('x', "×"), &c[1]),
+        None => preview.trim().to_owned(),
+    }
+}
+
+/// Where a clipboard image is decoded to: $XDG_RUNTIME_DIR/zunder-clip/<id>.<ext>
+fn image_path(id: &str, preview: &str) -> Option<String> {
+    let ext = BINARY.captures(preview).map(|c| c[2].to_owned()).unwrap_or_else(|| "png".into());
+    let path: PathBuf = dirs::runtime_dir()?.join("zunder-clip").join(format!("{id}.{ext}"));
+    Some(path.to_string_lossy().into_owned())
+}
+
+/// Decodes it there; the preview pane runs this the first time the entry is selected.
+fn decode_cmd(id: &str, preview: &str, line: &str) -> Option<String> {
+    let path = image_path(id, preview)?;
+    let tmp = format!("{path}.tmp");
+    Some(format!(
+        "mkdir -p \"$(dirname {p})\" && printf '%s' {l} | cliphist decode > {t} && mv {t} {p}",
+        p = shell_quote(&path),
+        l = shell_quote(line),
+        t = shell_quote(&tmp)
+    ))
 }

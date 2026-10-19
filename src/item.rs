@@ -21,6 +21,16 @@ pub struct Item {
     /// Hyprland `stableId` of a window to show a live preview of.
     #[serde(skip)]
     pub preview: Option<String>,
+    /// An image file to show in the preview pane (image files, clipboard images).
+    #[serde(skip)]
+    pub image: Option<String>,
+    /// Shell command that writes `image` when it doesn't exist yet, run on selection.
+    #[serde(skip)]
+    pub image_cmd: Option<String>,
+    /// Shell command whose output is the full text shown in the preview pane, run when the
+    /// item is selected (e.g. a clipboard entry longer than its one-line title).
+    #[serde(skip)]
+    pub text: Option<String>,
     /// Splits a provider's results into several sections (the settings page uses it).
     #[serde(skip)]
     pub group: String,

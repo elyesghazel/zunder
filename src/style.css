@@ -91,3 +91,8 @@ row:selected .hint   { color: @muted; }
 .preview-meta  { color: @faint; margin-top: 2px; }
 
 .icon { margin-right: 10px; }
+
+.preview-text-box { background: @hover; border-radius: 6px; }
+textview.preview-text,
+textview.preview-text > text { background: transparent; color: @fg; }
+textview.preview-text { padding: 10px 12px; font-family: inherit; }

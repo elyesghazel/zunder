@@ -123,6 +123,10 @@ struct Line {
     glyph: Option<String>,
     #[serde(default)]
     icon: String,
+    /// Image file shown in the preview pane.
+    image: Option<String>,
+    /// Text shown in the preview pane.
+    preview: Option<String>,
     #[serde(default)]
     action: Action,
 }
@@ -152,6 +156,8 @@ impl Call {
                         hint: l.hint,
                         glyph: l.glyph.unwrap_or_else(|| self.plugin.glyph.clone()),
                         icon: l.icon,
+                        image: l.image,
+                        text: l.preview.map(|p| format!("printf '%s' {}", shell_quote(&p))),
                         action: l.action,
                         score,
                         ..Default::default()
