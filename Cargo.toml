@@ -2,6 +2,17 @@
 name = "zunder"
 version = "0.1.0"
 edition = "2024"
+description = "Terminal-styled launcher and ALT+TAB window switcher for Hyprland"
+license = "MIT"
+repository = "https://github.com/elyesghazel/zunder"
+readme = "README.md"
+keywords = ["launcher", "hyprland", "wayland", "gtk4", "switcher"]
+categories = ["command-line-utilities", "gui"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
 
 [dependencies]
 async-channel = "2.5.0"
