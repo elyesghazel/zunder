@@ -3,6 +3,7 @@ pub mod calc;
 pub mod emoji;
 pub mod files;
 pub mod clipboard;
+pub mod convert;
 pub mod launches;
 pub mod plugins;
 pub mod settings;
@@ -21,6 +22,7 @@ pub fn all() -> Vec<Box<dyn Provider>> {
     vec![
         Box::new(calc::Calc),
         Box::new(time::Time),
+        Box::new(convert::Convert),
         Box::new(windows::Windows::load()),
         Box::new(apps::Apps::load()),
         Box::new(system::System),

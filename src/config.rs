@@ -13,6 +13,8 @@ pub struct Config {
     pub terminal: String,
     /// Web search fallback, `{q}` is replaced by the query.
     pub search_url: String,
+    /// Your currency for conversions, e.g. `CHF`. Empty = guessed from time zone and locale.
+    pub currency: String,
     pub font: String,
     pub font_size: f64,
     /// Panel size in px; ALT+TAB adds the preview width on top.
@@ -43,6 +45,7 @@ impl Default for Config {
         Config {
             terminal: String::new(),
             search_url: "https://duckduckgo.com/?q={q}".into(),
+            currency: String::new(),
             font: "JetBrainsMono Nerd Font".into(),
             font_size: 11.0,
             width: 820,
@@ -139,6 +142,7 @@ pub const SETTINGS: &[Setting] = &[
     Setting { key: "height", group: "Appearance", title: "Height", help: "result list height in px" },
     Setting { key: "terminal", group: "General", title: "Terminal", help: "for > commands, empty = $TERMINAL or kitty" },
     Setting { key: "search_url", group: "General", title: "Search engine", help: "URL with {q} for the query" },
+    Setting { key: "currency", group: "General", title: "Currency", help: "for `100 usd`, e.g. CHF; empty = from your time zone" },
 ];
 
 /// Allowed values for a setting that is a pick from a list, `None` for free-form ones.
