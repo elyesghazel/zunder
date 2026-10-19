@@ -7,7 +7,7 @@ straight on a page. Changes are saved right away and most apply immediately.
 
 | Page | What's on it |
 |------|--------------|
-| General | terminal, web search engine |
+| General | terminal, web search engine, currency |
 | Switcher | release Alt to switch, window previews |
 | Start screen | show windows, number of apps |
 | Appearance | icons, font, font size, theme, accent, backdrop dim, width, height |
@@ -30,6 +30,7 @@ editing by hand, run `zunder reload`.
 theme = "graphite"                           # see `theme` in the launcher for the list
 terminal = ""                                # empty = $TERMINAL, then kitty
 search_url = "https://duckduckgo.com/?q={q}"
+currency = ""                                # e.g. "CHF", empty = guessed from your time zone
 font = "JetBrainsMono Nerd Font"
 font_size = 11.0
 width = 820                                  # panel width, ALT+TAB adds 420 for the preview
@@ -49,6 +50,7 @@ disabled = []                                # e.g. ["Web", "System"]
 | `theme` | text | color scheme: a built-in or a file in `~/.config/zunder/themes/` |
 | `terminal` | text | terminal for `>` commands and `Terminal=true` apps, called as `<terminal> -e sh -c …` |
 | `search_url` | text | web search fallback, `{q}` is replaced by the URL-encoded query |
+| `currency` | text | your currency for conversions, e.g. `CHF` |
 | `font` | text | panel font, any installed family |
 | `font_size` | number | in pt |
 | `width` | number | panel width in px |
@@ -60,7 +62,7 @@ disabled = []                                # e.g. ["Web", "System"]
 | `alt_release` | on/off | releasing Alt switches windows |
 | `start_windows` | on/off | windows on the start screen |
 | `start_apps` | number | apps on the start screen |
-| `disabled` | list | section titles to hide: `Calculator`, `Time`, `Windows`, `Apps`, `System`, `Shell`, `Clipboard`, `History`, `Themes`, `Web`, `Plugins` |
+| `disabled` | list | section titles to hide: `Calculator`, `Time`, `Convert`, `Windows`, `Apps`, `System`, `Shell`, `Clipboard`, `History`, `Themes`, `Emoji`, `Files`, `Web`, `Plugins` |
 
 Search engines for `search_url`:
 
@@ -87,6 +89,7 @@ https://kagi.com/search?q={q}
 | `~/.local/share/zunder/launches.jsonl` | full launch history |
 | `$XDG_RUNTIME_DIR/zunder.sock` | control socket |
 | `$XDG_RUNTIME_DIR/zunder-previews/` | window screenshots, cleared on reboot |
+| `~/.cache/zunder/rates.json` | exchange rates, refreshed every 12 hours |
 
 The config folder is safe to keep in your dotfiles. Leave `~/.local/share/zunder` out, it's
 machine-specific.

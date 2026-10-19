@@ -24,6 +24,9 @@ instead. You can turn release-to-switch off in the settings.
 | nothing | favorites, open windows, recent and suggested apps |
 | `firefox` | fuzzy search over windows, apps, commands and plugins |
 | `2^10/3`, `sqrt(2)*pi` | calculator |
+| `5 km in mi`, `30c`, `100 usd in chf` | unit and currency conversion |
+| `readme`, `f readme` | files |
+| `fire`, `:heart` | emoji |
 | `time in ny`, `tokyo time` | world clock |
 | `time in 2h in london`, `in 90 min in la` | the time there, later |
 | `3pm in ny`, `9am tokyo`, `3pm ny in zurich` | time conversion |
@@ -106,6 +109,48 @@ Enter copies the time.
 
 `+ - * / ^ %`, parentheses, `sqrt sin cos tan ln exp abs floor ceil`, `pi`, `e`. A leading `=`
 is fine. Enter copies the result.
+
+## Conversion
+
+`<number> <unit> [in|to|as <unit>]`. Without a target, metric goes to imperial and back (`10 km`
+→ miles, `30c` → °F, `5 lb` → kg). Enter copies the number.
+
+| Kind | Units |
+|------|-------|
+| length | mm cm m km in ft yd mi nmi |
+| mass | mg g kg t oz lb st |
+| volume | ml cl dl l m3 tsp tbsp floz cup pt qt gal |
+| area | cm2 m2 km2 ha in2 ft2 acre mi2 |
+| speed | m/s km/h mph kn |
+| time | ms s min h day week year |
+| data | bit B KB MB GB TB KiB MiB GiB TiB |
+| energy | J kJ cal kcal Wh kWh MJ |
+| temperature | c f k (also °C, celsius…) |
+
+Full names and plurals work too (`5 miles in kilometers`), and so does `1,5` for `1.5`.
+
+**Currency**: ISO codes (`usd`, `chf`, `tnd`…), symbols (`$ € £ ¥`) and a few words (`dollars`,
+`euros`, `francs`). `100 usd` without a target shows your currency and dollars (euros for
+dollars). Your currency is the `currency` setting, or guessed from your time zone. Rates come
+from open.er-api.com, are cached in `~/.cache/zunder/rates.json` and refreshed in the
+background every 12 hours. The very first conversion needs internet. "pound" is a weight; use
+`£` or `gbp` for money.
+
+## Files
+
+From 3 letters on, the best 5 files and folders from your home folder show up under every search
+(only for queries starting with a letter). `f <name>` or `file <name>` shows only files, up to 60.
+More words narrow it down by path: `f readme zunder`.
+
+It uses `fd`, so hidden files and anything in a `.gitignore` are skipped, plus `node_modules`,
+`target`, `go/pkg`, `venv`, `vendor`, `dist` and `build`. Exact name matches and shallow paths
+rank first. Enter opens the file with its default app. Files can be favorites and get shortcuts.
+
+## Emoji
+
+From 3 letters on, the 3 best emoji show up in every search (`fire` → 🔥). `:name` or
+`emoji name` opens the whole picker; `:` alone lists them all. Words match the start of the name
+or the GitHub shortcode: `:red hea` → ❤️. Enter copies.
 
 ## Clipboard
 

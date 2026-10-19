@@ -83,7 +83,15 @@ press Ctrl+B, press the keys.
 
 ## Coming from vicinae, rofi, wofi, fuzzel
 
-Replace their binds with the ones above and remove their autostart line. Two things to know:
+Replace their binds with the ones above and remove their autostart line. From vicinae,
+
+```sh
+zunder import vicinae
+```
+
+takes over your favorites (apps and clipboard history) and launch counts, so ranking already
+knows what you use. Raycast-store extensions have no equivalent and are listed as skipped. Two
+more things to know:
 
 - vicinae registers SUPER+V for clipboard history by itself. Once its server isn't started any
   more, bind SUPER+V to `zunder show 'clip '` like above.

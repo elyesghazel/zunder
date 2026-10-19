@@ -11,6 +11,8 @@ makedepends=('cargo')
 optdepends=(
   'grim: window previews in ALT+TAB'
   'cliphist: clipboard history'
+  'fd: file search'
+  'curl: currency conversion'
   'ttf-jetbrains-mono-nerd: default font and glyphs'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")

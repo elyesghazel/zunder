@@ -10,6 +10,8 @@ zunder needs Hyprland, GTK 4.14 or newer and gtk4-layer-shell. Everything else i
 | a Nerd Font | glyphs, the default font | `ttf-jetbrains-mono-nerd` |
 | `grim` 1.5+ | window previews in ALT+TAB | `grim` |
 | `cliphist` | clipboard history | `cliphist` |
+| `fd` | file search | `fd` |
+| `curl` | exchange rates | `curl` |
 
 ## Arch Linux: release package
 

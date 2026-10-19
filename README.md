@@ -33,6 +33,9 @@ Written in Rust with GTK4 and gtk4-layer-shell. Built and tested on Arch with Hy
 | **Launch history** | `history`: everything you ever ran, searchable, never cleared |
 | **World clock** | `time in ny`, `time in 2h in tokyo`, `3pm ny in zurich` |
 | **Calculator** | `2^10/3`, `sqrt(2)*pi`, Enter copies |
+| **Conversion** | `5 km in mi`, `30c`, `2 gb in mib`, `100 usd in chf`: units and 160 currencies |
+| **Files** | files from your home folder show up as you type; `f name` for only files |
+| **Emoji** | `fire` already shows 🔥; `:heart` for the whole picker |
 | **Clipboard** | `clip`: cliphist history with fuzzy search, images too |
 | **Shell** | `> cmd` runs in your terminal or in the background |
 | **System** | lock, suspend, reboot, shut down, log out |
@@ -49,7 +52,7 @@ Prebuilt package from the [latest release](https://github.com/elyesghazel/zunder
 
 ```sh
 sudo pacman -U https://github.com/elyesghazel/zunder/releases/download/v0.1.0/zunder-0.1.0-1-x86_64.pkg.tar.zst
-sudo pacman -S --needed grim cliphist ttf-jetbrains-mono-nerd   # previews, clipboard, font
+sudo pacman -S --needed grim cliphist fd ttf-jetbrains-mono-nerd   # previews, clipboard, files, font
 ```
 
 Or build the package yourself from the [PKGBUILD](packaging/arch/PKGBUILD):
@@ -73,7 +76,7 @@ tar xf zunder-0.1.0-x86_64-linux.tar.gz && cd zunder-0.1.0
 ### From source
 
 ```sh
-sudo pacman -S --needed rust gtk4 gtk4-layer-shell wl-clipboard ttf-jetbrains-mono-nerd grim cliphist
+sudo pacman -S --needed rust gtk4 gtk4-layer-shell wl-clipboard ttf-jetbrains-mono-nerd grim cliphist fd
 git clone https://github.com/elyesghazel/zunder
 cd zunder
 ./install.sh --plugins      # cargo build --release, copies to ~/.local/bin, links example plugins
@@ -85,6 +88,8 @@ cd zunder
 | `wl-clipboard` | copying results | yes |
 | a Nerd Font | glyphs, default font | recommended |
 | `grim` 1.5+ | window previews | no |
+| `fd` | file search | no |
+| `curl` | exchange rates | no |
 | `cliphist` | clipboard history | no |
 
 More in [docs/installation.md](docs/installation.md), including updating and uninstalling.
@@ -126,7 +131,8 @@ source = ~/.config/hypr/zunder.conf
 ```
 
 Then `hyprctl reload`, start `zunder server` once by hand (or log out and in) and press
-ALT+SPACE. [docs/setup.md](docs/setup.md) has more binds and notes for moving over from vicinae,
+ALT+SPACE. Coming from vicinae? `zunder import vicinae` brings your favorites and launch counts
+over. [docs/setup.md](docs/setup.md) has more binds and notes for moving over from vicinae,
 rofi or wofi.
 
 ## Usage
@@ -154,6 +160,10 @@ Typing something after ALT+TAB turns it into a search; releasing Alt then doesn'
 | nothing | favorites, open windows, recent and suggested apps |
 | `firefox` | windows, apps, commands and plugins, best section first |
 | `2^10/3`, `sqrt(2)*pi`, `(4+4)*12%5` | calculator, Enter copies |
+| `5 km in mi`, `30c`, `1.5 l to cups`, `2 gb in mib` | unit conversion (no target: metric ⇄ imperial) |
+| `100 usd`, `€20 in tnd`, `50 chf to jpy` | currency, daily rates (no target: your currency) |
+| `readme`, `f readme`, `file invoice` | files in your home folder; inline from 3 letters, or only files with `f ` |
+| `fire`, `:heart`, `emoji party` | emoji; a few inline, all of them with `:` or `emoji `. Enter copies |
 | `time in ny`, `tokyo time` | the time there, UTC offset, how far ahead or behind you |
 | `time in 2h in london`, `in 90 min in la` | the time there, later |
 | `3pm in ny`, `9am tokyo`, `3pm ny in zurich` | convert between places |
@@ -177,6 +187,7 @@ zunder switch           # window switcher, or the next window if it's open
 zunder switch-prev      # same, backwards
 zunder settings [page]  # settings window, e.g. zunder settings appearance
 zunder reload           # reread config.toml, rescan apps and plugins
+zunder import vicinae   # take over vicinae's favorites and launch counts
 zunder run <key>        # run a saved shortcut (the generated binds call this)
 zunder quit             # stop the daemon
 zunder --version
@@ -191,7 +202,7 @@ right. Changes save right away and most apply immediately.
 
 | Page | What's on it |
 |------|--------------|
-| General | terminal, web search engine |
+| General | terminal, web search engine, currency |
 | Switcher | release Alt to switch, window previews |
 | Start screen | show windows, number of apps |
 | Appearance | icons, font, size, theme, accent, backdrop dim, width, height |
@@ -308,8 +319,6 @@ lines. See [docs/development.md](docs/development.md).
 
 ## Roadmap
 
-- emoji and symbol picker
-- file search (fd / plocate)
 - quicklinks with a `{query}` placeholder, as a built-in
 - secondary actions on `Ctrl+Enter` (copy path, open in terminal…)
 - paste right away after picking a clipboard entry
