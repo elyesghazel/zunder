@@ -40,6 +40,19 @@ pub fn dir() -> PathBuf {
     dirs::config_dir().unwrap_or_default().join("zunder/themes")
 }
 
+fn user_themes() -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir(dir())
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "css"))
+        .filter_map(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
+        .collect();
+    names.sort();
+    names
+}
+
 fn user_css(name: &str) -> Option<String> {
     if name.is_empty() || name.contains(['/', '\\']) || name.starts_with('.') {
         return None;
@@ -51,6 +64,17 @@ fn builtin_css(t: &Builtin) -> String {
     COLORS.iter().zip(t.colors).map(|(name, value)| format!("@define-color {name} {value};\n")).collect()
 }
 
+/// Every theme name: built-ins first, then user themes not already listed.
+pub fn names() -> Vec<String> {
+    let mut names: Vec<String> = BUILTIN.iter().map(|t| t.name.to_owned()).collect();
+    for name in user_themes() {
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    names
+}
+
 /// The `@define-color` block for `name`. A user theme wins over a built-in of the same name,
 /// an unknown name gives graphite.
 pub fn css(name: &str) -> String {
@@ -58,6 +82,31 @@ pub fn css(name: &str) -> String {
         return text;
     }
     builtin_css(BUILTIN.iter().find(|t| t.name == name).unwrap_or(&BUILTIN[0]))
+}
+
+/// One color of a theme, e.g. `color("nord", "accent")` gives `#88c0d0`. Last definition wins.
+pub fn color(name: &str, color: &str) -> Option<String> {
+    css(name)
+        .lines()
+        .filter_map(|line| {
+            let rest = line.trim().strip_prefix("@define-color")?;
+            let (key, value) = rest.trim().split_once(char::is_whitespace)?;
+            (key == color).then(|| value.trim().trim_end_matches(';').trim().to_owned())
+        })
+        .last()
+}
+
+/// True for a theme from the themes folder rather than a built-in.
+pub fn is_user(name: &str) -> bool {
+    user_css(name).is_some()
+}
+
+/// True when the background is light, judged by its luminance.
+pub fn is_light(name: &str) -> bool {
+    let Some(bg) = color(name, "bg") else { return false };
+    let hex = bg.trim_start_matches('#');
+    let channel = |i: usize| hex.get(i..i + 2).and_then(|c| u8::from_str_radix(c, 16).ok()).unwrap_or(0) as f64;
+    hex.len() >= 6 && 0.299 * channel(0) + 0.587 * channel(2) + 0.114 * channel(4) > 140.0
 }
 
 #[cfg(test)]
@@ -78,9 +127,19 @@ mod tests {
     }
 
     #[test]
+    fn names_start_with_builtins() {
+        let names = names();
+        assert_eq!(names[0], DEFAULT);
+        for t in BUILTIN {
+            assert_eq!(names.iter().filter(|n| *n == t.name).count(), 1);
+        }
+    }
+
+    #[test]
     fn unknown_falls_back_to_graphite() {
         assert_eq!(css("no-such-theme-xyz"), builtin_css(&BUILTIN[0]));
         assert_eq!(css("../etc/passwd"), builtin_css(&BUILTIN[0]));
+        assert_eq!(color("no-such-theme-xyz", "accent").as_deref(), Some("#b4befe"));
     }
 
     #[test]
@@ -90,5 +149,19 @@ mod tests {
             let line = style.lines().find(|l| l.starts_with(&format!("@define-color {name} "))).unwrap();
             assert!(line.contains(value), "{line}");
         }
+    }
+
+    #[test]
+    fn detects_light_themes() {
+        assert!(is_light("catppuccin-latte"));
+        assert!(is_light("rose-pine-dawn"));
+        assert!(!is_light("graphite"));
+        assert!(!is_light("nord"));
+    }
+
+    #[test]
+    fn reads_single_color() {
+        assert_eq!(color("nord", "accent").as_deref(), Some("#88c0d0"));
+        assert_eq!(color("nord", "nope"), None);
     }
 }

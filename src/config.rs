@@ -133,6 +133,14 @@ pub const SETTINGS: &[Setting] = &[
     Setting { key: "search_url", group: "General", title: "Search engine", help: "URL with {q} for the query" },
 ];
 
+/// Allowed values for a setting that is a pick from a list, `None` for free-form ones.
+pub fn choices(key: &str) -> Option<Vec<String>> {
+    match key {
+        "theme" => Some(crate::theme::names()),
+        _ => None,
+    }
+}
+
 impl Config {
     /// Current value of a setting as text, `None` for unknown keys.
     pub fn value(&self, key: &str) -> Option<String> {
@@ -205,5 +213,7 @@ mod tests {
         assert_eq!(c.theme, "nord");
         let old: Config = toml::from_str("font_size = 12.0").unwrap();
         assert_eq!(old.theme, "graphite");
+        assert!(super::choices("theme").unwrap().contains(&"catppuccin-latte".to_owned()));
+        assert!(super::choices("font").is_none());
     }
 }
