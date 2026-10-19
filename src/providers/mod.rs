@@ -1,5 +1,6 @@
 pub mod apps;
 pub mod calc;
+pub mod clipboard;
 pub mod launches;
 pub mod plugins;
 pub mod settings;
@@ -21,6 +22,7 @@ pub fn all() -> Vec<Box<dyn Provider>> {
         Box::new(apps::Apps::load()),
         Box::new(system::System),
         Box::new(shell::Shell),
+        Box::new(clipboard::Clipboard),
         Box::new(launches::Launches),
         Box::new(web::Web),
     ]
