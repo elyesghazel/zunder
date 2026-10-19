@@ -37,6 +37,40 @@ fn snapshot(item: &Item) -> Item {
     Item { score: 0, preview: None, group: String::new(), ..item.clone() }
 }
 
+// ── favorites ───────────────────────────────────────────
+
+/// Pinned to the start screen with Ctrl+F. ~/.config/zunder/favorites.json
+pub struct Favorites {
+    pub items: Vec<Item>,
+}
+
+impl Favorites {
+    fn path() -> PathBuf {
+        config_dir().join("favorites.json")
+    }
+
+    pub fn load() -> Self {
+        Favorites { items: read_json(&Self::path()) }
+    }
+
+    pub fn contains(&self, id: &str) -> bool {
+        !id.is_empty() && self.items.iter().any(|i| i.id == id)
+    }
+
+    /// Add or remove; returns whether it is a favorite now.
+    pub fn toggle(&mut self, item: &Item) -> bool {
+        let added = if self.contains(&item.id) {
+            self.items.retain(|i| i.id != item.id);
+            false
+        } else {
+            self.items.push(snapshot(item));
+            true
+        };
+        write_json(&Self::path(), &self.items);
+        added
+    }
+}
+
 // ── launch log ──────────────────────────────────────────
 
 #[derive(Serialize, Deserialize)]

@@ -170,7 +170,7 @@ impl Ui {
 
         let footer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         footer.add_css_class("footer");
-        for (key, desc) in [("↵", "open"), ("⇥", "next"), (">", "shell"), ("=", "calc"), ("esc", "close")] {
+        for (key, desc) in [("↵", "open"), ("⇥", "next"), ("^F", "favorite"), (">", "shell"), ("esc", "close")] {
             footer.append(&label(key, "key"));
             footer.append(&label(desc, "desc"));
         }
@@ -256,6 +256,7 @@ impl Ui {
             let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
             match key {
                 gdk::Key::Escape => ui.hide(),
+                gdk::Key::f if ctrl => ui.toggle_favorite(),
                 gdk::Key::Down | gdk::Key::Tab => ui.step(1),
                 gdk::Key::Up | gdk::Key::ISO_Left_Tab => ui.step(-1),
                 gdk::Key::j | gdk::Key::n if ctrl => ui.step(1),
@@ -567,6 +568,23 @@ fn icon(item: &Item) -> Option<gtk::Image> {
 }
 
 impl Ui {
+    fn selected_item(&self) -> Option<Item> {
+        let s = self.state.borrow();
+        s.items.get(s.selected).cloned()
+    }
+
+    fn toggle_favorite(self: &Rc<Self>) {
+        let Some(item) = self.selected_item().filter(|i| !i.id.is_empty()) else {
+            self.status.set_text("can't favorite this one");
+            return;
+        };
+        let added = self.state.borrow_mut().engine.favorites.toggle(&item);
+        let selected = self.state.borrow().selected;
+        self.refresh();
+        self.select(selected);
+        self.status.set_text(if added { "★ added to favorites" } else { "removed from favorites" });
+    }
+
     fn set_setting(self: &Rc<Self>, key: &str, value: Option<&str>) {
         let mut result = Ok(());
         config::update(|c| match key.strip_prefix("provider:") {

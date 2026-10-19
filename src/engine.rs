@@ -4,6 +4,8 @@ use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
 
 use crate::history::History;
+use crate::store::Favorites;
+
 use crate::item::Item;
 use crate::providers::{self, windows::Client};
 
@@ -52,6 +54,7 @@ pub struct Engine {
     providers: Vec<Box<dyn Provider>>,
     pub plugins: providers::plugins::Plugins,
     pub history: History,
+    pub favorites: Favorites,
     matcher: SkimMatcherV2,
 }
 
@@ -66,6 +69,7 @@ impl Engine {
             providers,
             plugins: providers::plugins::Plugins::load(),
             history: History::load(),
+            favorites: Favorites::load(),
             matcher: SkimMatcherV2::default().ignore_case(),
         }
     }
@@ -115,7 +119,16 @@ impl Engine {
         if !query.is_empty() {
             sections.sort_by(|a, b| b.0.cmp(&a.0));
         }
-        sections.into_iter().map(|(_, s)| s).collect()
+        let mut sections: Vec<Section> = sections.into_iter().map(|(_, s)| s).collect();
+        if query.is_empty() && !switch && !self.favorites.items.is_empty() {
+            sections.insert(0, Section { title: "Favorites".into(), items: self.favorites.items.clone() });
+        }
+        for item in sections.iter_mut().flat_map(|s| s.items.iter_mut()) {
+            if self.favorites.contains(&item.id) {
+                item.hint = format!("★ {}", item.hint);
+            }
+        }
+        sections
     }
 }
 
