@@ -1,6 +1,7 @@
 pub mod apps;
 pub mod calc;
 pub mod shell;
+pub mod system;
 pub mod windows;
 
 use crate::engine::Provider;
@@ -11,6 +12,7 @@ pub fn all() -> Vec<Box<dyn Provider>> {
         Box::new(calc::Calc),
         Box::new(windows::Windows),
         Box::new(apps::Apps::load()),
+        Box::new(system::System),
         Box::new(shell::Shell),
     ]
 }
