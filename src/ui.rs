@@ -350,6 +350,9 @@ impl Ui {
                 config::reload();
                 apply_config_css();
                 self.state.borrow_mut().engine.reload();
+                if visible {
+                    self.refresh();
+                }
             }
             "quit" => {
                 if let Some(app) = self.window.application() {
