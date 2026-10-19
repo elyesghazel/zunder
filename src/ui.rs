@@ -30,6 +30,8 @@ struct State {
     switch: bool,
     /// Bumped on every query so stale plugin results are dropped.
     seq: u64,
+    /// Ctrl+B was pressed: the next key combo becomes a global keybind for this item.
+    recording: Option<Item>,
 }
 
 struct Ui {
@@ -170,7 +172,7 @@ impl Ui {
 
         let footer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         footer.add_css_class("footer");
-        for (key, desc) in [("↵", "open"), ("⇥", "next"), ("^F", "favorite"), (">", "shell"), ("esc", "close")] {
+        for (key, desc) in [("↵", "open"), ("⇥", "next"), ("^F", "favorite"), ("^B", "keybind"), (">", "shell"), ("esc", "close")] {
             footer.append(&label(key, "key"));
             footer.append(&label(desc, "desc"));
         }
@@ -206,6 +208,7 @@ impl Ui {
                 selected: 0,
                 switch: false,
                 seq: 0,
+                recording: None,
             }),
             plugin_tx,
             capture_tx,
@@ -253,10 +256,15 @@ impl Ui {
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
         let ui = self.clone();
         keys.connect_key_pressed(move |_, key, _, mods| {
+            if ui.state.borrow().recording.is_some() {
+                ui.record(key, mods);
+                return glib::Propagation::Stop;
+            }
             let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
             match key {
                 gdk::Key::Escape => ui.hide(),
                 gdk::Key::f if ctrl => ui.toggle_favorite(),
+                gdk::Key::b if ctrl => ui.start_recording(),
                 gdk::Key::Down | gdk::Key::Tab => ui.step(1),
                 gdk::Key::Up | gdk::Key::ISO_Left_Tab => ui.step(-1),
                 gdk::Key::j | gdk::Key::n if ctrl => ui.step(1),
@@ -316,6 +324,10 @@ impl Ui {
             self.show(false);
             self.entry.set_text(query);
             self.entry.set_position(-1);
+            return;
+        }
+        if let Some(key) = cmd.strip_prefix("run ") {
+            self.run_bind(key);
             return;
         }
         match cmd {
@@ -585,6 +597,65 @@ impl Ui {
         self.status.set_text(if added { "★ added to favorites" } else { "removed from favorites" });
     }
 
+    fn start_recording(&self) {
+        let Some(item) = self.selected_item().filter(|i| !i.id.is_empty()) else {
+            self.status.set_text("can't bind this one");
+            return;
+        };
+        self.status.set_text("press a shortcut · ⌫ remove · esc cancel");
+        self.state.borrow_mut().recording = Some(item);
+    }
+
+    /// A key arrived while recording a keybind.
+    fn record(self: &Rc<Self>, key: gdk::Key, mods: gdk::ModifierType) {
+        let item = match key {
+            gdk::Key::Escape => {
+                self.state.borrow_mut().recording = None;
+                self.status.set_text("cancelled");
+                return;
+            }
+            gdk::Key::BackSpace => {
+                let Some(item) = self.state.borrow_mut().recording.take() else { return };
+                let result = self.state.borrow_mut().engine.binds.remove(&item.id);
+                self.finish_bind(result.map(|_| format!("removed shortcut of {}", item.title)));
+                return;
+            }
+            _ => match combo(key, mods) {
+                Some(combo) => (combo, self.state.borrow_mut().recording.take()),
+                None => return, // a lone modifier, or no modifier at all: keep waiting
+            },
+        };
+        let (combo, Some(item)) = item else { return };
+        let result = self.state.borrow_mut().engine.binds.set(&combo, &item);
+        self.finish_bind(result.map(|_| format!("{combo} → {}", item.title)));
+    }
+
+    fn finish_bind(self: &Rc<Self>, result: Result<String, String>) {
+        let selected = self.state.borrow().selected;
+        self.refresh();
+        self.select(selected);
+        match result {
+            Ok(msg) => self.status.set_text(&msg),
+            Err(e) => self.status.set_text(&format!("hyprland: {e}")),
+        }
+    }
+
+    /// `zunder run <key>`, called by the generated Hyprland binds.
+    fn run_bind(self: &Rc<Self>, key: &str) {
+        let Some(item) = self.state.borrow().engine.binds.find(key).cloned() else {
+            eprintln!("zunder: no keybind {key}");
+            return;
+        };
+        match &item.action {
+            crate::item::Action::Fill(text) => self.command(&format!("show {text}")),
+            action => {
+                self.state.borrow_mut().engine.history.bump(&item.id);
+                store::log_launch(&item);
+                action.execute();
+            }
+        }
+    }
+
     fn set_setting(self: &Rc<Self>, key: &str, value: Option<&str>) {
         let mut result = Ok(());
         config::update(|c| match key.strip_prefix("provider:") {
@@ -612,6 +683,35 @@ impl Ui {
             self.status.set_text(&e);
         }
     }
+}
+
+/// Hyprland combo for a key event, e.g. `SUPER + SHIFT + F`. Needs a modifier (F-keys don't).
+fn combo(key: gdk::Key, mods: gdk::ModifierType) -> Option<String> {
+    let name = key.to_lower().name()?.to_string();
+    let modifier_keys = ["Shift", "Control", "Alt", "Super", "Meta", "Hyper", "ISO_Level3", "Caps_Lock"];
+    if modifier_keys.iter().any(|m| name.starts_with(m)) {
+        return None;
+    }
+    let mut parts = Vec::new();
+    if mods.intersects(gdk::ModifierType::SUPER_MASK | gdk::ModifierType::META_MASK) {
+        parts.push("SUPER".to_owned());
+    }
+    if mods.contains(gdk::ModifierType::CONTROL_MASK) {
+        parts.push("CTRL".to_owned());
+    }
+    if mods.contains(gdk::ModifierType::ALT_MASK) {
+        parts.push("ALT".to_owned());
+    }
+    let real_modifier = !parts.is_empty();
+    if mods.contains(gdk::ModifierType::SHIFT_MASK) {
+        parts.push("SHIFT".to_owned());
+    }
+    let fkey = name.strip_prefix('F').is_some_and(|n| n.parse::<u8>().is_ok());
+    if !real_modifier && !fkey {
+        return None;
+    }
+    parts.push(if name.chars().count() == 1 { name.to_uppercase() } else { name });
+    Some(parts.join(" + "))
 }
 
 fn alt_held(window: &gtk::ApplicationWindow) -> bool {
@@ -658,4 +758,21 @@ fn item_row(item: &Item) -> (gtk::ListBoxRow, gtk::Label) {
         b.append(w);
     }
     (gtk::ListBoxRow::builder().child(&b).build(), marker)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{combo, gdk};
+    use gdk::ModifierType as M;
+
+    #[test]
+    fn builds_hyprland_combos() {
+        assert_eq!(combo(gdk::Key::f, M::SUPER_MASK).as_deref(), Some("SUPER + F"));
+        assert_eq!(combo(gdk::Key::F, M::SUPER_MASK | M::SHIFT_MASK).as_deref(), Some("SUPER + SHIFT + F"));
+        assert_eq!(combo(gdk::Key::F5, M::empty()).as_deref(), Some("F5"));
+        assert_eq!(combo(gdk::Key::Return, M::CONTROL_MASK | M::ALT_MASK).as_deref(), Some("CTRL + ALT + Return"));
+        assert_eq!(combo(gdk::Key::a, M::empty()), None);
+        assert_eq!(combo(gdk::Key::A, M::SHIFT_MASK), None);
+        assert_eq!(combo(gdk::Key::Super_L, M::SUPER_MASK), None);
+    }
 }

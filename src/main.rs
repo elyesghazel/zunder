@@ -20,6 +20,7 @@ usage:
   zunder switch          window switcher: opens on the previous window, next on repeat
   zunder switch-prev     same, backwards
   zunder settings        open the settings page
+  zunder run <key>       run a saved keybind (what the generated Hyprland binds call)
   zunder reload          rescan apps and plugins
   zunder quit            stop the server";
 
@@ -35,9 +36,10 @@ fn main() -> ExitCode {
             println!("{USAGE}");
             ExitCode::SUCCESS
         }
-        Some(cmd @ ("toggle" | "show" | "hide" | "switch" | "switch-prev" | "reload" | "quit" | "settings")) => {
+        Some(cmd @ ("toggle" | "show" | "hide" | "switch" | "switch-prev" | "reload" | "quit" | "settings" | "run")) => {
             let line = match (cmd, args.get(1)) {
                 ("settings", _) => "show settings ".to_owned(),
+                ("run", Some(key)) => format!("run {key}"),
                 ("show", Some(query)) => format!("show {query}"),
                 _ => cmd.to_owned(),
             };

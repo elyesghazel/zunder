@@ -4,8 +4,7 @@ use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
 
 use crate::history::History;
-use crate::store::Favorites;
-
+use crate::store::{Binds, Favorites};
 use crate::item::Item;
 use crate::providers::{self, windows::Client};
 
@@ -55,6 +54,7 @@ pub struct Engine {
     pub plugins: providers::plugins::Plugins,
     pub history: History,
     pub favorites: Favorites,
+    pub binds: Binds,
     matcher: SkimMatcherV2,
 }
 
@@ -70,6 +70,7 @@ impl Engine {
             plugins: providers::plugins::Plugins::load(),
             history: History::load(),
             favorites: Favorites::load(),
+            binds: Binds::load(),
             matcher: SkimMatcherV2::default().ignore_case(),
         }
     }
@@ -124,6 +125,9 @@ impl Engine {
             sections.insert(0, Section { title: "Favorites".into(), items: self.favorites.items.clone() });
         }
         for item in sections.iter_mut().flat_map(|s| s.items.iter_mut()) {
+            if let Some(combo) = self.binds.combo_for(&item.id) {
+                item.hint = combo.to_owned();
+            }
             if self.favorites.contains(&item.id) {
                 item.hint = format!("★ {}", item.hint);
             }
