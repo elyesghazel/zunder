@@ -1,5 +1,6 @@
 pub mod apps;
 pub mod calc;
+pub mod emoji;
 pub mod files;
 pub mod clipboard;
 pub mod launches;
@@ -27,6 +28,7 @@ pub fn all() -> Vec<Box<dyn Provider>> {
         Box::new(clipboard::Clipboard),
         Box::new(launches::Launches),
         Box::new(themes::Themes),
+        Box::new(emoji::Emoji),
         Box::new(files::Files),
         Box::new(web::Web),
     ]
