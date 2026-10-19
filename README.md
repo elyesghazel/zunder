@@ -95,6 +95,7 @@ What you type decides what shows up:
 | `clip`, `clip ssh` | clipboard history, `Enter` copies the entry again |
 | `history`, `history firefox` | everything you ever ran from zunder, newest first |
 | `settings` | the settings page |
+| `theme`, `theme nord` | color schemes, `Enter` switches and keeps the list open |
 | `> htop` | run a command in your terminal (stays open after it exits) or in the background |
 | `kill zen` | a search plugin, `<prefix> <query>` |
 | anything | a "Search on DuckDuckGo" result at the bottom |
@@ -135,7 +136,7 @@ All of it, in short:
 - **Web search**: fallback for any query, the engine is a setting.
 - **Plugins**: scripts in any language, see below.
 - **Settings**: `settings` opens a settings page inside zunder, see below.
-- **Theme**: everything is one CSS file you can override.
+- **Themes**: `theme` switches between twelve color schemes, your own are a small CSS file.
 
 Apps are rescanned every time the launcher opens, so new installs show up right away.
 
@@ -215,6 +216,7 @@ value and press `Enter` again, e.g. `settings font_size 13`.
 | Appearance | `icons` | on | colored app icons instead of glyphs |
 | | `font` | JetBrainsMono Nerd Font | any installed font |
 | | `font_size` | 11 | in pt |
+| | `theme` | graphite | color scheme, see [Themes](#themes) |
 | | `accent` | theme | hex color like `#f9e2af` |
 | | `dim` | 0.35 | backdrop darkness, 0 to 1 |
 | | `width` / `height` | 820 / 460 | panel width, result list height |
@@ -243,6 +245,7 @@ disabled = ["Web"]
 |------|------|
 | `~/.config/zunder/config.toml` | settings |
 | `~/.config/zunder/style.css` | your CSS on top of the theme |
+| `~/.config/zunder/themes/` | your own color themes, one `<name>.css` each |
 | `~/.config/zunder/plugins/` | plugins |
 | `~/.config/zunder/favorites.json` | favorites |
 | `~/.config/zunder/binds.json` | global shortcuts, the source for the generated Hyprland file |
@@ -251,10 +254,40 @@ disabled = ["Web"]
 | `~/.local/share/zunder/launches.jsonl` | the full launch history, one JSON line per launch |
 | `$XDG_RUNTIME_DIR/zunder-previews/` | window screenshots, gone after a reboot |
 
-## Theme
+## Themes
 
-The look is [`src/style.css`](src/style.css), a graphite palette with a lavender accent.
-`~/.config/zunder/style.css` is loaded on top of it, so only write what you want to change:
+Type `theme` to list the color schemes. `Enter` applies one right away and keeps the list open,
+so you can step through them. `theme` in the settings (or `theme = "nord"` in `config.toml`)
+does the same.
+
+Built in: `graphite` (the default), `catppuccin-mocha`, `catppuccin-latte` (light), `rose-pine`,
+`rose-pine-dawn` (light), `gruvbox-dark`, `tokyo-night`, `nord`, `everforest-dark`, `dracula`,
+`kanagawa` and `one-dark`.
+
+Your own theme is a file in `~/.config/zunder/themes/`, named after the theme, with one
+`@define-color` line per color from the table below. It shows up in the list next to the
+built-ins, and a file with a built-in's name replaces that built-in. Colors you leave out stay
+graphite.
+
+```css
+/* ~/.config/zunder/themes/solarized.css */
+@define-color bg     #002b36;
+@define-color fg     #eee8d5;
+@define-color muted  #93a1a1;
+@define-color faint  #657b83;
+@define-color ghost  #2a4a54;
+@define-color accent #b58900;
+@define-color green  #859900;
+@define-color sel    #0d3a46;
+@define-color hover  #07323d;
+```
+
+The `accent` setting wins over the theme's accent.
+
+## Custom CSS
+
+The layout is [`src/style.css`](src/style.css), and every color in it is one of the names below.
+`~/.config/zunder/style.css` is loaded on top of the theme, so only write what you want to change:
 
 ```css
 @define-color accent #f9e2af;
@@ -271,10 +304,12 @@ The look is [`src/style.css`](src/style.css), a graphite palette with a lavender
 | `faint` | subtitles, placeholder, glyphs |
 | `ghost` | border, separators, row markers |
 | `accent` | prompt, section titles, selection marker |
+| `green` | not used by the built-in CSS, there for your own rules |
 | `sel` / `hover` | selected / hovered row |
 
 The overlay covers the whole screen and dims it (`window.zunder`). Font, size, accent and dim are
-easier to change in the settings. Restart the daemon after changing the CSS.
+easier to change in the settings. Theme changes apply right away; restart the daemon after
+changing `style.css`.
 
 ## Adding a built-in
 

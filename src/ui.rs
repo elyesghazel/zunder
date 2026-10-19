@@ -13,6 +13,7 @@ use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use crate::config;
 use crate::settings_window;
 use crate::store;
+use crate::theme;
 use crate::engine::{Engine, Section};
 use crate::item::Item;
 use crate::providers::windows::{self, Client};
@@ -87,31 +88,35 @@ pub fn run(initial: Option<&'static str>) -> ExitCode {
 
 thread_local! {
     static CONFIG_CSS: gtk::CssProvider = gtk::CssProvider::new();
+    static THEME_CSS: gtk::CssProvider = gtk::CssProvider::new();
 }
 
-/// Font, size, dim and accent from config.toml, between the built-in theme and style.css.
+/// Font, size, dim, theme and accent from config.toml, between the built-in CSS and style.css.
 fn apply_config_css() {
     let cfg = config::get();
-    let mut css = format!(
+    let css = format!(
         ".panel {{ font-family: \"{}\"; font-size: {}pt; }}\nwindow.zunder {{ background: alpha(black, {}); }}\n",
         cfg.font.replace('"', ""),
         cfg.font_size,
         cfg.dim.clamp(0.0, 1.0)
     );
-    if !cfg.accent.is_empty() {
-        let a = cfg.accent.replace([';', '}'], "");
-        css += &format!(
-            ".caret, .heading-title, row:selected .marker, row:selected .glyph {{ color: {a}; }}\n\
-             entry.query {{ caret-color: {a}; }}\n"
-        );
-    }
     CONFIG_CSS.with(|p| p.load_from_string(&css));
+
+    // @define-color in a higher-priority provider recolors the rules in style.css
+    let mut colors = theme::css(&cfg.theme);
+    if !cfg.accent.is_empty() {
+        colors += &format!("\n@define-color accent {};\n", cfg.accent.replace([';', '}', '{'], ""));
+    }
+    THEME_CSS.with(|p| p.load_from_string(&colors));
 }
 
 fn load_css() {
     let display = gdk::Display::default().expect("no display");
     CONFIG_CSS.with(|p| {
         gtk::style_context_add_provider_for_display(&display, p, gtk::STYLE_PROVIDER_PRIORITY_USER);
+    });
+    THEME_CSS.with(|p| {
+        gtk::style_context_add_provider_for_display(&display, p, gtk::STYLE_PROVIDER_PRIORITY_USER + 1);
     });
     apply_config_css();
     let base = gtk::CssProvider::new();
@@ -123,7 +128,7 @@ fn load_css() {
     if user.exists() {
         let custom = gtk::CssProvider::new();
         custom.load_from_path(&user);
-        gtk::style_context_add_provider_for_display(&display, &custom, gtk::STYLE_PROVIDER_PRIORITY_USER + 1);
+        gtk::style_context_add_provider_for_display(&display, &custom, gtk::STYLE_PROVIDER_PRIORITY_USER + 2);
     }
 }
 
@@ -348,6 +353,9 @@ impl Ui {
                 config::reload();
                 apply_config_css();
                 self.state.borrow_mut().engine.reload();
+                if visible {
+                    self.refresh();
+                }
             }
             "quit" => {
                 if let Some(app) = self.window.application() {
@@ -692,7 +700,7 @@ impl Ui {
         self.scroll.set_max_content_height(height);
         // back to the list, keeping the selection on the changed row
         let selected = self.state.borrow().selected;
-        if value.is_some() {
+        if value.is_some() && self.entry.text().starts_with("settings") {
             self.entry.set_text("settings ");
             self.entry.set_position(-1);
         } else {

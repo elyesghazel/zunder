@@ -1,4 +1,4 @@
-/* Graphite palette, same as waybar/scripts/gcal. Override in ~/.config/zunder/style.css */
+/* Graphite palette, the default theme. Themes (src/theme.rs) and ~/.config/zunder/style.css override these. */
 @define-color bg     #0e0e14;
 @define-color fg     #e6e6ee;
 @define-color muted  #9a9aac;

@@ -6,6 +6,7 @@ pub mod plugins;
 pub mod settings;
 pub mod shell;
 pub mod system;
+pub mod themes;
 pub mod time;
 pub mod web;
 pub mod windows;
@@ -24,6 +25,7 @@ pub fn all() -> Vec<Box<dyn Provider>> {
         Box::new(shell::Shell),
         Box::new(clipboard::Clipboard),
         Box::new(launches::Launches),
+        Box::new(themes::Themes),
         Box::new(web::Web),
     ]
 }

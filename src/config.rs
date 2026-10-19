@@ -20,6 +20,8 @@ pub struct Config {
     pub height: i32,
     /// Backdrop darkness, 0 to 1.
     pub dim: f64,
+    /// Color scheme: a built-in name or a file in ~/.config/zunder/themes/.
+    pub theme: String,
     /// Accent color like `#b4befe`. Empty = theme default.
     pub accent: String,
     /// Colored app icons instead of glyphs.
@@ -46,6 +48,7 @@ impl Default for Config {
             width: 820,
             height: 460,
             dim: 0.35,
+            theme: crate::theme::DEFAULT.into(),
             accent: String::new(),
             icons: true,
             previews: true,
@@ -129,6 +132,7 @@ pub const SETTINGS: &[Setting] = &[
     Setting { key: "icons", group: "Appearance", title: "App icons", help: "colored icons instead of glyphs" },
     Setting { key: "font", group: "Appearance", title: "Font", help: "any installed font, Nerd Fonts show the glyphs" },
     Setting { key: "font_size", group: "Appearance", title: "Font size", help: "in pt" },
+    Setting { key: "theme", group: "Appearance", title: "Theme", help: "color scheme, built-in or ~/.config/zunder/themes/*.css" },
     Setting { key: "accent", group: "Appearance", title: "Accent color", help: "hex like #f9e2af, empty for the theme default" },
     Setting { key: "dim", group: "Appearance", title: "Backdrop dim", help: "0 = clear, 1 = black" },
     Setting { key: "width", group: "Appearance", title: "Width", help: "panel width in px" },
@@ -136,6 +140,14 @@ pub const SETTINGS: &[Setting] = &[
     Setting { key: "terminal", group: "General", title: "Terminal", help: "for > commands, empty = $TERMINAL or kitty" },
     Setting { key: "search_url", group: "General", title: "Search engine", help: "URL with {q} for the query" },
 ];
+
+/// Allowed values for a setting that is a pick from a list, `None` for free-form ones.
+pub fn choices(key: &str) -> Option<Vec<String>> {
+    match key {
+        "theme" => Some(crate::theme::names()),
+        _ => None,
+    }
+}
 
 impl Config {
     /// Current value of a setting as text, `None` for unknown keys.
@@ -207,5 +219,18 @@ mod tests {
         assert_eq!(c.value("previews").as_deref(), Some("on"));
         c.toggle_provider("Web");
         assert!(!c.enabled("web"));
+    }
+
+    #[test]
+    fn theme_setting() {
+        let mut c = Config::default();
+        assert_eq!(c.theme, "graphite");
+        assert_eq!(c.value("theme").as_deref(), Some("graphite"));
+        c.set("theme", Some("nord")).unwrap();
+        assert_eq!(c.theme, "nord");
+        let old: Config = toml::from_str("font_size = 12.0").unwrap();
+        assert_eq!(old.theme, "graphite");
+        assert!(super::choices("theme").unwrap().contains(&"catppuccin-latte".to_owned()));
+        assert!(super::choices("font").is_none());
     }
 }

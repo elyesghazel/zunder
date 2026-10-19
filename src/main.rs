@@ -6,6 +6,7 @@ mod item;
 mod providers;
 mod settings_window;
 mod store;
+mod theme;
 mod ui;
 
 use std::process::ExitCode;
