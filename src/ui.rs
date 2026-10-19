@@ -390,6 +390,8 @@ impl Ui {
         if switch && previews {
             capture_all(&self.state.borrow().windows, &self.capture_tx);
         }
+        // the list keeps its width; the preview gets exactly the extra space
+        self.scroll.set_min_content_width(width);
         let width = if switch && previews { width + PREVIEW_WIDTH } else { width };
         self.panel.set_size_request(width, -1);
         self.scroll.set_min_content_height(height);
@@ -544,6 +546,7 @@ impl Preview {
         let pane = gtk::Box::new(gtk::Orientation::Vertical, 0);
         pane.add_css_class("preview");
         pane.set_size_request(PREVIEW_WIDTH, -1);
+        pane.set_hexpand(false);
         pane.set_visible(false);
         let picture = gtk::Picture::new();
         picture.set_content_fit(gtk::ContentFit::Contain);
@@ -577,7 +580,7 @@ fn capture_all(windows: &[Client], tx: &async_channel::Sender<String>) {
             let path = preview_path(&id);
             let tmp = path.with_extension("tmp");
             let ok = std::process::Command::new("grim")
-                .args(["-T", &id, "-s", "0.5", "-t", "jpeg", "-q", "80"])
+                .args(["-T", &id, "-s", "0.2", "-t", "jpeg", "-q", "80"])
                 .arg(&tmp)
                 .stderr(std::process::Stdio::null())
                 .status()
