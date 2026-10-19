@@ -45,6 +45,7 @@ pub trait Provider {
 
 pub struct Engine {
     providers: Vec<Box<dyn Provider>>,
+    pub plugins: providers::plugins::Plugins,
     pub history: History,
     matcher: SkimMatcherV2,
 }
@@ -55,6 +56,7 @@ impl Engine {
     pub fn new() -> Self {
         Engine {
             providers: providers::all(),
+            plugins: providers::plugins::Plugins::load(),
             history: History::load(),
             matcher: SkimMatcherV2::default().ignore_case(),
         }
@@ -64,12 +66,14 @@ impl Engine {
         for p in &mut self.providers {
             p.reload();
         }
+        self.plugins.reload();
     }
 
     pub fn search(&self, query: &str, windows: &[Client], switch: bool) -> Vec<Section> {
         let query = query.trim_start();
         let cx = Ctx { query, windows, history: &self.history, switch, matcher: &self.matcher };
-        let all: Vec<&dyn Provider> = self.providers.iter().map(|p| p.as_ref()).collect();
+        let providers = self.providers.iter().map(|p| p.as_ref()).chain([&self.plugins as &dyn Provider]);
+        let all: Vec<&dyn Provider> = providers.collect();
         let active: Vec<&dyn Provider> = match all.iter().find(|p| p.exclusive(query)) {
             Some(p) => vec![*p],
             None => all,
