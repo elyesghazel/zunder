@@ -30,7 +30,9 @@ struct State {
     rows: Vec<(gtk::ListBoxRow, gtk::Label)>,
     selected: usize,
     switch: bool,
-    /// Bumped on every query so stale plugin results are dropped.
+    /// What's on screen, so late results from background jobs can be merged in.
+    sections: Vec<Section>,
+    /// Bumped on every query so stale background results are dropped.
     seq: u64,
     /// Ctrl+B was pressed: the next key combo becomes a global keybind for this item.
     recording: Option<Item>,
@@ -214,6 +216,7 @@ impl Ui {
                 selected: 0,
                 switch: false,
                 seq: 0,
+                sections: Vec::new(),
                 recording: None,
             }),
             plugin_tx,
@@ -238,9 +241,13 @@ impl Ui {
         let ui2 = ui.clone();
         glib::spawn_future_local(async move {
             while let Ok((seq, title, items)) = plugin_rx.recv().await {
-                if ui2.state.borrow().seq == seq {
-                    ui2.render(vec![Section { title, items }]);
+                if ui2.state.borrow().seq != seq || items.is_empty() {
+                    continue;
                 }
+                let mut sections = ui2.state.borrow().sections.clone();
+                let at = sections.iter().position(|s| s.title == "Web").unwrap_or(sections.len());
+                sections.insert(at, Section { title, items });
+                ui2.render(sections, true);
             }
         });
         ui
@@ -399,23 +406,25 @@ impl Ui {
 
     fn refresh(self: &Rc<Self>) {
         let query = self.entry.text().to_string();
-        let (sections, call, seq) = {
+        let (sections, jobs, seq) = {
             let mut s = self.state.borrow_mut();
             s.seq += 1;
-            let sections = s.engine.search(&query, &s.windows, s.switch);
-            (sections, s.engine.plugins.call(query.trim_start()), s.seq)
+            let (sections, jobs) = s.engine.search(&query, &s.windows, s.switch);
+            (sections, jobs, s.seq)
         };
-        if let Some(call) = call {
+        for (title, job) in jobs {
             let tx = self.plugin_tx.clone();
             std::thread::spawn(move || {
-                let items = call.run();
-                let _ = tx.send_blocking((seq, call.plugin.name.clone(), items));
+                let _ = tx.send_blocking((seq, title, job()));
             });
         }
-        self.render(sections);
+        self.render(sections, false);
     }
 
-    fn render(&self, sections: Vec<Section>) {
+    /// Show `sections`. `keep` holds the selection and scroll (late results merging in).
+    fn render(&self, sections: Vec<Section>, keep: bool) {
+        let (previous, scroll) = (self.state.borrow().selected, self.scroll.vadjustment().value());
+        self.state.borrow_mut().sections = sections.clone();
         self.list.remove_all();
         let mut items = Vec::new();
         let mut rows = Vec::new();
@@ -442,8 +451,13 @@ impl Ui {
             // ALT+TAB lands on the previous window, like every other switcher
             usize::from(s.switch && count > 1 && self.entry.text().is_empty())
         };
-        self.scroll.vadjustment().set_value(0.0);
-        self.select(first);
+        if keep {
+            self.select(previous.min(count.saturating_sub(1)));
+            self.scroll.vadjustment().set_value(scroll);
+        } else {
+            self.scroll.vadjustment().set_value(0.0);
+            self.select(first);
+        }
     }
 
     fn step(&self, delta: isize) {

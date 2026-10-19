@@ -19,7 +19,7 @@ use std::process::Command;
 
 use serde::Deserialize;
 
-use crate::engine::{Ctx, Provider};
+use crate::engine::{Ctx, Job, Provider};
 use crate::item::{Action, Item, shell_quote};
 
 #[derive(Clone, Debug)]
@@ -76,9 +76,14 @@ impl Provider for Plugins {
         self.call(query).is_some()
     }
 
+    fn deferred(&self, cx: &Ctx) -> Option<(String, Job)> {
+        let call = self.call(cx.query)?;
+        Some((call.plugin.name.clone(), Box::new(move || call.run())))
+    }
+
     fn search(&self, cx: &Ctx) -> Vec<Item> {
-        if let Some(call) = self.call(cx.query) {
-            return vec![Item { title: "…".into(), glyph: call.plugin.glyph, ..Default::default() }];
+        if self.call(cx.query).is_some() {
+            return Vec::new(); // results come from `deferred`
         }
         if cx.query.is_empty() {
             return Vec::new();

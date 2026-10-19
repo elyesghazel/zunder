@@ -8,6 +8,7 @@ use crate::store::{Binds, Favorites};
 use crate::item::Item;
 use crate::providers::{self, windows::Client};
 
+#[derive(Clone)]
 pub struct Section {
     pub title: String,
     pub items: Vec<Item>,
@@ -45,9 +46,17 @@ pub trait Provider {
     fn exclusive(&self, _query: &str) -> bool {
         false
     }
+    /// Slow work for this query (disk, network), run on a thread. Its items arrive later as a
+    /// section with the returned title, placed before the web search fallback.
+    fn deferred(&self, _cx: &Ctx) -> Option<(String, Job)> {
+        None
+    }
     /// Rescan on-disk state (desktop files, plugins…). Called each time the launcher opens.
     fn reload(&mut self) {}
 }
+
+/// Work a provider hands to a background thread.
+pub type Job = Box<dyn FnOnce() -> Vec<Item> + Send>;
 
 pub struct Engine {
     providers: Vec<Box<dyn Provider>>,
@@ -87,7 +96,7 @@ impl Engine {
         self.plugins.reload();
     }
 
-    pub fn search(&self, query: &str, windows: &[Client], switch: bool) -> Vec<Section> {
+    pub fn search(&self, query: &str, windows: &[Client], switch: bool) -> (Vec<Section>, Vec<(String, Job)>) {
         let query = query.trim_start();
         let cx = Ctx { query, windows, history: &self.history, switch, matcher: &self.matcher };
         let providers = self.providers.iter().map(|p| p.as_ref()).chain([&self.plugins as &dyn Provider]);
@@ -101,6 +110,7 @@ impl Engine {
             None => all,
         };
 
+        let jobs: Vec<(String, Job)> = active.iter().filter_map(|p| p.deferred(&cx)).collect();
         let mut sections: Vec<(i64, Section)> = active
             .into_iter()
             .flat_map(|p| {
@@ -137,7 +147,7 @@ impl Engine {
                 item.hint = format!("★ {}", item.hint);
             }
         }
-        sections
+        (sections, jobs)
     }
 }
 
