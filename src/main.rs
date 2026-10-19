@@ -1,3 +1,4 @@
+mod config;
 mod engine;
 mod history;
 mod ipc;
@@ -17,6 +18,7 @@ usage:
   zunder hide
   zunder switch          window switcher: opens on the previous window, next on repeat
   zunder switch-prev     same, backwards
+  zunder settings        open the settings page
   zunder reload          rescan apps and plugins
   zunder quit            stop the server";
 
@@ -32,8 +34,9 @@ fn main() -> ExitCode {
             println!("{USAGE}");
             ExitCode::SUCCESS
         }
-        Some(cmd @ ("toggle" | "show" | "hide" | "switch" | "switch-prev" | "reload" | "quit")) => {
+        Some(cmd @ ("toggle" | "show" | "hide" | "switch" | "switch-prev" | "reload" | "quit" | "settings")) => {
             let line = match (cmd, args.get(1)) {
+                ("settings", _) => "show settings ".to_owned(),
                 ("show", Some(query)) => format!("show {query}"),
                 _ => cmd.to_owned(),
             };

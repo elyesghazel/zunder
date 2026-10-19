@@ -1,6 +1,7 @@
 pub mod apps;
 pub mod calc;
 pub mod plugins;
+pub mod settings;
 pub mod shell;
 pub mod system;
 pub mod web;

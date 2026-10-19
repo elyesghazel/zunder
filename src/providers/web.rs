@@ -17,10 +17,11 @@ impl Provider for Web {
         }
         vec![Item {
             title: format!("Search “{q}”"),
-            subtitle: "duckduckgo".into(),
+            id: format!("web:{q}"),
+            subtitle: "web search".into(),
             hint: "web".into(),
             glyph: "\u{f0ac}".into(),
-            action: Action::Open(format!("https://duckduckgo.com/?q={}", url_encode(q))),
+            action: Action::Open(crate::config::get().search_url.replace("{q}", &url_encode(q))),
             score: -1,
             ..Default::default()
         }]

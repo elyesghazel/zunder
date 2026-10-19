@@ -25,9 +25,6 @@ pub struct Apps {
     apps: Vec<App>,
 }
 
-/// Apps on the start screen: most launched first, topped up with suggestions.
-const START: usize = 24;
-
 /// How likely an app is to be wanted when there's no history yet.
 fn suggestion_weight(app: &App) -> i64 {
     const WEIGHTS: &[(&str, i64)] = &[
@@ -102,7 +99,7 @@ impl Provider for Apps {
             start.sort_by(|a, b| b.0.cmp(&a.0));
             return start
                 .into_iter()
-                .take(START)
+                .take(crate::config::get().start_apps)
                 .map(|(score, a)| {
                     let mut item = self.item(a, score);
                     item.hint = if score >= 1000 { "recent".into() } else { "suggested".into() };

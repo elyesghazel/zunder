@@ -10,13 +10,12 @@ use gtk::{gdk, glib, graphene, prelude::*};
 use gtk4 as gtk;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 
+use crate::config;
 use crate::engine::{Engine, Section};
 use crate::item::Item;
 use crate::providers::windows::{self, Client};
 use crate::ipc;
 
-const PANEL_WIDTH: i32 = 820;
-const LIST_HEIGHT: i32 = 460;
 const PREVIEW_WIDTH: i32 = 420;
 const ICON_SIZE: i32 = 20;
 
@@ -82,8 +81,35 @@ pub fn run(initial: Option<&'static str>) -> ExitCode {
     if code == glib::ExitCode::SUCCESS { ExitCode::SUCCESS } else { ExitCode::FAILURE }
 }
 
+thread_local! {
+    static CONFIG_CSS: gtk::CssProvider = gtk::CssProvider::new();
+}
+
+/// Font, size, dim and accent from config.toml, between the built-in theme and style.css.
+fn apply_config_css() {
+    let cfg = config::get();
+    let mut css = format!(
+        ".panel {{ font-family: \"{}\"; font-size: {}pt; }}\nwindow.zunder {{ background: alpha(black, {}); }}\n",
+        cfg.font.replace('"', ""),
+        cfg.font_size,
+        cfg.dim.clamp(0.0, 1.0)
+    );
+    if !cfg.accent.is_empty() {
+        let a = cfg.accent.replace([';', '}'], "");
+        css += &format!(
+            ".caret, .heading-title, row:selected .marker, row:selected .glyph {{ color: {a}; }}\n\
+             entry.query {{ caret-color: {a}; }}\n"
+        );
+    }
+    CONFIG_CSS.with(|p| p.load_from_string(&css));
+}
+
 fn load_css() {
     let display = gdk::Display::default().expect("no display");
+    CONFIG_CSS.with(|p| {
+        gtk::style_context_add_provider_for_display(&display, p, gtk::STYLE_PROVIDER_PRIORITY_USER);
+    });
+    apply_config_css();
     let base = gtk::CssProvider::new();
     base.load_from_string(include_str!("style.css"));
     // USER priority so ~/.config/gtk-4.0/gtk.css themes do not leak in
@@ -121,7 +147,6 @@ impl Ui {
         panel.add_css_class("panel");
         panel.set_halign(gtk::Align::Center);
         panel.set_valign(gtk::Align::Center);
-        panel.set_size_request(PANEL_WIDTH, -1);
 
         let prompt = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         prompt.add_css_class("prompt");
@@ -139,8 +164,6 @@ impl Ui {
         list.set_selection_mode(gtk::SelectionMode::Single);
         let scroll = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
-            .min_content_height(LIST_HEIGHT)
-            .max_content_height(LIST_HEIGHT)
             .child(&list)
             .build();
 
@@ -282,7 +305,7 @@ impl Ui {
     }
 
     fn alt_release_switches(&self) -> bool {
-        self.state.borrow().switch && self.entry.text().is_empty()
+        config::get().alt_release && self.state.borrow().switch && self.entry.text().is_empty()
     }
 
     fn command(self: &Rc<Self>, cmd: &str) {
@@ -304,7 +327,11 @@ impl Ui {
                 let n = self.state.borrow().items.len();
                 self.select(n.saturating_sub(1));
             }
-            "reload" => self.state.borrow_mut().engine.reload(),
+            "reload" => {
+                config::reload();
+                apply_config_css();
+                self.state.borrow_mut().engine.reload();
+            }
             "quit" => {
                 if let Some(app) = self.window.application() {
                     app.quit();
@@ -319,14 +346,21 @@ impl Ui {
             let mut s = self.state.borrow_mut();
             s.switch = switch;
             s.windows = windows::list();
-            if switch {
-                capture_all(&s.windows, &self.capture_tx);
-            } else {
+            if !switch {
                 s.engine.reload();
             }
         }
-        let width = if switch { PANEL_WIDTH + PREVIEW_WIDTH } else { PANEL_WIDTH };
+        let (width, height, previews) = {
+            let cfg = config::get();
+            (cfg.width, cfg.height, cfg.previews)
+        };
+        if switch && previews {
+            capture_all(&self.state.borrow().windows, &self.capture_tx);
+        }
+        let width = if switch && previews { width + PREVIEW_WIDTH } else { width };
         self.panel.set_size_request(width, -1);
+        self.scroll.set_min_content_height(height);
+        self.scroll.set_max_content_height(height);
         self.entry.set_text("");
         self.refresh();
         self.window.present();
@@ -427,7 +461,7 @@ impl Ui {
 
     fn show_preview(&self) {
         let s = self.state.borrow();
-        let item = s.items.get(s.selected).filter(|_| s.switch);
+        let item = s.items.get(s.selected).filter(|_| s.switch && config::get().previews);
         let Some((item, id)) = item.and_then(|i| Some((i, i.preview.as_ref()?))) else {
             self.preview.pane.set_visible(false);
             return;
@@ -443,11 +477,15 @@ impl Ui {
         self.preview.pane.set_visible(true);
     }
 
-    fn activate(&self, i: usize) {
+    fn activate(self: &Rc<Self>, i: usize) {
         let Some(item) = self.state.borrow().items.get(i).cloned() else { return };
         if let crate::item::Action::Fill(text) = &item.action {
             self.entry.set_text(text);
             self.entry.set_position(-1);
+            return;
+        }
+        if let crate::item::Action::Set { key, value } = &item.action {
+            self.set_setting(key, value.as_deref());
             return;
         }
         if item.action.keeps_open() {
@@ -498,7 +536,7 @@ fn capture_all(windows: &[Client], tx: &async_channel::Sender<String>) {
             let path = preview_path(&id);
             let tmp = path.with_extension("tmp");
             let ok = std::process::Command::new("grim")
-                .args(["-T", &id, "-s", "0.3", "-t", "jpeg", "-q", "80"])
+                .args(["-T", &id, "-s", "0.5", "-t", "jpeg", "-q", "80"])
                 .arg(&tmp)
                 .stderr(std::process::Stdio::null())
                 .status()
@@ -526,6 +564,36 @@ fn icon(item: &Item) -> Option<gtk::Image> {
     Some(image)
 }
 
+impl Ui {
+    fn set_setting(self: &Rc<Self>, key: &str, value: Option<&str>) {
+        let mut result = Ok(());
+        config::update(|c| match key.strip_prefix("provider:") {
+            Some(provider) => c.toggle_provider(provider),
+            None => result = c.set(key, value),
+        });
+        apply_config_css();
+        let (width, height) = {
+            let cfg = config::get();
+            (cfg.width, cfg.height)
+        };
+        self.panel.set_size_request(width, -1);
+        self.scroll.set_min_content_height(height);
+        self.scroll.set_max_content_height(height);
+        // back to the list, keeping the selection on the changed row
+        let selected = self.state.borrow().selected;
+        if value.is_some() {
+            self.entry.set_text("settings ");
+            self.entry.set_position(-1);
+        } else {
+            self.refresh();
+            self.select(selected);
+        }
+        if let Err(e) = result {
+            self.status.set_text(&e);
+        }
+    }
+}
+
 fn alt_held(window: &gtk::ApplicationWindow) -> bool {
     WidgetExt::display(window)
         .default_seat()
@@ -548,7 +616,7 @@ fn item_row(item: &Item) -> (gtk::ListBoxRow, gtk::Label) {
     let b = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     b.add_css_class("item");
     let marker = label("▏", "marker");
-    let glyph: gtk::Widget = match icon(item) {
+    let glyph: gtk::Widget = match icon(item).filter(|_| config::get().icons) {
         Some(image) => image.upcast(),
         None => {
             let glyph = label(&item.glyph, "glyph");

@@ -27,6 +27,11 @@ impl Ctx<'_> {
     pub fn score(&self, text: &str) -> Option<i64> {
         self.matcher.fuzzy_match(text, self.query)
     }
+
+    /// Fuzzy score of an arbitrary `pattern` (e.g. the part after a prefix).
+    pub fn matcher_score(&self, pattern: &str, text: &str) -> Option<i64> {
+        self.matcher.fuzzy_match(text, pattern)
+    }
 }
 
 /// A source of results. Add a feature = add a file in `providers/` + one line in `providers::all()`.
@@ -54,8 +59,11 @@ const PER_SECTION: usize = 12;
 
 impl Engine {
     pub fn new() -> Self {
+        let mut providers = providers::all();
+        let titles = providers.iter().map(|p| p.title().to_owned()).chain(["Plugins".to_owned()]).collect();
+        providers.push(Box::new(providers::settings::Settings::new(titles)));
         Engine {
-            providers: providers::all(),
+            providers,
             plugins: providers::plugins::Plugins::load(),
             history: History::load(),
             matcher: SkimMatcherV2::default().ignore_case(),
@@ -73,26 +81,33 @@ impl Engine {
         let query = query.trim_start();
         let cx = Ctx { query, windows, history: &self.history, switch, matcher: &self.matcher };
         let providers = self.providers.iter().map(|p| p.as_ref()).chain([&self.plugins as &dyn Provider]);
-        let all: Vec<&dyn Provider> = providers.collect();
-        let active: Vec<&dyn Provider> = match all.iter().find(|p| p.exclusive(query)) {
-            Some(p) => vec![*p],
+        let all: Vec<&dyn Provider> = {
+            let cfg = crate::config::get();
+            providers.filter(|p| p.title() == "Settings" || cfg.enabled(p.title())).collect()
+        };
+        let exclusive = all.iter().find(|p| p.exclusive(query)).copied();
+        let active: Vec<&dyn Provider> = match exclusive {
+            Some(p) => vec![p],
             None => all,
         };
 
         let mut sections: Vec<(i64, Section)> = active
             .into_iter()
-            .filter_map(|p| {
+            .flat_map(|p| {
                 let mut items = p.search(&cx);
                 items.sort_by(|a, b| b.score.cmp(&a.score));
-                let best = items.first()?.score;
-                if !query.is_empty() {
+                let Some(best) = items.first().map(|i| i.score) else { return Vec::new() };
+                if !query.is_empty() && exclusive.is_none() {
                     // skim matches very loosely; drop the long tail of scattered-letter hits
                     if best > 0 {
                         items.retain(|i| i.score >= best / 3);
                     }
                     items.truncate(PER_SECTION);
                 }
-                Some((best, Section { title: p.title().to_owned(), items }))
+                split_groups(p.title(), items)
+                    .into_iter()
+                    .map(|s| (s.items.first().map_or(best, |i| i.score), s))
+                    .collect::<Vec<_>>()
             })
             .collect();
 
@@ -102,4 +117,17 @@ impl Engine {
         }
         sections.into_iter().map(|(_, s)| s).collect()
     }
+}
+
+/// One section per distinct `item.group`, in order of first appearance.
+fn split_groups(title: &str, items: Vec<Item>) -> Vec<Section> {
+    let mut sections: Vec<Section> = Vec::new();
+    for item in items {
+        let name = if item.group.is_empty() { title } else { item.group.as_str() };
+        match sections.iter_mut().find(|s| s.title == name) {
+            Some(s) => s.items.push(item),
+            None => sections.push(Section { title: name.to_owned(), items: vec![item] }),
+        }
+    }
+    sections
 }

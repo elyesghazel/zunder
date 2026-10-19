@@ -21,6 +21,9 @@ pub struct Item {
     /// Hyprland `stableId` of a window to show a live preview of.
     #[serde(skip)]
     pub preview: Option<String>,
+    /// Splits a provider's results into several sections (the settings page uses it).
+    #[serde(skip)]
+    pub group: String,
     pub action: Action,
     #[serde(skip)]
     pub score: i64,
@@ -42,13 +45,15 @@ pub enum Action {
     Open(String),
     /// Replace the query and keep the launcher open.
     Fill(String),
+    /// Change a setting (`None` toggles); `provider:<title>` turns a section on or off.
+    Set { key: String, value: Option<String> },
     #[default]
     None,
 }
 
 impl Action {
     pub fn keeps_open(&self) -> bool {
-        matches!(self, Action::Fill(_) | Action::None)
+        matches!(self, Action::Fill(_) | Action::Set { .. } | Action::None)
     }
 
     pub fn execute(&self) {
@@ -64,13 +69,13 @@ impl Action {
             }
             Action::Copy(text) => spawn(&["wl-copy", "--", text]),
             Action::Open(target) => spawn(&["xdg-open", target]),
-            Action::Fill(_) | Action::None => {}
+            Action::Fill(_) | Action::Set { .. } | Action::None => {}
         }
     }
 }
 
 pub fn terminal() -> String {
-    std::env::var("TERMINAL").unwrap_or_else(|_| "kitty".into())
+    crate::config::terminal()
 }
 
 /// Start a fully detached process (own session, no stdio) and reap it.

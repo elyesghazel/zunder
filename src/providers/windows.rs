@@ -82,6 +82,9 @@ impl Provider for Windows {
     }
 
     fn search(&self, cx: &Ctx) -> Vec<Item> {
+        if cx.query.is_empty() && !cx.switch && !crate::config::get().start_windows {
+            return Vec::new();
+        }
         cx.windows
             .iter()
             .enumerate()
