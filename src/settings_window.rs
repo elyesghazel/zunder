@@ -206,6 +206,19 @@ fn setting_control(key: &'static str, changed: &Rc<dyn Fn()>, status: &gtk::Labe
     drop(cfg);
     let changed = changed.clone();
     let status = status.clone();
+    if let Some(choices) = config::choices(key) {
+        let strings: Vec<&str> = choices.iter().map(String::as_str).collect();
+        let drop = gtk::DropDown::from_strings(&strings);
+        if let Some(i) = choices.iter().position(|c| *c == value) {
+            drop.set_selected(i as u32);
+        }
+        drop.connect_selected_notify(move |d| {
+            if let Some(choice) = choices.get(d.selected() as usize) {
+                save(key, Some(choice), &changed, &status);
+            }
+        });
+        return drop.upcast();
+    }
     match kind {
         Kind::Bool => {
             let sw = gtk::Switch::new();

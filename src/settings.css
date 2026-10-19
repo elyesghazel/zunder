@@ -98,3 +98,24 @@ window.zunder-settings switch:checked slider { background: @bg; }
   padding: 4px 14px;
 }
 .flat-button:hover { background: @sel; }
+
+window.zunder-settings dropdown > button {
+  background: @hover;
+  color: @fg;
+  border: 1px solid @ghost;
+  border-radius: 6px;
+  box-shadow: none;
+  min-width: 200px;
+}
+window.zunder-settings popover > contents {
+  background: @bg;
+  color: @fg;
+  border: 1px solid @ghost;
+}
+window.zunder-settings popover row:selected { background: @sel; }
+window.zunder-settings entry > text,
+window.zunder-settings spinbutton > text,
+window.zunder-settings dropdown label,
+window.zunder-settings popover label { color: @fg; }
+window.zunder-settings entry > text > placeholder { color: @faint; }
+window.zunder-settings dropdown arrow { color: @muted; }
