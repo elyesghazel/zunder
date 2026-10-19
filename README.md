@@ -142,6 +142,7 @@ rofi or wofi.
 | `Enter` or click | run the selected result |
 | `Ctrl+F` | add to / remove from favorites |
 | `Ctrl+B` | global shortcut: press the keys, `⌫` removes it, `Esc` cancels |
+| `Ctrl+,` | open the settings window (`Ctrl+.` works too) |
 | `Esc` or click outside | close |
 
 Typing something after ALT+TAB turns it into a search; releasing Alt then doesn't switch.

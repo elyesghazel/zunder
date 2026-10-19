@@ -178,7 +178,7 @@ impl Ui {
 
         let footer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         footer.add_css_class("footer");
-        for (key, desc) in [("↵", "open"), ("⇥", "next"), ("^F", "favorite"), ("^B", "keybind"), (">", "shell"), ("esc", "close")] {
+        for (key, desc) in [("↵", "open"), ("⇥", "next"), ("^F", "favorite"), ("^B", "keybind"), ("^,", "settings"), ("esc", "close")] {
             footer.append(&label(key, "key"));
             footer.append(&label(desc, "desc"));
         }
@@ -271,6 +271,7 @@ impl Ui {
                 gdk::Key::Escape => ui.hide(),
                 gdk::Key::f if ctrl => ui.toggle_favorite(),
                 gdk::Key::b if ctrl => ui.start_recording(),
+                gdk::Key::comma | gdk::Key::period if ctrl => ui.open_settings(None),
                 gdk::Key::Down | gdk::Key::Tab => ui.step(1),
                 gdk::Key::Up | gdk::Key::ISO_Left_Tab => ui.step(-1),
                 gdk::Key::j | gdk::Key::n if ctrl => ui.step(1),

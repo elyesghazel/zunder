@@ -11,6 +11,7 @@
 | `Enter` or click | run the selected result |
 | `Ctrl+F` | add to or remove from favorites |
 | `Ctrl+B` | give the selected result a global shortcut |
+| `Ctrl+,` | open the settings window (`Ctrl+.` works too) |
 | `Esc` or click outside | close |
 
 Once you type something after ALT+TAB, releasing Alt no longer switches, so you can search
