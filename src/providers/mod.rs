@@ -1,4 +1,5 @@
 pub mod apps;
+pub mod calc;
 pub mod windows;
 
 use crate::engine::Provider;
@@ -6,6 +7,7 @@ use crate::engine::Provider;
 /// Registered providers. With an empty query sections appear in this order.
 pub fn all() -> Vec<Box<dyn Provider>> {
     vec![
+        Box::new(calc::Calc),
         Box::new(windows::Windows),
         Box::new(apps::Apps::load()),
     ]
