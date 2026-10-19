@@ -117,6 +117,8 @@ struct Line {
     hint: String,
     glyph: Option<String>,
     #[serde(default)]
+    icon: String,
+    #[serde(default)]
     action: Action,
 }
 
@@ -144,6 +146,7 @@ impl Call {
                         subtitle: l.subtitle,
                         hint: l.hint,
                         glyph: l.glyph.unwrap_or_else(|| self.plugin.glyph.clone()),
+                        icon: l.icon,
                         action: l.action,
                         score,
                         ..Default::default()
