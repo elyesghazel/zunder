@@ -337,9 +337,42 @@ lines. See [docs/development.md](docs/development.md).
 
 ## Roadmap
 
-Next up: a one-line installer and an interactive `zunder setup` (0.2), window actions in the
-switcher (0.3), installable plugins (0.4) and GitHub sync (0.5). The full plan is in
-[docs/roadmap.md](docs/roadmap.md).
+The full plan, with the reasons and details, is in [docs/roadmap.md](docs/roadmap.md).
+
+**0.2: install to daily driver in two minutes**
+- [ ] one-line installer: `curl … | sh`
+- [ ] interactive `zunder setup`: keybinds, autostart, theme, import from vicinae / rofi / wofi
+- [ ] update notice in the launcher
+- [ ] ALT+TAB: reliable quick tap, multiple monitors, fullscreen windows
+- [ ] speed budget: open in under 30 ms, search in under 5 ms, measured
+- [ ] first-run screen
+
+**0.2.x: Windows** (side track)
+- [ ] centered window, glyphs and app icons
+- [ ] smaller bundle, about 10 MB
+- [ ] `zunder-setup.exe` installer with autostart, shortcut and hotkey
+
+**0.3: switcher actions**
+- [ ] close, move to workspace, fullscreen and minimize windows from the switcher
+- [ ] `Ctrl+K` action menu for every result
+- [ ] group by workspace, current workspace only
+
+**0.4: installable plugins**
+- [ ] plugin registry and `zunder plugin install <name>`
+- [ ] plugin settings
+- [ ] starter set: wifi, bluetooth, audio, pass, github, color picker, screenshot…
+- [ ] streaming plugin results
+
+**0.5: sync**
+- [ ] log in with GitHub; favorites, themes, plugins and settings in a private gist
+
+**0.6: macOS and Windows parity**
+- [ ] window switcher, previews, global shortcuts and clipboard history on both
+
+**Later**
+- [ ] Raycast extension bridge (optional)
+- [ ] AUR, winget and Homebrew packages
+- [ ] 1.0: stable config and plugin protocol
 
 ## License
 
