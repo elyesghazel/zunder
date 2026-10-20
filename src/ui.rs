@@ -19,6 +19,8 @@ use crate::providers::windows::{self, Client};
 use crate::ipc;
 
 const PREVIEW_WIDTH: i32 = 420;
+/// The switcher's window screenshots get a wider column than launcher image previews.
+const SWITCH_PREVIEW_WIDTH: i32 = 760;
 const ICON_SIZE: i32 = 20;
 
 struct State {
@@ -535,11 +537,17 @@ impl Ui {
         let width = config::get().width;
         // on the list itself: with no horizontal scrollbar GTK ignores min-content-width
         self.list.set_size_request(width, -1);
-        self.panel.set_size_request(if column { width + PREVIEW_WIDTH } else { width }, -1);
+        let preview = self.preview_width();
+        self.preview.pane.set_size_request(preview, -1);
+        self.panel.set_size_request(if column { width + preview } else { width }, -1);
         self.state.borrow_mut().preview_column = column;
         if !column {
             self.preview.pane.set_visible(false);
         }
+    }
+
+    fn preview_width(&self) -> i32 {
+        if self.state.borrow().switch { SWITCH_PREVIEW_WIDTH } else { PREVIEW_WIDTH }
     }
 
     fn show_preview(&self) {
@@ -574,7 +582,9 @@ impl Ui {
             (None, Some(id)) if s.switch => (Some(preview_path(id)), format!("{}  ·  {}", item.subtitle, item.hint)),
             _ => (None, "no preview".to_owned()),
         };
-        let texture = path.filter(|p| p.exists()).and_then(|p| scaled_texture(&p));
+        let texture = path.filter(|p| p.exists()).and_then(|p| {
+            scaled_texture(&p, self.preview_width() - 36, config::get().height, self.preview.picture.scale_factor())
+        });
         self.preview.picture.set_paintable(texture.as_ref());
         self.preview.title.set_text(&item.title);
         self.preview.meta.set_text(&meta);
@@ -653,9 +663,11 @@ impl Preview {
     }
 }
 
-/// The image shrunk to the preview pane, so big photos don't stall the list.
-fn scaled_texture(path: &Path) -> Option<gdk::Texture> {
-    let pixbuf = gtk::gdk_pixbuf::Pixbuf::from_file_at_scale(path, PREVIEW_WIDTH - 36, 360, true).ok()?;
+/// The image shrunk to the preview pane (in device pixels, so it stays sharp on HiDPI),
+/// so big photos don't stall the list.
+fn scaled_texture(path: &Path, width: i32, height: i32, scale: i32) -> Option<gdk::Texture> {
+    let scale = scale.max(1);
+    let pixbuf = gtk::gdk_pixbuf::Pixbuf::from_file_at_scale(path, width * scale, height * scale, true).ok()?;
     #[allow(deprecated)]
     Some(gdk::Texture::for_pixbuf(&pixbuf))
 }

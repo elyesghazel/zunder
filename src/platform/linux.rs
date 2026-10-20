@@ -46,7 +46,7 @@ pub fn focus_window(address: &str) {
 /// `grim -T` captures any window, even on another workspace.
 pub fn capture_window(stable_id: &str, path: &Path) -> bool {
     Command::new("grim")
-        .args(["-T", stable_id, "-s", "0.2", "-t", "jpeg", "-q", "80"])
+        .args(["-T", stable_id, "-s", "0.5", "-t", "jpeg", "-q", "92"])
         .arg(path)
         .stderr(std::process::Stdio::null())
         .status()
