@@ -93,7 +93,7 @@ pub fn color(name: &str, color: &str) -> Option<String> {
             let (key, value) = rest.trim().split_once(char::is_whitespace)?;
             (key == color).then(|| value.trim().trim_end_matches(';').trim().to_owned())
         })
-        .last()
+        .next_back()
 }
 
 /// True for a theme from the themes folder rather than a built-in.

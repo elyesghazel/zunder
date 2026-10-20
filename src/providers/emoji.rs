@@ -76,7 +76,7 @@ impl Provider for Emoji {
             .filter(|e| e.skin_tone().is_none_or(|t| t == emojis::SkinTone::Default))
             .filter_map(|e| Some(item(e, word_score(&q, e)? / 20)))
             .collect();
-        hits.sort_by(|a, b| b.score.cmp(&a.score));
+        hits.sort_by_key(|x| std::cmp::Reverse(x.score));
         hits.truncate(INLINE);
         hits
     }

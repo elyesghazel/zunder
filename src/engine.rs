@@ -119,7 +119,7 @@ impl Engine {
             .into_iter()
             .flat_map(|p| {
                 let mut items = p.search(&cx);
-                items.sort_by(|a, b| b.score.cmp(&a.score));
+                items.sort_by_key(|x| std::cmp::Reverse(x.score));
                 let Some(best) = items.first().map(|i| i.score) else { return Vec::new() };
                 if !query.is_empty() && exclusive.is_none() {
                     // skim matches very loosely; drop the long tail of scattered-letter hits
@@ -137,7 +137,7 @@ impl Engine {
 
         // empty query keeps provider order; otherwise the best match leads
         if !query.is_empty() {
-            sections.sort_by(|a, b| b.0.cmp(&a.0));
+            sections.sort_by_key(|x| std::cmp::Reverse(x.0));
         }
         let mut sections: Vec<Section> = sections.into_iter().map(|(_, s)| s).collect();
         if query.is_empty() && !switch && !self.favorites.items.is_empty() {
