@@ -40,6 +40,8 @@ pub struct Config {
     pub disabled: Vec<String>,
     /// Window classes zunder never lists, e.g. ["teams-for-linux"].
     pub hide_windows: Vec<String>,
+    /// Look for new zunder releases once a day (GitHub API) and say so on the start screen.
+    pub update_check: bool,
 }
 
 impl Default for Config {
@@ -62,6 +64,7 @@ impl Default for Config {
             start_apps: 24,
             disabled: Vec::new(),
             hide_windows: Vec::new(),
+            update_check: true,
         }
     }
 }
@@ -145,6 +148,7 @@ pub const SETTINGS: &[Setting] = &[
     Setting { key: "height", group: "Appearance", title: "Height", help: "result list height in px" },
     Setting { key: "terminal", group: "General", title: "Terminal", help: "for > commands, empty = $TERMINAL or kitty" },
     Setting { key: "search_url", group: "General", title: "Search engine", help: "URL with {q} for the query" },
+    Setting { key: "update_check", group: "General", title: "Check for updates", help: "once a day, shows a note on the start screen" },
     Setting { key: "currency", group: "General", title: "Currency", help: "for `100 usd`, e.g. CHF; empty = from your time zone" },
 ];
 
