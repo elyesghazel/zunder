@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    # Arch: the GTK and gtk4-layer-shell versions zunder is built against
+    container: archlinux:latest
+    steps:
+      - run: pacman -Syu --noconfirm --needed base-devel git rust gtk4 gtk4-layer-shell
+      - uses: actions/checkout@v4
+      - run: cargo build --locked
+      - run: cargo test --locked
+      - run: cargo clippy --locked -- -D warnings
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install gtk4 pkgconf
+      - run: cargo build --locked
+      - run: cargo test --locked
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-rust
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-gcc
+      - run: cargo build --locked
+      - run: cargo test --locked
