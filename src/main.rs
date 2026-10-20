@@ -1,5 +1,5 @@
 // release builds on Windows are a GUI app: no console window next to the launcher
-#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+#![cfg_attr(all(windows, not(debug_assertions), not(feature = "console")), windows_subsystem = "windows")]
 
 mod config;
 mod engine;
@@ -33,6 +33,7 @@ usage:
   zunder quit            stop the server";
 
 fn main() -> ExitCode {
+    log_panics();
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("server") => ui::run(None),
@@ -86,4 +87,20 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Panics also go to <data dir>/zunder/crash.log: a GUI build on Windows or a macOS app has no
+/// terminal to print them to.
+fn log_panics() {
+    let default = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let dir = dirs::data_local_dir().unwrap_or_else(std::env::temp_dir).join("zunder");
+        let _ = std::fs::create_dir_all(&dir);
+        let line = format!("{} zunder {}: {info}\n", chrono::Local::now().to_rfc3339(), env!("CARGO_PKG_VERSION"));
+        let _ = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("crash.log")).and_then(|mut f| {
+            use std::io::Write;
+            f.write_all(line.as_bytes())
+        });
+        default(info);
+    }));
 }

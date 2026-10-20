@@ -14,6 +14,10 @@ lto = true
 codegen-units = 1
 strip = true
 
+[features]
+# Windows: keep the console window, to see errors (zunder-debug.cmd in the release zip)
+console = []
+
 [dependencies]
 async-channel = "2.5.0"
 chrono = "0.4.45"
