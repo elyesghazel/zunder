@@ -105,8 +105,26 @@ Conventional Commits, subject only: `feat(time): add world clock`. One change pe
 
 ## Releasing
 
-1. Bump `version` in `Cargo.toml` and `pkgver` in `packaging/arch/PKGBUILD`, commit.
-2. Tag and push: `git tag v0.2.0 && git push origin main v0.2.0`.
-3. `packaging/release.sh` builds the tarball and the Arch package into `dist/` and fills in
-   the PKGBUILD checksum.
-4. `gh release create v0.2.0 dist/* --title v0.2.0 --notes-file …`
+```sh
+packaging/bump.sh 0.2.0
+```
+
+That sets the version in `Cargo.toml`, `Cargo.lock` and the PKGBUILD, runs the tests, commits
+`chore(release): v0.2.0`, tags `v0.2.0` and pushes. The tag starts
+[`release.yml`](../.github/workflows/release.yml), which builds on GitHub's machines and publishes
+a release with:
+
+| File | Built on | What's in it |
+|------|----------|--------------|
+| `zunder-<v>-1-x86_64.pkg.tar.zst` | Arch container | Arch package (`pacman -U`) |
+| `zunder-<v>-x86_64-linux.tar.gz` | Arch container | binary, `install.sh`, docs, example plugins |
+| `zunder-<v>-windows-x86_64.zip` | Windows, MSYS2 | `zunder.exe` with the GTK DLLs, icons and schemas; `zunder.cmd` starts it |
+| `zunder-<v>-macos-arm64.dmg` | macOS (Apple Silicon) | `zunder.app` with the GTK libraries bundled by dylibbundler |
+
+Release notes are generated from the commit subjects since the last tag. Run the workflow by hand
+from the Actions tab to build the files without publishing anything.
+
+Nothing releases on a normal push; `ci.yml` only builds and tests on all three systems.
+
+`packaging/release.sh` still builds the Linux files locally, for testing the package before a
+release.

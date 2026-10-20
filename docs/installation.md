@@ -49,6 +49,23 @@ Fedora: `sudo dnf install gtk4 gtk4-layer-shell`. On Debian and Ubuntu, check th
 has GTK 4.14+ and packages gtk4-layer-shell (`apt search gtk4-layer-shell`); older releases
 don't.
 
+## macOS (early)
+
+Apple Silicon only for now. Download `zunder-<version>-macos-arm64.dmg` from the
+[latest release](https://github.com/elyesghazel/zunder/releases), open it and drag `zunder` to
+Applications. The app isn't signed, so the first time right-click it and choose Open (or run
+`xattr -dr com.apple.quarantine /Applications/zunder.app`).
+
+The launcher, apps, search, calculator, conversion, time, emoji, files, plugins, themes and
+settings work. The window switcher, previews and global shortcuts don't exist on macOS yet, so
+start it from Spotlight or a hotkey tool like skhd (`zunder toggle`).
+
+## Windows (early)
+
+Download `zunder-<version>-windows-x86_64.zip`, unzip it anywhere and run `zunder.cmd`. Same
+state as macOS: everything except the window switcher, previews and global shortcuts. Pin
+`zunder.cmd` to the taskbar or give a shortcut to it a key combination in its Properties.
+
 ## From source
 
 ```sh
