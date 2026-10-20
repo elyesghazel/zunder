@@ -33,6 +33,8 @@ struct State {
     sections: Vec<Section>,
     /// Bumped on every query so stale background results are dropped.
     seq: u64,
+    /// The window got focus since it was shown (closing on focus loss waits for this).
+    had_focus: bool,
     /// The preview column is open (ALT+TAB with previews, or images in the results).
     preview_column: bool,
     /// Ctrl+B was pressed: the next key combo becomes a global keybind for this item.
@@ -217,6 +219,7 @@ impl Ui {
                 sections: Vec::new(),
                 recording: None,
                 preview_column: false,
+                had_focus: false,
             }),
             plugin_tx,
             capture_tx,
@@ -316,10 +319,14 @@ impl Ui {
         });
 
         // without a full-screen overlay there's no backdrop to click: close when focus leaves
+        // only once it really had focus: a console or file manager taking focus back right after
+        // the launch shouldn't close it before you've seen it
         if !crate::platform::FULL_SCREEN_OVERLAY {
             let ui = self.clone();
             self.window.connect_is_active_notify(move |w| {
-                if !w.is_active() && w.is_visible() && ui.state.borrow().recording.is_none() {
+                if w.is_active() {
+                    ui.state.borrow_mut().had_focus = true;
+                } else if w.is_visible() && ui.state.borrow().had_focus && ui.state.borrow().recording.is_none() {
                     ui.hide();
                 }
             });
@@ -387,6 +394,7 @@ impl Ui {
         {
             let mut s = self.state.borrow_mut();
             s.switch = switch;
+            s.had_focus = false;
             s.windows = windows::list();
             if !switch {
                 s.engine.reload();
