@@ -337,13 +337,9 @@ lines. See [docs/development.md](docs/development.md).
 
 ## Roadmap
 
-- quicklinks with a `{query}` placeholder, as a built-in
-- secondary actions on `Ctrl+Enter` (copy path, open in terminal…)
-- paste right away after picking a clipboard entry
-- AUR package
-- macOS: window switcher (Accessibility API), previews (ScreenCaptureKit), hotkeys, `.app` bundle
-- Windows: window switcher, previews (DWM thumbnails), hotkeys, installer
-- sync favorites, plugins, themes and settings through your GitHub account
+Next up: a one-line installer and an interactive `zunder setup` (0.2), window actions in the
+switcher (0.3), installable plugins (0.4) and GitHub sync (0.5). The full plan is in
+[docs/roadmap.md](docs/roadmap.md).
 
 ## License
 
