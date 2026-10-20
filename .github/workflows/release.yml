@@ -1,0 +1,139 @@
+name: release
+
+# Runs when a version tag is pushed (packaging/bump.sh does that), or by hand from the Actions
+# tab: then it only builds the files, without publishing a release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # v0.2.0 → 0.2.0; a manual run uses the version in Cargo.toml
+  TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - run: pacman -Syu --noconfirm --needed base-devel git rust gtk4 gtk4-layer-shell
+      - uses: actions/checkout@v4
+      - name: version
+        run: |
+          git config --global --add safe.directory "$PWD"
+          echo "VER=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> "$GITHUB_ENV"
+      - name: tarball
+        run: |
+          cargo build --release --locked
+          mkdir -p dist "stage/zunder-$VER"
+          cp target/release/zunder install.sh README.md LICENSE "stage/zunder-$VER/"
+          cp -r docs examples "stage/zunder-$VER/"
+          tar -C stage -czf "dist/zunder-$VER-x86_64-linux.tar.gz" "zunder-$VER"
+      - name: arch package
+        run: |
+          useradd -m builder
+          mkdir /tmp/pkg
+          cp packaging/arch/PKGBUILD /tmp/pkg/
+          git archive --format=tar.gz --prefix="zunder-$VER/" HEAD > "/tmp/pkg/zunder-$VER.tar.gz"
+          sed -i "s/^pkgver=.*/pkgver=$VER/; s/^sha256sums=.*/sha256sums=('SKIP')/" /tmp/pkg/PKGBUILD
+          chown -R builder /tmp/pkg
+          su builder -c "cd /tmp/pkg && makepkg -f --noconfirm"
+          cp /tmp/pkg/zunder-$VER-*.pkg.tar.zst dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-rust
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-adwaita-icon-theme
+            zip
+      - name: version
+        run: echo "VER=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> "$GITHUB_ENV"
+      - name: build
+        run: cargo build --release --locked
+      - name: bundle GTK next to zunder.exe
+        run: |
+          app="zunder-$VER"
+          mkdir -p "$app/bin" "$app/lib" "$app/share/glib-2.0/schemas" "$app/share/icons"
+          cp target/release/zunder.exe "$app/bin/"
+          # every DLL zunder.exe needs from MSYS2, found recursively by ldd
+          ldd "$app/bin/zunder.exe" | grep -i '/ucrt64/' | awk '{print $3}' | sort -u | xargs -I{} cp {} "$app/bin/"
+          cp -r /ucrt64/lib/gdk-pixbuf-2.0 "$app/lib/"
+          cp /ucrt64/share/glib-2.0/schemas/gschemas.compiled "$app/share/glib-2.0/schemas/"
+          cp -r /ucrt64/share/icons/Adwaita /ucrt64/share/icons/hicolor "$app/share/icons/"
+          cp README.md LICENSE "$app/"
+          cp -r docs examples "$app/"
+          printf '@start "" "%%~dp0bin\\zunder.exe" %%*\r\n' > "$app/zunder.cmd"
+          mkdir -p dist
+          zip -qr "dist/zunder-$VER-windows-x86_64.zip" "$app"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install gtk4 pkgconf dylibbundler adwaita-icon-theme
+      - name: version
+        run: echo "VER=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> "$GITHUB_ENV"
+      - name: build
+        run: cargo build --release --locked
+      - name: zunder.app
+        run: |
+          app=dist/zunder.app/Contents
+          mkdir -p "$app/MacOS" "$app/Frameworks" "$app/Resources/share/glib-2.0/schemas" "$app/Resources/share/icons" "$app/Resources/lib"
+          cp target/release/zunder "$app/MacOS/zunder-bin"
+          cp packaging/macos/launcher.sh "$app/MacOS/zunder"
+          chmod +x "$app/MacOS/zunder"
+          sed "s/@VERSION@/$VER/" packaging/macos/Info.plist > "$app/Info.plist"
+          # copy every Homebrew dylib into Frameworks and point the binary at them
+          dylibbundler -od -b -x "$app/MacOS/zunder-bin" -d "$app/Frameworks" -p @executable_path/../Frameworks/
+          prefix=$(brew --prefix)
+          cp "$prefix/share/glib-2.0/schemas/gschemas.compiled" "$app/Resources/share/glib-2.0/schemas/"
+          cp -r "$prefix/share/icons/Adwaita" "$prefix/share/icons/hicolor" "$app/Resources/share/icons/"
+          cp -r "$prefix/lib/gdk-pixbuf-2.0" "$app/Resources/lib/"
+      - name: dmg
+        run: |
+          mkdir -p out
+          hdiutil create -volname zunder -srcfolder dist/zunder.app -ov -format UDZO "out/zunder-$VER-macos-arm64.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: out/*
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: files
+          merge-multiple: true
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" files/* --title "zunder ${TAG#v}" --generate-notes \
+            --notes "Arch: \`sudo pacman -U\` the .pkg.tar.zst · Linux: the tarball and install.sh · Windows: unzip, run zunder.cmd · macOS (Apple Silicon): open the .dmg, drag zunder to Applications, right-click → Open the first time (it isn't signed). macOS and Windows are early: no window switcher or global shortcuts yet."
