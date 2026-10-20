@@ -1,5 +1,25 @@
 # Installation
 
+The quick way, on any distro:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/elyesghazel/zunder/main/get.sh | sh
+```
+
+| Option | What it does |
+|--------|--------------|
+| `… \| sh` | install or update, then run `zunder setup` |
+| `… \| sh -s -- --no-setup` | install or update only |
+| `… \| sh -s -- --uninstall` | remove zunder; your config stays |
+| `ZUNDER_BIN_DIR=/path … \| sh` | where the binary goes on non-Arch distros (default `~/.local/bin`) |
+
+Arch gets the release package through pacman. Everything else gets the binary built on
+Debian 13, which needs glibc 2.41+ (Debian 13, Ubuntu 25.04, Fedora 42, openSUSE Tumbleweed or
+newer) plus gtk4 and gtk4-layer-shell from the distro; the script checks both and prints the
+install command. Downloads are checked against the release's `SHA256SUMS`.
+
+The sections below are the manual ways.
+
 zunder needs Hyprland, GTK 4.14 or newer and gtk4-layer-shell. Everything else is optional.
 
 | Dependency | Needed for | Arch package |

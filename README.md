@@ -64,6 +64,18 @@ three on every push), with these parts working there so far:
 
 ## Install
 
+```sh
+curl -fsSL https://raw.githubusercontent.com/elyesghazel/zunder/main/get.sh | sh
+```
+
+On Arch it installs the release package with pacman; on other distros it puts the binary in
+`~/.local/bin` and tells you if gtk4 or gtk4-layer-shell are missing. Then it runs
+`zunder setup`, which asks a few questions and sets up the keybinds, autostart and theme
+(and takes over from vicinae, rofi or wofi if you used one). Run the same line again to update;
+`… | sh -s -- --uninstall` removes zunder.
+
+The other ways:
+
 ### Arch Linux
 
 Prebuilt package from the [latest release](https://github.com/elyesghazel/zunder/releases):
@@ -114,7 +126,8 @@ More in [docs/installation.md](docs/installation.md), including updating and uni
 
 ## Setup
 
-Start the daemon with Hyprland and bind the keys. With a Lua config:
+`zunder setup` does all of this for you (`--dry-run` shows the changes first). By hand, with a
+Lua config:
 
 ```lua
 -- conf/autostart.lua, inside hl.on("hyprland.start", function() … end)
@@ -340,12 +353,12 @@ lines. See [docs/development.md](docs/development.md).
 The full plan, with the reasons and details, is in [docs/roadmap.md](docs/roadmap.md).
 
 **0.2: install to daily driver in two minutes**
-- [ ] one-line installer: `curl … | sh`
-- [ ] interactive `zunder setup`: keybinds, autostart, theme, import from vicinae / rofi / wofi
-- [ ] update notice in the launcher
+- [x] one-line installer: `curl … | sh`
+- [x] interactive `zunder setup`: keybinds, autostart, theme, import from vicinae / rofi / wofi
+- [x] update notice in the launcher
 - [ ] ALT+TAB: reliable quick tap, multiple monitors, fullscreen windows
 - [ ] speed budget: open in under 30 ms, search in under 5 ms, measured
-- [ ] first-run screen
+- [x] first-run screen
 
 **0.2.x: Windows** (side track)
 - [ ] centered window, glyphs and app icons

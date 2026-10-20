@@ -1,5 +1,25 @@
 # Setup
 
+```sh
+zunder setup              # asks, defaults on Enter
+zunder setup --dry-run    # shows every change, writes nothing
+zunder setup --yes        # takes every default
+```
+
+It finds your Hyprland config (Lua or classic) and:
+
+- switches over from vicinae, rofi, wofi, fuzzel, walker, anyrun, ulauncher or tofi: their
+  daemons get commented out, and the key that opened them now opens zunder (each changed file
+  keeps a `.bak`)
+- imports vicinae's favorites and launch counts
+- binds ALT+TAB, a launcher key and SUPER+V, telling you when a key is already taken
+- starts cliphist with Hyprland if it isn't running
+- picks a theme and adds the example plugins
+
+Its own lines go to `~/.config/hypr/zunder-setup.lua` (or `.conf`), loaded by one line it adds
+to `hyprland.lua`. Running it again is safe: it rewrites only that file and doesn't add things
+your config already has. Everything below is what it does, for doing it by hand.
+
 zunder is a daemon plus a CLI that talks to it. Hyprland starts the daemon and the keybinds call
 the CLI. Opening is instant because the daemon already has everything loaded.
 
