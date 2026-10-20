@@ -87,7 +87,7 @@ jobs:
           cp -r docs examples "$app/"
           printf '@start "" "%%~dp0bin\\zunder.exe" %%*\r\n' > "$app/zunder.cmd"
           # same program with a console that shows every error, for when zunder.cmd does nothing
-          printf '@echo off\r\necho zunder debug run, errors show up below. Close this window to stop.\r\n"%%~dp0bin\\zunder-console.exe" server\r\necho exit code %%errorlevel%%\r\npause\r\n' > "$app/zunder-debug.cmd"
+          printf '@echo off\r\necho zunder debug run, errors show up below. Close this window to stop.\r\n"%%~dp0bin\\zunder-console.exe"\r\necho exit code %%errorlevel%%\r\npause\r\n' > "$app/zunder-debug.cmd"
           mkdir -p dist
           zip -qr "dist/zunder-$VER-windows-x86_64.zip" "$app"
       - uses: actions/upload-artifact@v4
