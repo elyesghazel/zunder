@@ -12,6 +12,7 @@ pub mod system;
 pub mod themes;
 pub mod time;
 pub mod update;
+pub mod welcome;
 pub mod web;
 pub mod windows;
 
@@ -21,6 +22,7 @@ use crate::engine::Provider;
 /// Plugins are appended by the engine.
 pub fn all() -> Vec<Box<dyn Provider>> {
     vec![
+        Box::new(welcome::Welcome),
         Box::new(update::Update),
         Box::new(calc::Calc),
         Box::new(time::Time),

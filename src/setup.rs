@@ -451,6 +451,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
         say("dry run done, nothing changed");
         return Ok(());
     }
+    // writing the config also ends the first-run screen
+    config::update(|_| {});
 
     // apply now: reload Hyprland and start the daemon under it (autostart only runs at login)
     let _ = Command::new("hyprctl").arg("reload").output();
