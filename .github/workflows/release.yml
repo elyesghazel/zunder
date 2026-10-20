@@ -40,7 +40,8 @@ jobs:
           git archive --format=tar.gz --prefix="zunder-$VER/" HEAD > "/tmp/pkg/zunder-$VER.tar.gz"
           sed -i "s/^pkgver=.*/pkgver=$VER/; s/^sha256sums=.*/sha256sums=('SKIP')/" /tmp/pkg/PKGBUILD
           chown -R builder /tmp/pkg
-          su builder -c "cd /tmp/pkg && makepkg -f --noconfirm"
+          # build deps are installed; runtime deps (hyprland, wl-clipboard) are not needed to build
+          su builder -c "cd /tmp/pkg && makepkg -f --noconfirm --nodeps"
           cp /tmp/pkg/zunder-$VER-*.pkg.tar.zst dist/
       - uses: actions/upload-artifact@v4
         with:
