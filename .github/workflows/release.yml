@@ -69,12 +69,15 @@ jobs:
       - name: version
         run: echo "VER=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> "$GITHUB_ENV"
       - name: build
-        run: cargo build --release --locked
+        run: |
+          cargo build --release --locked
+          cargo build --release --locked --features console --target-dir target-console
       - name: bundle GTK next to zunder.exe
         run: |
           app="zunder-$VER"
           mkdir -p "$app/bin" "$app/lib" "$app/share/glib-2.0/schemas" "$app/share/icons"
           cp target/release/zunder.exe "$app/bin/"
+          cp target-console/release/zunder.exe "$app/bin/zunder-console.exe"
           # every DLL zunder.exe needs from MSYS2, found recursively by ldd
           ldd "$app/bin/zunder.exe" | grep -i '/ucrt64/' | awk '{print $3}' | sort -u | xargs -I{} cp {} "$app/bin/"
           cp -r /ucrt64/lib/gdk-pixbuf-2.0 "$app/lib/"
@@ -83,6 +86,8 @@ jobs:
           cp README.md LICENSE "$app/"
           cp -r docs examples "$app/"
           printf '@start "" "%%~dp0bin\\zunder.exe" %%*\r\n' > "$app/zunder.cmd"
+          # same program with a console that shows every error, for when zunder.cmd does nothing
+          printf '@echo off\r\necho zunder debug run, errors show up below. Close this window to stop.\r\n"%%~dp0bin\\zunder-console.exe" server\r\necho exit code %%errorlevel%%\r\npause\r\n' > "$app/zunder-debug.cmd"
           mkdir -p dist
           zip -qr "dist/zunder-$VER-windows-x86_64.zip" "$app"
       - uses: actions/upload-artifact@v4
