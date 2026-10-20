@@ -15,7 +15,7 @@ env:
   TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
 
 jobs:
-  linux:
+  arch:
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
@@ -25,17 +25,10 @@ jobs:
         run: |
           git config --global --add safe.directory "$PWD"
           echo "VER=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> "$GITHUB_ENV"
-      - name: tarball
-        run: |
-          cargo build --release --locked
-          mkdir -p dist "stage/zunder-$VER"
-          cp target/release/zunder install.sh README.md LICENSE "stage/zunder-$VER/"
-          cp -r docs examples "stage/zunder-$VER/"
-          tar -C stage -czf "dist/zunder-$VER-x86_64-linux.tar.gz" "zunder-$VER"
       - name: arch package
         run: |
           useradd -m builder
-          mkdir /tmp/pkg
+          mkdir /tmp/pkg dist
           cp packaging/arch/PKGBUILD /tmp/pkg/
           git archive --format=tar.gz --prefix="zunder-$VER/" HEAD > "/tmp/pkg/zunder-$VER.tar.gz"
           sed -i "s/^pkgver=.*/pkgver=$VER/; s/^sha256sums=.*/sha256sums=('SKIP')/" /tmp/pkg/PKGBUILD
@@ -43,6 +36,32 @@ jobs:
           # build deps are installed; runtime deps (hyprland, wl-clipboard) are not needed to build
           su builder -c "cd /tmp/pkg && makepkg -f --noconfirm --nodeps"
           cp /tmp/pkg/zunder-$VER-*.pkg.tar.zst dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch
+          path: dist/*
+
+  # The generic tarball is built on Debian 13: its glibc (2.41) is old enough for Debian,
+  # Ubuntu 25.04+, Fedora 42+, openSUSE and Arch, and it packages gtk4-layer-shell.
+  linux:
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - run: |
+          apt-get update -qq
+          apt-get install -y -qq curl ca-certificates build-essential pkg-config git libgtk-4-dev libgtk4-layer-shell-dev
+          curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - uses: actions/checkout@v4
+      - name: version
+        run: echo "VER=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> "$GITHUB_ENV"
+      - name: tarball
+        run: |
+          cargo build --release --locked
+          mkdir -p dist "stage/zunder-$VER"
+          cp target/release/zunder install.sh README.md LICENSE "stage/zunder-$VER/"
+          cp -r docs examples "stage/zunder-$VER/"
+          tar -C stage -czf "dist/zunder-$VER-x86_64-linux.tar.gz" "zunder-$VER"
       - uses: actions/upload-artifact@v4
         with:
           name: linux
@@ -129,7 +148,7 @@ jobs:
 
   publish:
     if: github.ref_type == 'tag'
-    needs: [linux, windows, macos]
+    needs: [arch, linux, windows, macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
