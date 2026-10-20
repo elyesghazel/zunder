@@ -69,7 +69,12 @@ fn find(term: &str, limit: usize) -> Vec<Item> {
     for dir in SKIP {
         fd.args(["--exclude", dir]);
     }
-    let out = fd.args(["--", &regex::escape(&first)]).arg(&home).output();
+    fd.args(["--", &regex::escape(&first)]).arg(&home);
+    let out = fd.output().or_else(|_| {
+        // Debian and Ubuntu ship fd as `fdfind`
+        let mut alt = Command::new("fdfind");
+        alt.args(fd.get_args()).output()
+    });
     let Ok(out) = out else {
         return vec![Item {
             title: "fd is not installed".into(),
@@ -101,7 +106,7 @@ fn find(term: &str, limit: usize) -> Vec<Item> {
             (score, p)
         })
         .collect();
-    found.sort_by(|a, b| b.0.cmp(&a.0));
+    found.sort_by_key(|x| std::cmp::Reverse(x.0));
     found
         .into_iter()
         .take(limit)
