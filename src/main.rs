@@ -10,6 +10,7 @@ mod item;
 mod platform;
 mod providers;
 mod settings_window;
+mod setup;
 mod store;
 mod theme;
 mod ui;
@@ -20,12 +21,14 @@ const USAGE: &str = "zunder — a terminal-styled launcher for Hyprland
 
 usage:
   zunder                 toggle the launcher (starts the server if needed)
+  zunder setup           set up keybinds, autostart and theme for Hyprland (--dry-run, --yes)
   zunder server          run the server (put this in autostart)
   zunder toggle          show or hide the launcher
   zunder show [query]   show, optionally prefilled (e.g. `zunder show 'kill '`)
   zunder hide
   zunder switch          window switcher: opens on the previous window, next on repeat
   zunder switch-prev     same, backwards
+  zunder overview        toggle the switcher without Alt: stays open until you pick a window
   zunder settings [page] open the settings window, e.g. `zunder settings appearance`
   zunder run <key>       run a saved keybind (what the generated Hyprland binds call)
   zunder reload          rescan apps and plugins
@@ -40,6 +43,13 @@ fn main() -> ExitCode {
         None => match ipc::send("toggle") {
             Ok(()) => ExitCode::SUCCESS,
             Err(_) => ui::run(Some("show")),
+        },
+        Some("setup") => match setup::run(&args[1..]) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("zunder: {e}");
+                ExitCode::FAILURE
+            }
         },
         Some("import") => match args.get(1).map(String::as_str) {
             Some("vicinae") => match import::vicinae() {
@@ -66,7 +76,7 @@ fn main() -> ExitCode {
             println!("{USAGE}");
             ExitCode::SUCCESS
         }
-        Some(cmd @ ("toggle" | "show" | "hide" | "switch" | "switch-prev" | "reload" | "quit" | "settings" | "run")) => {
+        Some(cmd @ ("toggle" | "show" | "hide" | "switch" | "switch-prev" | "overview" | "reload" | "quit" | "settings" | "run")) => {
             let line = match (cmd, args.get(1)) {
                 ("settings", Some(page)) => format!("open-settings {page}"),
                 ("settings", None) => "open-settings".to_owned(),
