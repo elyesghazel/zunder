@@ -376,10 +376,7 @@ fn shortcuts_page(changed: &Rc<dyn Fn()>, status: &gtk::Label) -> gtk::Box {
 fn open_button(text: &str, target: std::path::PathBuf) -> gtk::Button {
     let button = gtk::Button::with_label(text);
     button.add_css_class("flat-button");
-    button.connect_clicked(move |_| {
-        let p = crate::item::shell_quote(&target.to_string_lossy());
-        crate::item::spawn(&["sh", "-c", &format!("mkdir -p \"$(dirname {p})\"; [ -e {p} ] || touch {p}; xdg-open {p}")]);
-    });
+    button.connect_clicked(move |_| crate::item::ensure_and_open(&target, false));
     button
 }
 
@@ -388,10 +385,7 @@ fn plugins_page(info: &Rc<Info>) -> gtk::Box {
     let open = gtk::Button::with_label("open folder");
     open.add_css_class("flat-button");
     let dir = plugins::dir();
-    open.connect_clicked(move |_| {
-        let p = crate::item::shell_quote(&dir.to_string_lossy());
-        crate::item::spawn(&["sh", "-c", &format!("mkdir -p {p} && xdg-open {p}")]);
-    });
+    open.connect_clicked(move |_| crate::item::ensure_and_open(&dir, true));
     page.append(&row("Plugins folder", &plugins::dir().display().to_string().replace(&home(), "~"), &open));
     if info.plugins.is_empty() {
         page.append(&label("no plugins installed", "empty"));

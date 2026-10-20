@@ -1,7 +1,6 @@
-use std::process::{Command, Stdio};
-use std::thread;
-
 use serde::{Deserialize, Serialize};
+
+use crate::platform;
 
 /// One selectable result row.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -68,41 +67,27 @@ impl Action {
 
     pub fn execute(&self) {
         match self {
-            Action::Run(cmd) => spawn(&["sh", "-c", cmd]),
-            Action::Term(cmd) => {
-                let held = format!("{cmd}; printf '\\n\\033[2m[exit %s] enter to close\\033[0m' $?; read _");
-                spawn(&[&terminal(), "-e", "sh", "-c", &held]);
-            }
-            Action::Focus(addr) => {
-                let lua = format!("hl.dsp.focus({{ window = \"address:{addr}\" }})");
-                spawn(&["hyprctl", "dispatch", &lua]);
-            }
-            Action::Copy(text) => spawn(&["wl-copy", "--", text]),
-            Action::Open(target) => spawn(&["xdg-open", target]),
+            Action::Run(cmd) => platform::run_shell(cmd),
+            Action::Term(cmd) => platform::run_in_terminal(cmd),
+            Action::Focus(id) => platform::focus_window(id),
+            Action::Copy(text) => platform::copy(text),
+            Action::Open(target) => platform::open(target),
             Action::Fill(_) | Action::Set { .. } | Action::None => {}
         }
     }
 }
 
-pub fn terminal() -> String {
-    crate::config::terminal()
-}
-
-/// Start a fully detached process (own session, no stdio) and reap it.
-pub fn spawn(argv: &[&str]) {
-    let child = Command::new("setsid")
-        .arg("-f")
-        .args(argv)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
-    match child {
-        Ok(mut c) => {
-            thread::spawn(move || c.wait());
+/// Create `path` (an empty file, or a folder) if it's missing, then open it.
+pub fn ensure_and_open(path: &std::path::Path, folder: bool) {
+    if folder {
+        let _ = std::fs::create_dir_all(path);
+    } else if !path.exists() {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
         }
-        Err(e) => eprintln!("zunder: failed to run {argv:?}: {e}"),
+        let _ = std::fs::write(path, "");
     }
+    platform::open(&path.to_string_lossy());
 }
 
 pub fn shell_quote(s: &str) -> String {

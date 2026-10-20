@@ -1260,6 +1260,7 @@ dependencies = [
  "fuzzy-matcher",
  "gtk4",
  "gtk4-layer-shell",
+ "iana-time-zone",
  "meval",
  "regex",
  "serde",

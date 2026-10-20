@@ -173,7 +173,7 @@ fn currency(text: &str, rates: Option<&Rates>) -> Option<String> {
         return Some((*code).to_owned());
     }
     let code = t.to_uppercase();
-    let known = KNOWN.contains(&code.as_str()) || rates.is_some_and(|r| r.rates.get(&code).is_some());
+    let known = KNOWN.contains(&code.as_str()) || rates.is_some_and(|r| r.rates.contains_key(&code));
     (code.len() == 3 && code.chars().all(|c| c.is_ascii_alphabetic()) && known).then_some(code)
 }
 
@@ -183,7 +183,7 @@ pub fn home_currency() -> String {
     if !set.is_empty() {
         return set;
     }
-    let tz = fs::read_link("/etc/localtime").map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+    let tz = crate::platform::time_zone().unwrap_or_default();
     let by_zone: &[(&str, &str)] = &[
         ("Europe/Zurich", "CHF"), ("Europe/London", "GBP"), ("Europe/Stockholm", "SEK"),
         ("Europe/Oslo", "NOK"), ("Europe/Copenhagen", "DKK"), ("Europe/Warsaw", "PLN"),

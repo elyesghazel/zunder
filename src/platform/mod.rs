@@ -1,0 +1,114 @@
+//! Everything that differs between Linux, macOS and Windows. Each OS module provides the same
+//! functions; the rest of zunder only talks to `platform::…`.
+//!
+//! | function             | what it does                                               |
+//! |----------------------|------------------------------------------------------------|
+//! | `init_overlay`       | turn the launcher window into an overlay                   |
+//! | `list_windows`       | open windows, most recently focused first                  |
+//! | `focus_window`       | bring a window to the front                                |
+//! | `capture_window`     | screenshot of one window into a file                       |
+//! | `scan_apps`          | installed applications                                     |
+//! | `open` / `copy`      | open a file or URL / put text on the clipboard             |
+//! | `run_in_terminal`    | run a command in a terminal that stays open                |
+//! | `terminal_command`   | wrap an app's command so it runs in a terminal             |
+//! | `system_commands`    | lock, sleep, restart…                                      |
+//! | `install_binds`      | turn zunder's keybinds into global shortcuts               |
+//! | `is_executable`      | whether a file in the plugins folder can be run            |
+
+use std::process::{Command, Stdio};
+use std::thread;
+
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "linux")]
+pub use linux::*;
+
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "macos")]
+pub use macos::*;
+
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+pub use windows::*;
+
+/// An entry for the System section.
+pub struct SystemCommand {
+    pub title: &'static str,
+    pub keywords: &'static str,
+    pub glyph: &'static str,
+    pub command: &'static str,
+}
+
+/// Start a detached process (no stdio, survives zunder) and reap it.
+pub fn spawn(argv: &[&str]) {
+    let Some((program, args)) = argv.split_first() else { return };
+    let mut cmd = Command::new(program);
+    cmd.args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    detach(&mut cmd);
+    match cmd.spawn() {
+        Ok(mut child) => {
+            thread::spawn(move || child.wait());
+        }
+        Err(e) => eprintln!("zunder: failed to run {argv:?}: {e}"),
+    }
+}
+
+#[cfg(unix)]
+fn detach(cmd: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    cmd.process_group(0);
+}
+
+#[cfg(windows)]
+fn detach(cmd: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const DETACHED_PROCESS: u32 = 0x0000_0008;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(DETACHED_PROCESS | CREATE_NO_WINDOW);
+}
+
+/// The system shell, for command lines from plugins, `>` and actions.
+pub fn shell(cmd: &str) -> Command {
+    #[cfg(unix)]
+    let mut c = {
+        let mut c = Command::new("sh");
+        c.args(["-c", cmd]);
+        c
+    };
+    #[cfg(windows)]
+    let mut c = {
+        let mut c = Command::new("cmd");
+        c.args(["/C", cmd]);
+        c
+    };
+    c.stdin(Stdio::null());
+    c
+}
+
+/// Run a command line in the background.
+pub fn run_shell(cmd: &str) {
+    #[cfg(unix)]
+    spawn(&["sh", "-c", cmd]);
+    #[cfg(windows)]
+    spawn(&["cmd", "/C", cmd]);
+}
+
+/// Put text on the clipboard by piping it into a helper program.
+#[allow(dead_code)]
+fn pipe_to(program: &str, args: &[&str], text: &str) {
+    use std::io::Write;
+    let child = Command::new(program).args(args).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+    if let Ok(mut child) = child {
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = stdin.write_all(text.as_bytes());
+        }
+        thread::spawn(move || child.wait());
+    }
+}
+
+/// The local IANA time zone, e.g. `Europe/Zurich`, on every OS.
+pub fn time_zone() -> Option<String> {
+    iana_time_zone::get_timezone().ok()
+}

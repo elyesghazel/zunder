@@ -8,7 +8,6 @@ use std::time::Duration;
 
 use gtk::{gdk, glib, graphene, prelude::*};
 use gtk4 as gtk;
-use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 
 use crate::config;
 use crate::settings_window;
@@ -150,14 +149,7 @@ fn label(text: &str, class: &str) -> gtk::Label {
 impl Ui {
     fn build(app: &gtk::Application) -> Rc<Self> {
         let window = gtk::ApplicationWindow::builder().application(app).title("zunder").build();
-        window.init_layer_shell();
-        window.set_layer(Layer::Overlay);
-        window.set_namespace(Some("zunder"));
-        window.set_keyboard_mode(KeyboardMode::Exclusive);
-        window.set_exclusive_zone(-1);
-        for edge in [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right] {
-            window.set_anchor(edge, true);
-        }
+        crate::platform::init_overlay(&window);
         window.add_css_class("zunder");
 
         let panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -322,6 +314,16 @@ impl Ui {
                 }
             });
         });
+
+        // without a full-screen overlay there's no backdrop to click: close when focus leaves
+        if !crate::platform::FULL_SCREEN_OVERLAY {
+            let ui = self.clone();
+            self.window.connect_is_active_notify(move |w| {
+                if !w.is_active() && w.is_visible() && ui.state.borrow().recording.is_none() {
+                    ui.hide();
+                }
+            });
+        }
 
         // click on the dimmed backdrop closes
         let click = gtk::GestureClick::new();
@@ -547,7 +549,7 @@ impl Ui {
         if let (Some(img), Some(cmd)) = (&item.image, &item.image_cmd)
             && !Path::new(img).exists()
         {
-            let _ = std::process::Command::new("sh").args(["-c", cmd]).status();
+            let _ = crate::platform::shell(cmd).status();
         }
         let (path, meta) = match (&item.image, &item.preview) {
             (Some(img), _) => (Some(PathBuf::from(img)), image_meta(Path::new(img))),
@@ -566,7 +568,7 @@ impl Ui {
         if let Some(cached) = self.preview.text_cache.borrow().get(cmd) {
             return cached.clone();
         }
-        let out = std::process::Command::new("sh").args(["-c", cmd]).output();
+        let out = crate::platform::shell(cmd).output();
         let text: String = out.map(|o| String::from_utf8_lossy(&o.stdout).chars().take(50_000).collect()).unwrap_or_default();
         self.preview.text_cache.borrow_mut().insert(cmd.to_owned(), text.clone());
         text
@@ -672,12 +674,7 @@ fn capture_all(windows: &[Client], tx: &async_channel::Sender<String>) {
         std::thread::spawn(move || {
             let path = preview_path(&id);
             let tmp = path.with_extension("tmp");
-            let ok = std::process::Command::new("grim")
-                .args(["-T", &id, "-s", "0.2", "-t", "jpeg", "-q", "80"])
-                .arg(&tmp)
-                .stderr(std::process::Stdio::null())
-                .status()
-                .is_ok_and(|s| s.success());
+            let ok = crate::platform::capture_window(&id, &tmp);
             if ok && std::fs::rename(&tmp, &path).is_ok() {
                 let _ = tx.send_blocking(id);
             }

@@ -13,7 +13,6 @@
 //! command: shows up in the main search by name; Enter runs it once.
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -195,7 +194,7 @@ fn scan() -> Vec<Plugin> {
         .filter_map(|e| {
             let path = e.path();
             let meta = fs::metadata(&path).ok()?;
-            if !meta.is_file() || meta.permissions().mode() & 0o111 == 0 {
+            if !meta.is_file() || !crate::platform::is_executable(&meta, &path) {
                 return None;
             }
             let stem = path.file_stem()?.to_string_lossy().into_owned();

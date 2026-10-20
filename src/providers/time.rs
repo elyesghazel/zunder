@@ -273,12 +273,7 @@ impl Provider for Time {
 
 /// The system zone, for converting into "here".
 fn local_tz() -> Tz {
-    std::env::var("TZ")
-        .ok()
-        .or_else(|| std::fs::read_link("/etc/localtime").ok().map(|p| p.to_string_lossy().into_owned()))
-        .and_then(|p| p.split("zoneinfo/").last().map(str::to_owned))
-        .and_then(|name| name.parse().ok())
-        .unwrap_or(Tz::UTC)
+    crate::platform::time_zone().and_then(|name| name.parse().ok()).unwrap_or(Tz::UTC)
 }
 
 fn human(d: Duration) -> String {

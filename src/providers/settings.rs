@@ -2,7 +2,7 @@
 
 use crate::config::{self, SETTINGS};
 use crate::engine::{Ctx, Provider};
-use crate::item::{Action, Item, shell_quote};
+use crate::item::{Action, Item};
 use crate::providers::plugins;
 
 pub struct Settings {
@@ -25,12 +25,16 @@ fn on_off(on: bool) -> String {
 
 /// Open a file in the default app, creating it (and its folder) first.
 fn open_file(path: &std::path::Path, folder: bool) -> Action {
-    let p = shell_quote(&path.to_string_lossy());
-    Action::Run(if folder {
-        format!("mkdir -p {p} && xdg-open {p}")
-    } else {
-        format!("mkdir -p \"$(dirname {p})\" && touch {p} && xdg-open {p}")
-    })
+    // make sure it exists so the file manager / editor has something to open
+    if folder {
+        let _ = std::fs::create_dir_all(path);
+    } else if !path.exists() {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(path, "");
+    }
+    Action::Open(path.to_string_lossy().into_owned())
 }
 
 impl Provider for Settings {

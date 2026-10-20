@@ -4,6 +4,7 @@ mod history;
 mod import;
 mod ipc;
 mod item;
+mod platform;
 mod providers;
 mod settings_window;
 mod store;

@@ -1,7 +1,6 @@
-//! Open Hyprland windows, most recently focused first.
+//! Open windows, most recently focused first. The list comes from `platform::list_windows`.
 
 use std::collections::HashMap;
-use std::process::Command;
 
 use serde::Deserialize;
 
@@ -9,7 +8,7 @@ use crate::engine::{Ctx, Provider};
 use crate::item::{Action, Item};
 use crate::providers::apps;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct Client {
     pub address: String,
     pub class: String,
@@ -24,7 +23,7 @@ pub struct Client {
     pub stable_id: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct Workspace {
     pub name: String,
 }
@@ -34,10 +33,7 @@ fn yes() -> bool {
 }
 
 pub fn list() -> Vec<Client> {
-    let Ok(out) = Command::new("hyprctl").args(["clients", "-j"]).output() else {
-        return Vec::new();
-    };
-    let mut clients: Vec<Client> = serde_json::from_slice(&out.stdout).unwrap_or_default();
+    let mut clients = crate::platform::list_windows();
     let hidden = crate::config::get().hide_windows.clone();
     clients.retain(|c| {
         c.mapped && !(c.class.is_empty() && c.title.is_empty()) && !hidden.iter().any(|h| h.eq_ignore_ascii_case(&c.class))
