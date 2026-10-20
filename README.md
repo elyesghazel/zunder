@@ -2,6 +2,8 @@
 
 A launcher and ALT+TAB window switcher for Hyprland that looks like a terminal.
 
+[![ci](https://github.com/elyesghazel/zunder/actions/workflows/ci.yml/badge.svg)](https://github.com/elyesghazel/zunder/actions/workflows/ci.yml)
+
 ![zunder demo](assets/demo.gif)
 
 zunder runs as a small daemon. A keybind sends it a command over a unix socket, and it shows a
@@ -43,6 +45,22 @@ Written in Rust with GTK4 and gtk4-layer-shell. Built and tested on Arch with Hy
 | **Plugins** | any script that prints lines, e.g. `kill zen` |
 | **Themes** | 12 built in (catppuccin, rose-pine, gruvbox, tokyo-night, nord…), or your own |
 | **Settings** | a settings window with a sidebar, plus `settings` inside the launcher |
+
+## Platforms
+
+zunder is built for Hyprland first. The same code also builds on macOS and Windows (CI checks all
+three on every push), with these parts working there so far:
+
+| | Linux (Hyprland) | macOS | Windows |
+|---|---|---|---|
+| launcher, search, calculator, conversion, time, emoji, files, plugins, themes, settings | ✓ | ✓ | ✓ |
+| apps | ✓ `.desktop` | ✓ `.app` bundles | ✓ Start menu |
+| lock, sleep, restart, shut down | ✓ | ✓ | ✓ |
+| full-screen overlay with backdrop | ✓ | borderless window | borderless window |
+| window switcher and previews | ✓ | planned | planned |
+| global shortcuts (Ctrl+B) | ✓ | planned | planned |
+| clipboard history | ✓ cliphist | planned | planned |
+| packages | Arch | planned | planned |
 
 ## Install
 
@@ -323,6 +341,9 @@ lines. See [docs/development.md](docs/development.md).
 - secondary actions on `Ctrl+Enter` (copy path, open in terminal…)
 - paste right away after picking a clipboard entry
 - AUR package
+- macOS: window switcher (Accessibility API), previews (ScreenCaptureKit), hotkeys, `.app` bundle
+- Windows: window switcher, previews (DWM thumbnails), hotkeys, installer
+- sync favorites, plugins, themes and settings through your GitHub account
 
 ## License
 
