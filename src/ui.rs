@@ -29,6 +29,8 @@ struct State {
     rows: Vec<(gtk::ListBoxRow, gtk::Label)>,
     selected: usize,
     switch: bool,
+    /// Opened with `overview`: the switcher stays open until a window is picked (no Alt to release).
+    hold: bool,
     /// What's on screen, so late results from background jobs can be merged in.
     sections: Vec<Section>,
     /// Bumped on every query so stale background results are dropped.
@@ -215,6 +217,7 @@ impl Ui {
                 rows: Vec::new(),
                 selected: 0,
                 switch: false,
+                hold: false,
                 seq: 0,
                 sections: Vec::new(),
                 recording: None,
@@ -345,7 +348,8 @@ impl Ui {
     }
 
     fn alt_release_switches(&self) -> bool {
-        config::get().alt_release && self.state.borrow().switch && self.entry.text().is_empty()
+        let s = self.state.borrow();
+        config::get().alt_release && s.switch && !s.hold && self.entry.text().is_empty()
     }
 
     fn command(self: &Rc<Self>, cmd: &str) {
@@ -366,6 +370,11 @@ impl Ui {
             "hide" => self.hide(),
             "switch" | "switch-prev" if visible => self.step(if cmd == "switch" { 1 } else { -1 }),
             "switch" => self.show(true),
+            "overview" if visible => self.hide(),
+            "overview" => {
+                self.state.borrow_mut().hold = true;
+                self.show(true);
+            }
             "switch-prev" => {
                 self.show(true);
                 let n = self.state.borrow().items.len();
@@ -419,6 +428,7 @@ impl Ui {
     }
 
     fn hide(&self) {
+        self.state.borrow_mut().hold = false;
         self.window.set_visible(false);
     }
 
