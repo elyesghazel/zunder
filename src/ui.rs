@@ -883,7 +883,9 @@ impl Ui {
         });
         apply_config_css();
         let height = config::get().height;
-        self.fit_panel(self.state.borrow().preview_column);
+        // read first: the borrow in the argument would still be alive inside fit_panel's borrow_mut
+        let column = self.state.borrow().preview_column;
+        self.fit_panel(column);
         self.scroll.set_min_content_height(height);
         self.scroll.set_max_content_height(height);
         // back to the list, keeping the selection on the changed row
