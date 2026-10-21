@@ -89,6 +89,7 @@ jobs:
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-adwaita-icon-theme
             zip
+            unzip
       - uses: Swatinem/rust-cache@v2
         with:
           key: windows-msys2
@@ -104,6 +105,9 @@ jobs:
           app="zunder-$VER"
           mkdir -p "$app/bin" "$app/lib" "$app/share/glib-2.0/schemas" "$app/share/icons"
           cp target/release/zunder.exe "$app/bin/"
+          # fd for file search, so nothing has to be installed after zunder
+          curl -fsSL -o fd.zip https://github.com/sharkdp/fd/releases/download/v10.3.0/fd-v10.3.0-x86_64-pc-windows-msvc.zip
+          unzip -j -q fd.zip "*/fd.exe" -d "$app/bin/"
           cp target-console/release/zunder.exe "$app/bin/zunder-console.exe"
           # every DLL zunder.exe needs from MSYS2, found recursively by ldd
           ldd "$app/bin/zunder.exe" | grep -i '/ucrt64/' | awk '{print $3}' | sort -u | xargs -I{} cp {} "$app/bin/"

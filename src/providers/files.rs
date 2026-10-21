@@ -64,7 +64,9 @@ fn find(term: &str, limit: usize) -> Vec<Item> {
     let mut words = term.split_whitespace().map(str::to_lowercase);
     let Some(first) = words.next() else { return Vec::new() };
     let rest: Vec<String> = words.collect();
-    let mut fd = Command::new("fd");
+    // the Windows bundle ships fd.exe next to zunder.exe
+    let bundled = std::env::current_exe().ok().and_then(|e| Some(e.parent()?.join("fd.exe"))).filter(|p| p.exists());
+    let mut fd = Command::new(bundled.unwrap_or_else(|| "fd".into()));
     fd.args(["--ignore-case", "--absolute-path", "--max-results", "300"]);
     for dir in SKIP {
         fd.args(["--exclude", dir]);
