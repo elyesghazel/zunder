@@ -39,4 +39,4 @@ gtk4-layer-shell = "0.8.1"
 
 [target."cfg(windows)".dependencies]
 gdk4-win32 = "0.11.5"
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_Registry", "Win32_UI_Shell", "Win32_Storage_FileSystem", "Win32_System_Com"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_Registry", "Win32_UI_Shell", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_UI_Input_KeyboardAndMouse"] }

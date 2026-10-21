@@ -39,6 +39,27 @@ pub fn update_hint() -> &'static str {
 /// "JetBrainsMono NF", which the CSS lists next to its Linux name.
 pub fn init() {
     install_fonts();
+    std::thread::spawn(hotkey_loop);
+}
+
+/// ALT+SPACE opens zunder from anywhere, like Raycast or PowerToys Run. The key is registered
+/// with Windows on a thread with its own message loop; a press toggles zunder through its socket.
+fn hotkey_loop() {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{MOD_ALT, MOD_NOREPEAT, RegisterHotKey, VK_SPACE};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetMessageW, MSG, WM_HOTKEY};
+    // SAFETY: registering for this thread (null window) and pumping its own message queue.
+    unsafe {
+        if RegisterHotKey(std::ptr::null_mut(), 1, MOD_ALT | MOD_NOREPEAT, u32::from(VK_SPACE)) == 0 {
+            eprintln!("zunder: ALT+SPACE is taken by another program; use Ctrl+Alt+Space");
+            return;
+        }
+        let mut msg: MSG = std::mem::zeroed();
+        while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
+            if msg.message == WM_HOTKEY {
+                let _ = crate::ipc::send("toggle");
+            }
+        }
+    }
 }
 
 /// The unpacked folder: `<prefix>\bin\zunder.exe`.
