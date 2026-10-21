@@ -130,6 +130,10 @@ icons, and comes back after a reboot. Tested on real Windows.
 
 ---
 
+## 0.2.2: missing tools install themselves
+
+- [x] "Install fd" / "Install cliphist" results: Enter runs the right package manager in a terminal
+
 ## 0.3: setup and presence
 
 1. **Setup as a page inside zunder.** `setup` opens a page like `settings`: toggles for the

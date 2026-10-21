@@ -76,12 +76,8 @@ fn find(term: &str, limit: usize) -> Vec<Item> {
         alt.args(fd.get_args()).output()
     });
     let Ok(out) = out else {
-        return vec![Item {
-            title: "fd is not installed".into(),
-            subtitle: "pacman -S fd".into(),
-            glyph: "\u{f071}".into(),
-            ..Default::default()
-        }];
+        // only `f …` says so; inline results just stay empty
+        return if limit == INLINE { Vec::new() } else { vec![super::missing_tool("fd", "finds the files", "")] };
     };
     let home_str = home.to_string_lossy().into_owned();
     let mut found: Vec<(i64, String)> = String::from_utf8_lossy(&out.stdout)

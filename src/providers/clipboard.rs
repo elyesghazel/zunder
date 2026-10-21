@@ -49,12 +49,11 @@ impl Provider for Clipboard {
         let out = match Command::new("cliphist").arg("list").output() {
             Ok(out) => out,
             Err(_) => {
-                return vec![Item {
-                    title: "cliphist is not installed".into(),
-                    subtitle: "pacman -S cliphist, then run `wl-paste --watch cliphist store`".into(),
-                    glyph: "\u{f071}".into(),
-                    ..Default::default()
-                }];
+                return vec![super::missing_tool(
+                    "cliphist",
+                    "keeps the clipboard history",
+                    "; then `zunder setup` starts it with Hyprland",
+                )];
             }
         };
         let rest = cx.query[PREFIX.len()..].trim();

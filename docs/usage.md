@@ -149,6 +149,10 @@ rank first. Enter opens the file with its default app. Files can be favorites an
 Image results (`f png`, `f wallpaper`, or images among the inline results) open a preview pane
 with the picture, its size and format.
 
+When `fd` isn't installed, `f <name>` shows an **Install fd** result instead: Enter opens a
+terminal with the right command for your system (`pacman`, `apt`, `dnf`, `zypper`, `winget` or
+`brew`). `clip` does the same for cliphist.
+
 ## Emoji
 
 From 3 letters on, the 3 best emoji show up in every search (`fire` → 🔥). `:name` or

@@ -115,6 +115,37 @@ fn pipe_to(program: &str, args: &[&str], text: &str) {
     }
 }
 
+/// The command that installs `tool` with this system's package manager, run in a terminal from
+/// a "… is not installed" result. `None` when we don't know how.
+pub fn install_command(tool: &str) -> Option<String> {
+    let has = |program: &str| {
+        std::env::var_os("PATH").is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(program).is_file()))
+    };
+    if cfg!(windows) {
+        let id = match tool {
+            "fd" => "sharkdp.fd",
+            _ => return None,
+        };
+        return Some(format!("winget install -e --id {id}"));
+    }
+    if cfg!(target_os = "macos") {
+        return has("brew").then(|| format!("brew install {tool}"));
+    }
+    // Linux: the package is called differently on Debian and Fedora
+    let (manager, package) = if has("pacman") {
+        ("sudo pacman -S --needed", tool)
+    } else if has("apt-get") {
+        ("sudo apt install", if tool == "fd" { "fd-find" } else { tool })
+    } else if has("dnf") {
+        ("sudo dnf install", if tool == "fd" { "fd-find" } else { tool })
+    } else if has("zypper") {
+        ("sudo zypper install", tool)
+    } else {
+        return None;
+    };
+    Some(format!("{manager} {package}"))
+}
+
 /// The local IANA time zone, e.g. `Europe/Zurich`, on every OS.
 pub fn time_zone() -> Option<String> {
     iana_time_zone::get_timezone().ok()

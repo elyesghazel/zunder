@@ -39,3 +39,24 @@ pub fn all() -> Vec<Box<dyn Provider>> {
         Box::new(web::Web),
     ]
 }
+
+/// "<tool> is not installed": Enter installs it in a terminal when we know how.
+pub fn missing_tool(tool: &str, purpose: &str, after: &str) -> crate::item::Item {
+    use crate::item::{Action, Item};
+    match crate::platform::install_command(tool) {
+        Some(cmd) => Item {
+            title: format!("Install {tool}"),
+            subtitle: format!("not installed yet, {purpose}{after} · {cmd}"),
+            hint: "install".into(),
+            glyph: "\u{f019}".into(),
+            action: Action::Term(cmd),
+            ..Default::default()
+        },
+        None => Item {
+            title: format!("{tool} is not installed"),
+            subtitle: format!("{purpose}{after} · install it with your package manager"),
+            glyph: "\u{f071}".into(),
+            ..Default::default()
+        },
+    }
+}
