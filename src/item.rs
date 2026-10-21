@@ -26,16 +26,22 @@ pub struct Item {
     /// Shell command that writes `image` when it doesn't exist yet, run on selection.
     #[serde(skip)]
     pub image_cmd: Option<String>,
-    /// Shell command whose output is the full text shown in the preview pane, run when the
-    /// item is selected (e.g. a clipboard entry longer than its one-line title).
+    /// Full text for the preview pane, e.g. a clipboard entry longer than its one-line title.
     #[serde(skip)]
-    pub text: Option<String>,
+    pub text: Option<Text>,
     /// Splits a provider's results into several sections (the settings page uses it).
     #[serde(skip)]
     pub group: String,
     pub action: Action,
     #[serde(skip)]
     pub score: i64,
+}
+
+/// Preview-pane text: given as is, or the output of a command run when the item is selected.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Text {
+    Literal(String),
+    Command(String),
 }
 
 /// What Enter does. Plugins emit the same shape as JSON, e.g. `{"open": "https://…"}`.

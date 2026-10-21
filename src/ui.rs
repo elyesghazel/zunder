@@ -586,8 +586,11 @@ impl Ui {
             return;
         }
         let Some(item) = s.items.get(s.selected) else { return };
-        if let Some(cmd) = &item.text {
-            let body = self.preview_text(cmd);
+        if let Some(text) = &item.text {
+            let body = match text {
+                crate::item::Text::Literal(body) => body.clone(),
+                crate::item::Text::Command(cmd) => self.preview_text(cmd),
+            };
             let lines = body.lines().count();
             self.preview.text.buffer().set_text(&body);
             self.preview.text_scroll.vadjustment().set_value(0.0);

@@ -3,7 +3,7 @@
 
 use crate::config;
 use crate::engine::{Ctx, Provider};
-use crate::item::{Action, Item, shell_quote};
+use crate::item::{Action, Item, Text};
 
 const SETUP: &str = "Opens a terminal and asks.
 Enter takes the default.
@@ -75,7 +75,7 @@ impl Provider for Welcome {
             ..Default::default()
         };
         // what each step is about, in the preview pane on the right
-        let explained = |item: Item, text: &str| Item { text: Some(format!("printf '%s' {}", shell_quote(text))), ..item };
+        let explained = |item: Item, text: &str| Item { text: Some(Text::Literal(text.to_owned())), ..item };
         let themes = crate::theme::names().join("\n");
         let pages = "General      terminal, search, money\nSwitcher     Alt release, previews\nStart screen windows, apps\nAppearance   font, theme, size\nProviders    sections on / off\nFavorites    what you pinned\nShortcuts    global keys\nPlugins      installed scripts\nAbout        version, files";
         vec![

@@ -8,7 +8,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 
 use crate::engine::{Ctx, Provider};
-use crate::item::{Action, Item, shell_quote};
+use crate::item::{Action, Item, Text, shell_quote};
 
 pub struct Clipboard;
 
@@ -73,7 +73,7 @@ impl Provider for Clipboard {
                     title: if image { image_title(preview) } else { preview.trim().replace('\t', " ") },
                     image: image.then(|| image_path(id, preview)).flatten(),
                     image_cmd: image.then(|| decode_cmd(id, preview, line)).flatten(),
-                    text: (!image).then(|| format!("printf '%s' {} | cliphist decode", shell_quote(line))),
+                    text: (!image).then(|| Text::Command(format!("printf '%s' {} | cliphist decode", shell_quote(line)))),
                     hint: format!("#{id}"),
                     glyph: if image { "\u{f03e}".into() } else { GLYPH.into() },
                     subtitle: if image { "image".into() } else { String::new() },

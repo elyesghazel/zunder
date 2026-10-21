@@ -156,7 +156,7 @@ impl Call {
                         glyph: l.glyph.unwrap_or_else(|| self.plugin.glyph.clone()),
                         icon: l.icon,
                         image: l.image,
-                        text: l.preview.map(|p| format!("printf '%s' {}", shell_quote(&p))),
+                        text: l.preview.map(crate::item::Text::Literal),
                         action: l.action,
                         score,
                         ..Default::default()
