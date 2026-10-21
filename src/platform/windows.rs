@@ -255,12 +255,15 @@ pub fn scan_apps() -> Vec<App> {
 /// The shortcut's icon as a PNG in %LOCALAPPDATA%\zunder\icons, extracted once and reused until
 /// the shortcut changes.
 fn icon_png(lnk: &Path) -> Option<String> {
-    use windows_sys::Win32::UI::Shell::{SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON, SHGetFileInfoW};
-    use windows_sys::Win32::UI::WindowsAndMessaging::DestroyIcon;
+    use windows_sys::Win32::UI::Shell::{
+        ExtractIconExW, SHFILEINFOW, SHGFI_ICON, SHGFI_ICONLOCATION, SHGFI_LARGEICON, SHGetFileInfoW,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{DestroyIcon, HICON};
 
     let modified = fs::metadata(lnk).and_then(|m| m.modified()).ok()?;
     let stamp = modified.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    let key = crate::store::bind_key(&format!("{}{stamp}", lnk.display()));
+    // "v2": icons from before the arrow-free lookup get extracted again
+    let key = crate::store::bind_key(&format!("v2{}{stamp}", lnk.display()));
     let dir = dirs::data_local_dir()?.join("zunder").join("icons");
     let png = dir.join(format!("{key}.png"));
     if png.exists() {
@@ -268,15 +271,29 @@ fn icon_png(lnk: &Path) -> Option<String> {
     }
     let _ = fs::create_dir_all(&dir);
     let wide: Vec<u16> = lnk.as_os_str().to_string_lossy().encode_utf16().chain([0]).collect();
-    // SAFETY: SHFILEINFOW is plain data the call fills in; the icon it returns is ours to destroy.
+    let size = std::mem::size_of::<SHFILEINFOW>() as u32;
+    // SAFETY: SHFILEINFOW is plain data the calls fill in; every icon handle we get is destroyed.
     unsafe {
+        // the shortcut's own icon location (usually the program's .exe): the plain icon, without
+        // the arrow Windows draws on shortcuts
         let mut info: SHFILEINFOW = std::mem::zeroed();
-        let ok = SHGetFileInfoW(wide.as_ptr(), 0, &mut info, std::mem::size_of::<SHFILEINFOW>() as u32, SHGFI_ICON | SHGFI_LARGEICON);
-        if ok == 0 || info.hIcon.is_null() {
+        let mut icon: HICON = std::ptr::null_mut();
+        if SHGetFileInfoW(wide.as_ptr(), 0, &mut info, size, SHGFI_ICONLOCATION) != 0 && info.szDisplayName[0] != 0 {
+            ExtractIconExW(info.szDisplayName.as_ptr(), info.iIcon, &mut icon, std::ptr::null_mut(), 1);
+        }
+        // no icon file (some Store apps): the shortcut's icon, arrow and all
+        if icon.is_null() {
+            let mut info: SHFILEINFOW = std::mem::zeroed();
+            if SHGetFileInfoW(wide.as_ptr(), 0, &mut info, size, SHGFI_ICON | SHGFI_LARGEICON) == 0 {
+                return None;
+            }
+            icon = info.hIcon;
+        }
+        if icon.is_null() {
             return None;
         }
-        let saved = save_icon(info.hIcon, &png);
-        DestroyIcon(info.hIcon);
+        let saved = save_icon(icon, &png);
+        DestroyIcon(icon);
         saved.then(|| png.to_string_lossy().into_owned())
     }
 }
