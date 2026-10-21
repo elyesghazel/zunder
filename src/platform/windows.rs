@@ -71,15 +71,19 @@ pub fn install_binds(_binds: &[Bind]) -> Result<String, String> {
     Err("global shortcuts aren't supported on Windows yet".into())
 }
 
-/// Shortcuts (`.lnk`) in the user's and the shared Start menu.
-pub fn scan_apps() -> Vec<App> {
-    let roots: Vec<PathBuf> = ["APPDATA", "PROGRAMDATA"]
+/// Folders whose change means the app list needs a rescan.
+pub fn app_dirs() -> Vec<PathBuf> {
+    ["APPDATA", "PROGRAMDATA"]
         .iter()
         .filter_map(|v| std::env::var_os(v))
         .map(|base| PathBuf::from(base).join("Microsoft\\Windows\\Start Menu\\Programs"))
-        .collect();
+        .collect()
+}
+
+/// Shortcuts (`.lnk`) in the user's and the shared Start menu.
+pub fn scan_apps() -> Vec<App> {
     let mut apps = Vec::new();
-    for root in roots {
+    for root in app_dirs() {
         walk(&root, &mut apps);
     }
     apps

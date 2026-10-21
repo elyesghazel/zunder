@@ -127,8 +127,29 @@ impl Provider for Apps {
     }
 }
 
-/// Installed apps from the platform, one entry per name, sorted.
+/// Installed apps from the platform, one entry per name, sorted. Cached: rescanned only when one
+/// of the app folders changed, or every 10 minutes for changes deeper down.
 pub fn scan_all() -> Vec<App> {
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant, SystemTime};
+    type Cache = (Vec<Option<SystemTime>>, Instant, Vec<App>);
+    static CACHE: Mutex<Option<Cache>> = Mutex::new(None);
+
+    let stamps: Vec<Option<SystemTime>> =
+        crate::platform::app_dirs().iter().map(|d| std::fs::metadata(d).and_then(|m| m.modified()).ok()).collect();
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((seen, at, apps)) = cache.as_ref()
+        && *seen == stamps
+        && at.elapsed() < Duration::from_secs(600)
+    {
+        return apps.clone();
+    }
+    let apps = scan_fresh();
+    *cache = Some((stamps, Instant::now(), apps.clone()));
+    apps
+}
+
+fn scan_fresh() -> Vec<App> {
     let mut apps = crate::platform::scan_apps();
     // the same app often ships several entries (flatpak + native, aliases): keep the first
     let mut names = HashSet::new();

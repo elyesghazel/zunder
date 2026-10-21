@@ -86,18 +86,22 @@ pub fn install_binds(_binds: &[Bind]) -> Result<String, String> {
     Err("global shortcuts aren't supported on macOS yet".into())
 }
 
-/// `.app` bundles in /Applications, /System/Applications and ~/Applications.
-pub fn scan_apps() -> Vec<App> {
+/// Folders whose change means the app list needs a rescan.
+pub fn app_dirs() -> Vec<std::path::PathBuf> {
     let home = dirs::home_dir().unwrap_or_default();
-    let roots = [
+    vec![
         Path::new("/Applications").to_path_buf(),
         Path::new("/Applications/Utilities").to_path_buf(),
         Path::new("/System/Applications").to_path_buf(),
         Path::new("/System/Applications/Utilities").to_path_buf(),
         home.join("Applications"),
-    ];
+    ]
+}
+
+/// `.app` bundles in /Applications, /System/Applications and ~/Applications.
+pub fn scan_apps() -> Vec<App> {
     let mut apps = Vec::new();
-    for root in roots {
+    for root in app_dirs() {
         let Ok(entries) = fs::read_dir(&root) else { continue };
         for entry in entries.flatten() {
             let path = entry.path();

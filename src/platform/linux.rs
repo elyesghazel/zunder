@@ -134,6 +134,11 @@ fn data_dirs() -> Vec<PathBuf> {
     dirs
 }
 
+/// Folders whose change means the app list needs a rescan.
+pub fn app_dirs() -> Vec<PathBuf> {
+    data_dirs().into_iter().map(|d| d.join("applications")).collect()
+}
+
 pub fn scan_apps() -> Vec<App> {
     let mut seen = HashSet::new();
     let mut apps = Vec::new();
