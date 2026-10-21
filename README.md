@@ -71,8 +71,8 @@ curl -fsSL https://raw.githubusercontent.com/elyesghazel/zunder/main/get.sh | sh
 On Arch it installs the release package with pacman; on other distros it puts the binary in
 `~/.local/bin` and tells you if gtk4 or gtk4-layer-shell are missing. Then it runs
 `zunder setup`, which asks a few questions and sets up the keybinds, autostart and theme
-(and takes over from vicinae, rofi or wofi if you used one). Run the same line again to update;
-`… | sh -s -- --uninstall` removes zunder.
+(and takes over from vicinae, rofi or wofi if you used one). When a new version is out, zunder
+says so on its start screen and Enter updates it; `… | sh -s -- --uninstall` removes zunder.
 
 The other ways:
 

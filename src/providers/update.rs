@@ -1,5 +1,5 @@
 //! Start screen notice when a newer zunder is out. Checks GitHub at most once a day, in the
-//! background; turn it off with `update_check = false`.
+//! background; turn it off with `update_check = false`. Enter updates in a terminal.
 
 use std::fs;
 use std::path::PathBuf;
@@ -12,7 +12,8 @@ use crate::item::{Action, Item};
 
 pub struct Update;
 
-const RELEASES: &str = "https://github.com/elyesghazel/zunder/releases/latest";
+/// Enter on the notice runs the installer again in a terminal: it updates, then restarts zunder.
+const UPDATE: &str = "curl -fsSL https://raw.githubusercontent.com/elyesghazel/zunder/main/get.sh | sh -s -- --no-setup";
 const API: &str = "https://api.github.com/repos/elyesghazel/zunder/releases/latest";
 
 #[derive(Serialize, Deserialize, Default)]
@@ -81,10 +82,11 @@ impl Provider for Update {
         tag.filter(|t| newer(t, current))
             .map(|t| Item {
                 title: format!("zunder {} is out", t.trim_start_matches('v')),
-                subtitle: format!("you have {current} · Enter opens the release, or rerun the install line"),
+                subtitle: format!("you have {current} · Enter updates now"),
                 hint: "update".into(),
                 glyph: "\u{f01b}".into(),
-                action: Action::Open(RELEASES.into()),
+                id: "cmd:update".into(),
+                action: Action::Term(UPDATE.into()),
                 score: 1_000_000,
                 ..Default::default()
             })

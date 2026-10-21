@@ -109,8 +109,13 @@ Then go to [Setup](setup.md) to bind the keys.
 
 ## Updating
 
-Package: install the new release package. Source: `git pull && ./install.sh`. Restart the daemon
-afterwards with `zunder quit && zunder server &`, or log out and back in.
+When a new version is out, zunder's start screen says "zunder X is out" (it checks GitHub once
+a day; `update_check = false` turns that off). Press Enter on it: a terminal runs the install
+line again, which updates zunder (on Arch through pacman, so it asks for your password) and
+restarts the running daemon, so the new version is live right away.
+
+By hand it's the same line: `curl -fsSL https://raw.githubusercontent.com/elyesghazel/zunder/main/get.sh | sh`.
+From source: `git pull && ./install.sh`, then `zunder quit` and start `zunder server` again.
 
 ## Uninstalling
 
