@@ -35,8 +35,20 @@ fn prefix() -> Option<PathBuf> {
 pub fn after_show(window: &gtk::ApplicationWindow) {
     let w = window.clone();
     gtk4::glib::idle_add_local_once(move || place(&w));
-    let w = window.clone();
-    gtk4::glib::timeout_add_local_once(std::time::Duration::from_millis(60), move || place(&w));
+    // the window grows when the preview column opens: center again on every size change
+    thread_local! {
+        static HOOKED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+    if let Some(surface) = window.surface()
+        && !HOOKED.with(|h| h.replace(true))
+    {
+        let w = window.downgrade();
+        surface.connect_layout(move |_, _, _| {
+            if let Some(w) = w.upgrade() {
+                place(&w);
+            }
+        });
+    }
 }
 
 fn place(window: &gtk::ApplicationWindow) {
