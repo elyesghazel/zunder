@@ -109,7 +109,7 @@ thread_local! {
 fn apply_config_css() {
     let cfg = config::get();
     let css = format!(
-        ".panel {{ font-family: \"{}\"; font-size: {}pt; }}\nwindow.zunder {{ background: alpha(black, {}); }}\n",
+        ".panel {{ font-family: \"{}\", \"JetBrainsMono NF\", monospace; font-size: {}pt; }}\nwindow.zunder {{ background: alpha(black, {}); }}\n",
         cfg.font.replace('"', ""),
         cfg.font_size,
         cfg.dim.clamp(0.0, 1.0)

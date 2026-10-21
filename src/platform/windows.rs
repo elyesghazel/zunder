@@ -18,23 +18,9 @@ pub fn init_overlay(window: &gtk::ApplicationWindow) {
     window.set_resizable(false);
 }
 
-/// Startup, before GTK: point text rendering at the bundled fonts.
-///
-/// GTK on Windows normally asks Windows for fonts, which doesn't match the Nerd Font by the
-/// name zunder uses, so the glyphs came out as hex boxes. With the fontconfig backend and our
-/// own fonts.conf (bundled font folder + the Windows font folders) it finds the font by the same
-/// name as on Linux. The per-user install stays as a fallback for other apps.
+/// Startup: make the bundled Nerd Font available. On Windows the font is called
+/// "JetBrainsMono NF", which the CSS lists next to its Linux name.
 pub fn init() {
-    if let Some(prefix) = prefix() {
-        let conf = prefix.join("etc").join("fonts").join("fonts.conf");
-        if conf.exists() {
-            // SAFETY: called first thing in `ui::run`, before GTK or any other thread exists.
-            unsafe {
-                std::env::set_var("PANGOCAIRO_BACKEND", "fc");
-                std::env::set_var("FONTCONFIG_FILE", &conf);
-            }
-        }
-    }
     install_fonts();
 }
 

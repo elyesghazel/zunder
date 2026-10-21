@@ -3,7 +3,7 @@
 window.zunder-settings {
   background: @bg;
   color: @fg;
-  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-family: "JetBrainsMono Nerd Font", "JetBrainsMono NF", monospace;
   font-size: 11pt;
 }
 

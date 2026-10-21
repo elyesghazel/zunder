@@ -106,8 +106,6 @@ jobs:
           mkdir -p "$app/share/fonts"
           curl -fsSL -o nf.tar.xz https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.tar.xz
           tar -xJf nf.tar.xz -C "$app/share/fonts" JetBrainsMonoNerdFont-Regular.ttf JetBrainsMonoNerdFont-Bold.ttf
-          mkdir -p "$app/etc/fonts"
-          cp packaging/windows/fonts.conf "$app/etc/fonts/"
           cp README.md LICENSE "$app/"
           cp -r docs examples "$app/"
           printf '@start "" "%%~dp0bin\\zunder.exe" %%*\r\n' > "$app/zunder.cmd"

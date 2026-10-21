@@ -19,7 +19,8 @@ window.zunder {
   border: 1px solid @ghost;
   border-radius: 10px;
   padding: 16px 0 10px;
-  font-family: "JetBrainsMono Nerd Font", monospace;
+  /* "…NF" is the same font's name on Windows */
+  font-family: "JetBrainsMono Nerd Font", "JetBrainsMono NF", monospace;
   font-size: 11pt;
   box-shadow: 0 24px 64px alpha(black, 0.55);
 }
