@@ -48,11 +48,13 @@ hl.window_rule({
     center = true,
 })
 
--- conf/windowrules.lua: zunder appears instantly instead of sliding in like other layers
+-- conf/windowrules.lua: zunder fades in instead of sliding in like other layers.
+-- The fade's speed is fadeLayersIn / fadeLayersOut in your animations (1.5 feels snappy);
+-- no_anim = true instead of animation makes it instant.
 hl.layer_rule({
-    name    = "zunder-no-anim",
-    match   = { namespace = "^zunder$" },
-    no_anim = true,
+    name      = "zunder-fade",
+    match     = { namespace = "^zunder$" },
+    animation = "fade",
 })
 
 -- hyprland.lua, after your binds: the shortcuts you make inside zunder (Ctrl+B)
@@ -76,7 +78,7 @@ bind = SUPER, V, exec, zunder show 'clip '
 windowrule = float, title:^zunder settings$
 windowrule = size 980 660, title:^zunder settings$
 windowrule = center, title:^zunder settings$
-layerrule = noanim, zunder
+layerrule = animation fade, zunder
 
 source = ~/.config/hypr/zunder.conf
 ```
