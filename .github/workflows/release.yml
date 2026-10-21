@@ -196,4 +196,4 @@ jobs:
           # checked by get.sh before installing
           (cd files && sha256sum * > SHA256SUMS)
           gh release create "$TAG" files/* --title "zunder ${TAG#v}" --generate-notes \
-            --notes "Arch: \`sudo pacman -U\` the .pkg.tar.zst · Linux: the tarball and install.sh · Windows: unzip, run zunder.cmd · macOS (Apple Silicon): open the .dmg, drag zunder to Applications, right-click → Open the first time (it isn't signed). macOS and Windows are early: no window switcher or global shortcuts yet."
+            --notes "Arch: \`sudo pacman -U\` the .pkg.tar.zst · Linux: the tarball and install.sh · Windows: run zunder-windows-setup.exe (no admin; More info → Run anyway), then ALT+SPACE · macOS (Apple Silicon): open the .dmg, drag zunder to Applications, right-click → Open the first time (it isn't signed). macOS and Windows don't have the window switcher yet."

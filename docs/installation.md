@@ -80,11 +80,22 @@ The launcher, apps, search, calculator, conversion, time, emoji, files, plugins,
 settings work. The window switcher, previews and global shortcuts don't exist on macOS yet, so
 start it from Spotlight or a hotkey tool like skhd (`zunder toggle`).
 
-## Windows (early)
+## Windows
 
-Download `zunder-<version>-windows-x86_64.zip`, unzip it anywhere and run `zunder.cmd`. Same
-state as macOS: everything except the window switcher, previews and global shortcuts. Pin
-`zunder.cmd` to the taskbar or give a shortcut to it a key combination in its Properties.
+Download [zunder-windows-setup.exe](https://github.com/elyesghazel/zunder/releases/latest/download/zunder-windows-setup.exe)
+(about 16 MB) and run it. Windows warns because it isn't signed: **More info → Run anyway**.
+
+- Installs for your user only, to `%LOCALAPPDATA%\Programs\zunder`, so no admin is needed.
+- Options: start with Windows, Ctrl+Alt+Space on the Start menu entry, desktop shortcut.
+- **ALT+SPACE** opens zunder (zunder registers it itself; if another program has it, use
+  Ctrl+Alt+Space).
+- File search works out of the box: `fd` comes with the installer.
+- Uninstall from Settings → Apps.
+- Updates: when a new version is out, the start screen says so and Enter installs it silently.
+
+Without the window switcher, previews and Ctrl+B shortcuts so far. A portable zip
+(`zunder-<version>-windows-x86_64.zip`) is on the release page too: unzip it anywhere and run
+`zunder.cmd`; `zunder-debug.cmd` shows errors in a console.
 
 ## From source
 

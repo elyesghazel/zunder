@@ -54,15 +54,27 @@ three on every push), with these parts working there so far:
 | | Linux (Hyprland) | macOS | Windows |
 |---|---|---|---|
 | launcher, search, calculator, conversion, time, emoji, files, plugins, themes, settings | ✓ | ✓ | ✓ |
-| apps | ✓ `.desktop` | ✓ `.app` bundles | ✓ Start menu |
+| apps | ✓ `.desktop` | ✓ `.app` bundles | ✓ Start menu, with their icons |
+| open with a key | ✓ any Hyprland bind | planned | ✓ ALT+SPACE (and Ctrl+Alt+Space) |
 | lock, sleep, restart, shut down | ✓ | ✓ | ✓ |
-| full-screen overlay with backdrop | ✓ | borderless window | borderless window |
+| full-screen overlay with backdrop | ✓ | borderless window | borderless window, centered |
 | window switcher and previews | ✓ | planned | planned |
 | global shortcuts (Ctrl+B) | ✓ | planned | planned |
 | clipboard history | ✓ cliphist | planned | planned |
-| packages | Arch | planned | planned |
+| install | one-line installer, Arch package | `.dmg` | `zunder-windows-setup.exe` |
+| updates from the start screen | ✓ | opens the download | ✓ installs silently |
 
 ## Install
+
+**Windows:** download [zunder-windows-setup.exe](https://github.com/elyesghazel/zunder/releases/latest/download/zunder-windows-setup.exe)
+and run it. It installs for your user (no admin), and asks about starting with Windows and a
+desktop shortcut. ALT+SPACE opens zunder. Windows warns about unsigned programs: More info →
+Run anyway.
+
+**macOS (Apple Silicon):** the `.dmg` from the [latest release](https://github.com/elyesghazel/zunder/releases/latest);
+drag zunder to Applications, then right-click → Open the first time.
+
+**Linux:**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/elyesghazel/zunder/main/get.sh | sh
