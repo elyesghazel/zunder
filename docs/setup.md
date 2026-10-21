@@ -48,6 +48,13 @@ hl.window_rule({
     center = true,
 })
 
+-- conf/windowrules.lua: zunder appears instantly instead of sliding in like other layers
+hl.layer_rule({
+    name    = "zunder-no-anim",
+    match   = { namespace = "^zunder$" },
+    no_anim = true,
+})
+
 -- hyprland.lua, after your binds: the shortcuts you make inside zunder (Ctrl+B)
 pcall(require, "zunder")
 ```
@@ -69,6 +76,7 @@ bind = SUPER, V, exec, zunder show 'clip '
 windowrule = float, title:^zunder settings$
 windowrule = size 980 660, title:^zunder settings$
 windowrule = center, title:^zunder settings$
+layerrule = noanim, zunder
 
 source = ~/.config/hypr/zunder.conf
 ```

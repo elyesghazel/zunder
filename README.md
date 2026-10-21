@@ -140,9 +140,10 @@ hl.bind("ALT + SHIFT + TAB", hl.dsp.exec_cmd("zunder switch-prev"))
 hl.bind("ALT + SPACE",       hl.dsp.exec_cmd("zunder toggle"))
 hl.bind("SUPER + V",         hl.dsp.exec_cmd("zunder show 'clip '"))
 
--- conf/windowrules.lua: settings window floats
+-- conf/windowrules.lua: settings window floats, the launcher opens without animation
 hl.window_rule({ name = "zunder-settings", match = { title = "^zunder settings$" },
                  float = true, size = "980 660", center = true })
+hl.layer_rule({ name = "zunder-no-anim", match = { namespace = "^zunder$" }, no_anim = true })
 
 -- hyprland.lua, after your binds: the shortcuts you make with Ctrl+B
 pcall(require, "zunder")

@@ -233,6 +233,8 @@ fn generated(lua: bool, c: &Choice) -> String {
         if c.window_rule {
             s += "\nhl.window_rule({\n    name   = \"zunder-settings\",\n    match  = { title = \"^zunder settings$\" },\n    float  = true,\n    size   = \"980 660\",\n    center = true,\n})\n";
         }
+        // the launcher should appear instantly, not slide in like other layers
+        s += "\nhl.layer_rule({\n    name    = \"zunder-no-anim\",\n    match   = { namespace = \"^zunder$\" },\n    no_anim = true,\n})\n";
         s
     } else {
         let mut s = String::from("# written by `zunder setup`; run it again to change this, or edit it freely\n\n");
@@ -247,6 +249,7 @@ fn generated(lua: bool, c: &Choice) -> String {
         if c.window_rule {
             s += "\nwindowrule = float, title:^zunder settings$\nwindowrule = size 980 660, title:^zunder settings$\nwindowrule = center, title:^zunder settings$\n";
         }
+        s += "\nlayerrule = noanim, zunder\n";
         s
     }
 }
