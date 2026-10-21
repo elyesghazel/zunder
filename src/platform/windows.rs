@@ -18,9 +18,29 @@ pub fn init_overlay(window: &gtk::ApplicationWindow) {
     window.set_resizable(false);
 }
 
-/// Startup: make the bundled Nerd Font available (the glyphs need it).
+/// Startup, before GTK: point text rendering at the bundled fonts.
+///
+/// GTK on Windows normally asks Windows for fonts, which doesn't match the Nerd Font by the
+/// name zunder uses, so the glyphs came out as hex boxes. With the fontconfig backend and our
+/// own fonts.conf (bundled font folder + the Windows font folders) it finds the font by the same
+/// name as on Linux. The per-user install stays as a fallback for other apps.
 pub fn init() {
+    if let Some(prefix) = prefix() {
+        let conf = prefix.join("etc").join("fonts").join("fonts.conf");
+        if conf.exists() {
+            // SAFETY: called first thing in `ui::run`, before GTK or any other thread exists.
+            unsafe {
+                std::env::set_var("PANGOCAIRO_BACKEND", "fc");
+                std::env::set_var("FONTCONFIG_FILE", &conf);
+            }
+        }
+    }
     install_fonts();
+}
+
+/// The unpacked folder: `<prefix>\bin\zunder.exe`.
+fn prefix() -> Option<PathBuf> {
+    Some(std::env::current_exe().ok()?.parent()?.parent()?.to_path_buf())
 }
 
 /// Windows lets GTK put the window anywhere: center it on the monitor under the mouse, keep it
@@ -75,9 +95,7 @@ fn install_fonts() {
     use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, REG_SZ, RegSetKeyValueW};
 
     let wide = |s: &str| s.encode_utf16().chain([0]).collect::<Vec<u16>>();
-    let Some(bundled) = std::env::current_exe().ok().and_then(|e| Some(e.parent()?.parent()?.join("share").join("fonts"))) else {
-        return;
-    };
+    let Some(bundled) = prefix().map(|p| p.join("share").join("fonts")) else { return };
     let Ok(entries) = fs::read_dir(&bundled) else { return };
     let target = dirs::data_local_dir().unwrap_or_default().join("Microsoft\\Windows\\Fonts");
     let _ = fs::create_dir_all(&target);
