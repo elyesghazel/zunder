@@ -746,7 +746,7 @@ fn icon(item: &Item) -> Option<gtk::Image> {
     if icon.is_empty() {
         return None;
     }
-    let image = if icon.starts_with('/') {
+    let image = if Path::new(icon).is_absolute() {
         Path::new(icon).exists().then(|| gtk::Image::from_file(icon))?
     } else {
         let theme = gtk::IconTheme::for_display(&gdk::Display::default()?);
