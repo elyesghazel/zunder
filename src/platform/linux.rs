@@ -30,11 +30,55 @@ pub const FULL_SCREEN_OVERLAY: bool = true;
 
 // ── windows ─────────────────────────────────────────────
 
+/// The window list, kept up to date by a thread listening to Hyprland's event socket, so opening
+/// zunder doesn't have to wait for `hyprctl` (10–25 ms). Falls back to asking directly.
 pub fn list_windows() -> Vec<Client> {
+    use std::sync::atomic::Ordering;
+    if !WATCHING.swap(true, Ordering::SeqCst) {
+        std::thread::spawn(watch_windows);
+    }
+    if let Some(cached) = WINDOWS.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+        return cached;
+    }
+    let fresh = fetch_windows();
+    *WINDOWS.lock().unwrap_or_else(|e| e.into_inner()) = Some(fresh.clone());
+    fresh
+}
+
+static WINDOWS: std::sync::Mutex<Option<Vec<Client>>> = std::sync::Mutex::new(None);
+static WATCHING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn fetch_windows() -> Vec<Client> {
     let Ok(out) = Command::new("hyprctl").args(["clients", "-j"]).output() else {
         return Vec::new();
     };
     serde_json::from_slice(&out.stdout).unwrap_or_default()
+}
+
+/// Refresh the cached list on every event that can change it. When the socket goes away, the
+/// cache is dropped and the next `list_windows` asks hyprctl and starts listening again.
+fn watch_windows() {
+    use std::io::{BufRead, BufReader};
+    use std::sync::atomic::Ordering;
+    const EVENTS: &[&str] = &[
+        "openwindow", "closewindow", "activewindow", "movewindow", "windowtitle", "fullscreen",
+        "changefloatingmode", "minimized", "workspace", "focusedmon", "movetoworkspace",
+    ];
+    let socket = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").and_then(|sig| {
+        let dir = dirs::runtime_dir()?.join("hypr").join(sig);
+        std::os::unix::net::UnixStream::connect(dir.join(".socket2.sock")).ok()
+    });
+    if let Some(socket) = socket {
+        for line in BufReader::new(socket).lines().map_while(Result::ok) {
+            let event = line.split(">>").next().unwrap_or("");
+            if EVENTS.iter().any(|e| event.starts_with(e)) {
+                let fresh = fetch_windows();
+                *WINDOWS.lock().unwrap_or_else(|e| e.into_inner()) = Some(fresh);
+            }
+        }
+    }
+    *WINDOWS.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    WATCHING.store(false, Ordering::SeqCst);
 }
 
 pub fn focus_window(address: &str) {
