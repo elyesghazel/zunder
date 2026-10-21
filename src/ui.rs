@@ -124,7 +124,28 @@ fn apply_config_css() {
     THEME_CSS.with(|p| p.load_from_string(&colors));
 }
 
+/// Fonts shipped next to the binary (`<prefix>/share/fonts`, the Windows bundle) go straight into
+/// GTK's font map, so they work without being installed and without the OS looking them up.
+fn add_bundled_fonts() {
+    use gtk::pango::prelude::FontMapExt;
+    let Some(dir) = std::env::current_exe().ok().and_then(|e| Some(e.parent()?.parent()?.join("share").join("fonts"))) else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(&dir) else { return };
+    let font_map = gtk::Label::new(None).pango_context().font_map();
+    let Some(font_map) = font_map else { return };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("ttf") || e.eq_ignore_ascii_case("otf"))
+            && let Err(e) = font_map.add_font_file(&path)
+        {
+            eprintln!("zunder: couldn't load {}: {e}", path.display());
+        }
+    }
+}
+
 fn load_css() {
+    add_bundled_fonts();
     let display = gdk::Display::default().expect("no display");
     CONFIG_CSS.with(|p| {
         gtk::style_context_add_provider_for_display(&display, p, gtk::STYLE_PROVIDER_PRIORITY_USER);

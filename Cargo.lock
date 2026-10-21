@@ -1290,6 +1290,7 @@ dependencies = [
  "gtk4-layer-shell",
  "iana-time-zone",
  "meval",
+ "pango",
  "regex",
  "serde",
  "serde_json",
