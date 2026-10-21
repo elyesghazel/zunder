@@ -130,6 +130,16 @@ icons, and comes back after a reboot. Tested on real Windows.
 
 ---
 
+## 0.3: setup and presence
+
+1. **Setup as a page inside zunder.** `setup` opens a page like `settings`: toggles for the
+   keys, switching over from other launchers, autostart, theme and example plugins, and an
+   Apply row. It uses the same logic as `zunder setup` (`src/setup.rs`), so the terminal version
+   stays for scripts. On Windows and macOS it shows what applies there (hotkey, autostart).
+2. **Tray icon.** A small zunder icon while the server runs, with a menu: open, settings,
+   reload, quit. StatusNotifierItem over D-Bus on Linux (`ksni`), the notification area on
+   Windows, the menu bar on macOS.
+
 ## 0.3: the switcher nobody else has (about 1–2 weeks)
 
 All in `src/providers/windows.rs`, `src/ui.rs` and `src/platform/linux.rs`.

@@ -369,13 +369,20 @@ The full plan, with the reasons and details, is in [docs/roadmap.md](docs/roadma
 - [x] interactive `zunder setup`: keybinds, autostart, theme, import from vicinae / rofi / wofi
 - [x] update notice in the launcher
 - [ ] ALT+TAB: reliable quick tap, multiple monitors, fullscreen windows
+- [x] opens and closes with a quick fade instead of the layer slide
 - [x] speed budget: open in under 30 ms, search in under 5 ms, measured
 - [x] first-run screen
 
 **0.2.x: Windows** (side track)
-- [ ] centered window, glyphs and app icons
-- [ ] smaller bundle, about 10 MB
-- [ ] `zunder-setup.exe` installer with autostart, shortcut and hotkey
+- [x] centered window, glyphs and app icons
+- [x] smaller bundle (16 MB installer; GTK alone is about 40 MB of DLLs)
+- [x] `zunder-windows-setup.exe` installer with autostart, Start menu entry and hotkey
+- [x] ALT+SPACE opens zunder on Windows
+- [x] updates in place from the notice on Windows
+
+**0.3: setup and presence**
+- [ ] setup as a page inside zunder instead of a terminal, on every system
+- [ ] tray icon: shows the server runs, menu with open, settings, quit
 
 **0.3: switcher actions**
 - [ ] close, move to workspace, fullscreen and minimize windows from the switcher
