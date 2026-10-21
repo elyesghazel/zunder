@@ -262,8 +262,8 @@ fn icon_png(lnk: &Path) -> Option<String> {
 
     let modified = fs::metadata(lnk).and_then(|m| m.modified()).ok()?;
     let stamp = modified.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    // "v2": icons from before the arrow-free lookup get extracted again
-    let key = crate::store::bind_key(&format!("v2{}{stamp}", lnk.display()));
+    // "v3": icons from before the arrow-free lookup get extracted again
+    let key = crate::store::bind_key(&format!("v3{}{stamp}", lnk.display()));
     let dir = dirs::data_local_dir()?.join("zunder").join("icons");
     let png = dir.join(format!("{key}.png"));
     if png.exists() {
@@ -278,7 +278,18 @@ fn icon_png(lnk: &Path) -> Option<String> {
         // the arrow Windows draws on shortcuts
         let mut info: SHFILEINFOW = std::mem::zeroed();
         let mut icon: HICON = std::ptr::null_mut();
-        if SHGetFileInfoW(wide.as_ptr(), 0, &mut info, size, SHGFI_ICONLOCATION) != 0 && info.szDisplayName[0] != 0 {
+        // best: the program the shortcut points to (firefox.exe…); a plain file has no arrow
+        if let Some(target) = lnk_target(lnk).filter(|t| t.exists()) {
+            let target: Vec<u16> = target.as_os_str().to_string_lossy().encode_utf16().chain([0]).collect();
+            if SHGetFileInfoW(target.as_ptr(), 0, &mut info, size, SHGFI_ICON | SHGFI_LARGEICON) != 0 {
+                icon = info.hIcon;
+            }
+        }
+        // next: an icon the shortcut names explicitly
+        if icon.is_null()
+            && SHGetFileInfoW(wide.as_ptr(), 0, &mut info, size, SHGFI_ICONLOCATION) != 0
+            && info.szDisplayName[0] != 0
+        {
             ExtractIconExW(info.szDisplayName.as_ptr(), info.iIcon, &mut icon, std::ptr::null_mut(), 1);
         }
         // no icon file (some Store apps): the shortcut's icon, arrow and all
@@ -296,6 +307,23 @@ fn icon_png(lnk: &Path) -> Option<String> {
         DestroyIcon(icon);
         saved.then(|| png.to_string_lossy().into_owned())
     }
+}
+
+/// The path a shortcut points to, read from the .lnk's LinkInfo (no COM needed). `None` for
+/// shortcuts without one, like Store apps.
+fn lnk_target(lnk: &Path) -> Option<PathBuf> {
+    let link = lnk::ShellLink::open(lnk, lnk::encoding::WINDOWS_1252).ok()?;
+    let info = link.link_info().as_ref()?;
+    let base = info.local_base_path_unicode().as_deref().or(info.local_base_path())?;
+    let suffix = info.common_path_suffix_unicode().as_deref().unwrap_or(info.common_path_suffix());
+    let mut path = base.to_string();
+    if !suffix.is_empty() {
+        if !path.ends_with('\\') {
+            path.push('\\');
+        }
+        path.push_str(suffix);
+    }
+    Some(PathBuf::from(path))
 }
 
 /// HICON → RGBA → PNG. Icons without an alpha channel get it from their mask.
