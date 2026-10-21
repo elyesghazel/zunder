@@ -174,13 +174,114 @@ pub fn app_dirs() -> Vec<PathBuf> {
         .collect()
 }
 
-/// Shortcuts (`.lnk`) in the user's and the shared Start menu.
+/// Shortcuts (`.lnk`) in the user's and the shared Start menu, with their icons.
 pub fn scan_apps() -> Vec<App> {
+    use windows_sys::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
+    // SHGetFileInfo resolves shortcuts through the shell, which wants COM on this thread
+    // SAFETY: initializing COM is allowed repeatedly; extra calls just return S_FALSE.
+    unsafe { CoInitializeEx(std::ptr::null(), COINIT_APARTMENTTHREADED as u32) };
     let mut apps = Vec::new();
     for root in app_dirs() {
         walk(&root, &mut apps);
     }
+    for app in &mut apps {
+        app.icon = icon_png(Path::new(&app.id)).unwrap_or_default();
+    }
     apps
+}
+
+/// The shortcut's icon as a PNG in %LOCALAPPDATA%\zunder\icons, extracted once and reused until
+/// the shortcut changes.
+fn icon_png(lnk: &Path) -> Option<String> {
+    use windows_sys::Win32::UI::Shell::{SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON, SHGetFileInfoW};
+    use windows_sys::Win32::UI::WindowsAndMessaging::DestroyIcon;
+
+    let modified = fs::metadata(lnk).and_then(|m| m.modified()).ok()?;
+    let stamp = modified.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let key = crate::store::bind_key(&format!("{}{stamp}", lnk.display()));
+    let dir = dirs::data_local_dir()?.join("zunder").join("icons");
+    let png = dir.join(format!("{key}.png"));
+    if png.exists() {
+        return Some(png.to_string_lossy().into_owned());
+    }
+    let _ = fs::create_dir_all(&dir);
+    let wide: Vec<u16> = lnk.as_os_str().to_string_lossy().encode_utf16().chain([0]).collect();
+    // SAFETY: SHFILEINFOW is plain data the call fills in; the icon it returns is ours to destroy.
+    unsafe {
+        let mut info: SHFILEINFOW = std::mem::zeroed();
+        let ok = SHGetFileInfoW(wide.as_ptr(), 0, &mut info, std::mem::size_of::<SHFILEINFOW>() as u32, SHGFI_ICON | SHGFI_LARGEICON);
+        if ok == 0 || info.hIcon.is_null() {
+            return None;
+        }
+        let saved = save_icon(info.hIcon, &png);
+        DestroyIcon(info.hIcon);
+        saved.then(|| png.to_string_lossy().into_owned())
+    }
+}
+
+/// HICON → RGBA → PNG. Icons without an alpha channel get it from their mask.
+///
+/// # Safety
+/// `icon` must be a valid icon handle.
+unsafe fn save_icon(icon: windows_sys::Win32::UI::WindowsAndMessaging::HICON, png: &Path) -> bool {
+    use windows_sys::Win32::Graphics::Gdi::{
+        BI_RGB, BITMAP, BITMAPINFO, BITMAPINFOHEADER, CreateCompatibleDC, DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDIBits,
+        GetObjectW,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetIconInfo, ICONINFO};
+
+    // SAFETY: the caller passes a valid icon; every GDI object created here is released below.
+    unsafe {
+        let mut info: ICONINFO = std::mem::zeroed();
+        if GetIconInfo(icon, &mut info) == 0 {
+            return false;
+        }
+        let (color, mask) = (info.hbmColor, info.hbmMask);
+        let release = || {
+            if !color.is_null() {
+                DeleteObject(color);
+            }
+            if !mask.is_null() {
+                DeleteObject(mask);
+            }
+        };
+        if color.is_null() {
+            release();
+            return false;
+        }
+        let mut bm: BITMAP = std::mem::zeroed();
+        GetObjectW(color, std::mem::size_of::<BITMAP>() as i32, (&mut bm as *mut BITMAP).cast());
+        let (w, h) = (bm.bmWidth, bm.bmHeight);
+        if w <= 0 || h <= 0 {
+            release();
+            return false;
+        }
+        let mut bi: BITMAPINFO = std::mem::zeroed();
+        bi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
+        bi.bmiHeader.biWidth = w;
+        bi.bmiHeader.biHeight = -h; // top-down rows
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        let dc = CreateCompatibleDC(std::ptr::null_mut());
+        let mut pixels = vec![0u8; (w * h * 4) as usize];
+        GetDIBits(dc, color, 0, h as u32, pixels.as_mut_ptr().cast(), &mut bi, DIB_RGB_COLORS);
+        if pixels.chunks(4).all(|p| p[3] == 0) && !mask.is_null() {
+            // old-style icon: opaque wherever the mask is black
+            let mut bits = vec![0u8; (w * h * 4) as usize];
+            GetDIBits(dc, mask, 0, h as u32, bits.as_mut_ptr().cast(), &mut bi, DIB_RGB_COLORS);
+            for (p, m) in pixels.chunks_mut(4).zip(bits.chunks(4)) {
+                p[3] = if m[0] == 0 { 255 } else { 0 };
+            }
+        }
+        DeleteDC(dc);
+        release();
+        for p in pixels.chunks_mut(4) {
+            p.swap(0, 2); // BGRA → RGBA
+        }
+        let pixbuf = gtk4::gdk_pixbuf::Pixbuf::from_mut_slice(pixels, gtk4::gdk_pixbuf::Colorspace::Rgb, true, 8, w, h, w * 4);
+        pixbuf.savev(png, "png", &[]).is_ok()
+    }
 }
 
 fn walk(dir: &Path, apps: &mut Vec<App>) {
