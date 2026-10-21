@@ -71,6 +71,7 @@ struct Preview {
 }
 
 pub fn run(initial: Option<&'static str>) -> ExitCode {
+    crate::platform::init();
     let (tx, rx) = async_channel::unbounded::<String>();
     if let Err(e) = ipc::listen(tx) {
         eprintln!("zunder: {e}");
@@ -431,6 +432,7 @@ impl Ui {
         self.refresh();
         let t = std::time::Instant::now();
         self.window.present();
+        crate::platform::after_show(&self.window);
         self.entry.grab_focus();
         timing("present", t);
         timing("show", started);

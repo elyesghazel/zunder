@@ -18,6 +18,53 @@ pub fn init_overlay(window: &gtk::ApplicationWindow) {
     window.set_resizable(false);
 }
 
+/// Called once at startup, before GTK.
+pub fn init() {}
+
+/// Windows lets GTK put the window anywhere: center it on the monitor under the mouse, keep it
+/// above other windows and give it the keyboard. Runs again a moment later, after GTK has
+/// settled the final size (the preview column changes the width).
+pub fn after_show(window: &gtk::ApplicationWindow) {
+    let w = window.clone();
+    gtk4::glib::idle_add_local_once(move || place(&w));
+    let w = window.clone();
+    gtk4::glib::timeout_add_local_once(std::time::Duration::from_millis(60), move || place(&w));
+}
+
+fn place(window: &gtk::ApplicationWindow) {
+    use windows_sys::Win32::Foundation::{POINT, RECT};
+    use windows_sys::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetCursorPos, GetWindowRect, HWND_TOPMOST, SWP_NOSIZE, SWP_SHOWWINDOW, SetForegroundWindow, SetWindowPos,
+    };
+
+    let Some(surface) = window.surface() else { return };
+    let Ok(surface) = surface.downcast::<gdk4_win32::Win32Surface>() else { return };
+    let hwnd = surface.handle().0;
+    // SAFETY: plain Win32 calls on our own window handle, with zeroed out-structs that the
+    // functions fill in; MONITORINFO's size is set as the API requires.
+    unsafe {
+        let mut rect: RECT = std::mem::zeroed();
+        if GetWindowRect(hwnd, &mut rect) == 0 {
+            return;
+        }
+        let (w, h) = (rect.right - rect.left, rect.bottom - rect.top);
+        let mut cursor = POINT { x: 0, y: 0 };
+        GetCursorPos(&mut cursor);
+        let monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+        let mut info: MONITORINFO = std::mem::zeroed();
+        info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        if GetMonitorInfoW(monitor, &mut info) == 0 {
+            return;
+        }
+        let area = info.rcWork;
+        let x = area.left + (area.right - area.left - w) / 2;
+        let y = area.top + (area.bottom - area.top - h) / 2;
+        SetWindowPos(hwnd, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_SHOWWINDOW);
+        SetForegroundWindow(hwnd);
+    }
+}
+
 /// The window is only as big as the panel; it closes when it loses focus instead.
 pub const FULL_SCREEN_OVERLAY: bool = false;
 

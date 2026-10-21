@@ -25,6 +25,12 @@ pub fn init_overlay(window: &gtk::ApplicationWindow) {
     }
 }
 
+/// Called once at startup, before GTK.
+pub fn init() {}
+
+/// Called right after the launcher is shown.
+pub fn after_show(_window: &gtk::ApplicationWindow) {}
+
 /// The overlay covers the screen, so clicks outside the panel close it.
 pub const FULL_SCREEN_OVERLAY: bool = true;
 
