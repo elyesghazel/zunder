@@ -346,7 +346,18 @@ keybind ─► zunder switch ─► $XDG_RUNTIME_DIR/zunder.sock ─► daemon
 The daemon keeps GTK and the app index loaded, so opening is instant; the CLI only writes a word
 to the socket. The overlay is a full-screen layer-shell surface with exclusive keyboard focus.
 Results come from providers, one Rust file each in `src/providers/`, and adding one is about 30
-lines. See [docs/development.md](docs/development.md).
+lines.
+
+Measured on a laptop with Hyprland (release build, `ZUNDER_TIMING=1 zunder server` prints these):
+
+| Step | Time |
+|------|------|
+| open, start screen unchanged since last time | 3–8 ms |
+| open, start screen changed | about 25 ms |
+| search per keystroke | 0.3–2.6 ms |
+
+The window list comes from Hyprland's event socket instead of `hyprctl` on every open, apps are
+rescanned only when an `applications/` folder changes, and unchanged results reuse their rows. See [docs/development.md](docs/development.md).
 
 ## Roadmap
 
@@ -357,7 +368,7 @@ The full plan, with the reasons and details, is in [docs/roadmap.md](docs/roadma
 - [x] interactive `zunder setup`: keybinds, autostart, theme, import from vicinae / rofi / wofi
 - [x] update notice in the launcher
 - [ ] ALT+TAB: reliable quick tap, multiple monitors, fullscreen windows
-- [ ] speed budget: open in under 30 ms, search in under 5 ms, measured
+- [x] speed budget: open in under 30 ms, search in under 5 ms, measured
 - [x] first-run screen
 
 **0.2.x: Windows** (side track)

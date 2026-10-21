@@ -19,7 +19,9 @@ XDG_RUNTIME_DIR=$RT WAYLAND_DISPLAY=$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY ./target/d
 XDG_RUNTIME_DIR=$RT ./target/debug/zunder show
 ```
 
-Add `XDG_CONFIG_HOME=$(mktemp -d)` to test with a clean config.
+Add `XDG_CONFIG_HOME=$(mktemp -d)` to test with a clean config, and `ZUNDER_TIMING=1` to the
+server to print how long each step of opening and searching takes. Keep opening under 30 ms and
+a keystroke under 5 ms.
 
 ## Layout
 
