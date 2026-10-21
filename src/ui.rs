@@ -402,13 +402,17 @@ impl Ui {
     }
 
     fn show(self: &Rc<Self>, switch: bool) {
+        let started = std::time::Instant::now();
         {
             let mut s = self.state.borrow_mut();
             s.switch = switch;
             s.had_focus = false;
             s.windows = windows::list();
+            timing("windows", started);
             if !switch {
+                let t = std::time::Instant::now();
                 s.engine.reload();
+                timing("reload", t);
             }
         }
         let (width, height, previews) = {
@@ -425,8 +429,11 @@ impl Ui {
         self.preview.text_cache.borrow_mut().clear();
         self.entry.set_text("");
         self.refresh();
+        let t = std::time::Instant::now();
         self.window.present();
         self.entry.grab_focus();
+        timing("present", t);
+        timing("show", started);
     }
 
     fn hide(&self) {
@@ -439,7 +446,9 @@ impl Ui {
         let (sections, jobs, seq) = {
             let mut s = self.state.borrow_mut();
             s.seq += 1;
+            let t = std::time::Instant::now();
             let (sections, jobs) = s.engine.search(&query, &s.windows, s.switch);
+            timing(&format!("search {query:?}"), t);
             (sections, jobs, s.seq)
         };
         for (title, job) in jobs {
@@ -448,7 +457,9 @@ impl Ui {
                 let _ = tx.send_blocking((seq, title, job()));
             });
         }
+        let t = std::time::Instant::now();
         self.render(sections, false);
+        timing("render", t);
     }
 
     /// Show `sections`. `keep` holds the selection and scroll (late results merging in).
@@ -875,6 +886,14 @@ fn combo(key: gdk::Key, mods: gdk::ModifierType) -> Option<String> {
     }
     parts.push(if name.chars().count() == 1 { name.to_uppercase() } else { name });
     Some(parts.join(" + "))
+}
+
+/// `ZUNDER_TIMING=1 zunder server` prints how long each step takes, for keeping zunder fast.
+fn timing(what: &str, since: std::time::Instant) {
+    static ON: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| std::env::var_os("ZUNDER_TIMING").is_some());
+    if *ON {
+        eprintln!("zunder: {what:<24} {:>7.2} ms", since.elapsed().as_secs_f64() * 1000.0);
+    }
 }
 
 fn alt_held(window: &gtk::ApplicationWindow) -> bool {
