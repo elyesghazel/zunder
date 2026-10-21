@@ -18,6 +18,15 @@ pub fn init_overlay(window: &gtk::ApplicationWindow) {
     window.set_resizable(false);
 }
 
+/// No self-update on macOS yet: Enter opens the release page with the new dmg.
+pub fn update_action() -> crate::item::Action {
+    crate::item::Action::Open("https://github.com/elyesghazel/zunder/releases/latest".into())
+}
+
+pub fn update_hint() -> &'static str {
+    "Enter opens the download"
+}
+
 /// Called once at startup, before GTK.
 pub fn init() {}
 

@@ -8,12 +8,10 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use crate::engine::{Ctx, Provider};
-use crate::item::{Action, Item};
+use crate::item::Item;
 
 pub struct Update;
 
-/// Enter on the notice runs the installer again in a terminal: it updates, then restarts zunder.
-const UPDATE: &str = "curl -fsSL https://raw.githubusercontent.com/elyesghazel/zunder/main/get.sh | sh -s -- --no-setup";
 const API: &str = "https://api.github.com/repos/elyesghazel/zunder/releases/latest";
 
 #[derive(Serialize, Deserialize, Default)]
@@ -82,11 +80,11 @@ impl Provider for Update {
         tag.filter(|t| newer(t, current))
             .map(|t| Item {
                 title: format!("zunder {} is out", t.trim_start_matches('v')),
-                subtitle: format!("you have {current} · Enter updates now"),
+                subtitle: format!("you have {current} · {}", crate::platform::update_hint()),
                 hint: "update".into(),
                 glyph: "\u{f01b}".into(),
                 id: "cmd:update".into(),
-                action: Action::Term(UPDATE.into()),
+                action: crate::platform::update_action(),
                 score: 1_000_000,
                 ..Default::default()
             })

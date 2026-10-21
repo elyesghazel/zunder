@@ -25,6 +25,18 @@ pub fn init_overlay(window: &gtk::ApplicationWindow) {
     }
 }
 
+/// What Enter on the "new version" notice does: run the installer again in a terminal, which
+/// updates (pacman or ~/.local/bin) and restarts the daemon.
+pub fn update_action() -> crate::item::Action {
+    crate::item::Action::Term(
+        "curl -fsSL https://raw.githubusercontent.com/elyesghazel/zunder/main/get.sh | sh -s -- --no-setup".into(),
+    )
+}
+
+pub fn update_hint() -> &'static str {
+    "Enter updates now"
+}
+
 /// Called once at startup, before GTK.
 pub fn init() {}
 

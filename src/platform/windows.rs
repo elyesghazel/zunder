@@ -18,6 +18,23 @@ pub fn init_overlay(window: &gtk::ApplicationWindow) {
     window.set_resizable(false);
 }
 
+/// Enter on the "new version" notice: download the newest installer and run it silently. It
+/// stops this zunder, updates it in place and starts the daemon again.
+pub fn update_action() -> crate::item::Action {
+    let script = "$f = Join-Path $env:TEMP 'zunder-windows-setup.exe'; \
+        Invoke-WebRequest -UseBasicParsing -OutFile $f \
+        'https://github.com/elyesghazel/zunder/releases/latest/download/zunder-windows-setup.exe'; \
+        Start-Process $f -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'";
+    // -EncodedCommand takes UTF-16LE base64, so nothing in the script needs quoting for cmd
+    let utf16: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    let encoded = gtk4::glib::base64_encode(&utf16);
+    crate::item::Action::Run(format!("powershell -NoProfile -WindowStyle Hidden -EncodedCommand {encoded}"))
+}
+
+pub fn update_hint() -> &'static str {
+    "Enter updates now"
+}
+
 /// Startup: make the bundled Nerd Font available. On Windows the font is called
 /// "JetBrainsMono NF", which the CSS lists next to its Linux name.
 pub fn init() {
