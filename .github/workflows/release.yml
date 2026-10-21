@@ -108,12 +108,19 @@ jobs:
           # every DLL zunder.exe needs from MSYS2, found recursively by ldd
           ldd "$app/bin/zunder.exe" | grep -i '/ucrt64/' | awk '{print $3}' | sort -u | xargs -I{} cp {} "$app/bin/"
           cp -r /ucrt64/lib/gdk-pixbuf-2.0 "$app/lib/"
+          # only the image loaders zunder uses (png, jpeg, gif, svg for GTK's own icons)
+          loaders="$app/lib/gdk-pixbuf-2.0/2.10.0/loaders"
+          rm -f "$loaders"/*.dll.a "$loaders"/*xpm* "$loaders"/*xbm* "$loaders"/*tga* "$loaders"/*tiff* "$loaders"/*ani* "$loaders"/*bmp* "$loaders"/*icns* "$loaders"/*qtif*
           cp /ucrt64/share/glib-2.0/schemas/gschemas.compiled "$app/share/glib-2.0/schemas/"
           cp -r /ucrt64/share/icons/Adwaita /ucrt64/share/icons/hicolor "$app/share/icons/"
+          # Windows draws its own cursors; GTK's controls only need a few symbolic icons
+          adw="$app/share/icons/Adwaita"
+          rm -rf "$adw/cursors" "$adw/symbolic/status" "$adw/symbolic/devices" "$adw/symbolic/emotes" "$adw/symbolic/legacy" "$adw/symbolic/apps" "$adw/symbolic/categories"
+          gtk4-update-icon-cache -q -t -f "$adw" || true
           # the Nerd Font zunder's glyphs need; zunder installs it for the user on first start
           mkdir -p "$app/share/fonts"
           curl -fsSL -o nf.tar.xz https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.tar.xz
-          tar -xJf nf.tar.xz -C "$app/share/fonts" JetBrainsMonoNerdFont-Regular.ttf JetBrainsMonoNerdFont-Bold.ttf
+          tar -xJf nf.tar.xz -C "$app/share/fonts" JetBrainsMonoNerdFont-Regular.ttf
           cp README.md LICENSE "$app/"
           cp -r docs examples "$app/"
           printf '@start "" "%%~dp0bin\\zunder.exe" %%*\r\n' > "$app/zunder.cmd"
