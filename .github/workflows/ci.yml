@@ -22,11 +22,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: brew install gtk4 pkgconf
+      - uses: Swatinem/rust-cache@v2
       - run: cargo build --locked
       - run: cargo test --locked
 
   windows:
     runs-on: windows-latest
+    env:
+      # one cargo home for MSYS2's cargo and rust-cache, so the registry gets cached too
+      CARGO_HOME: D:\cargo-home
     defaults:
       run:
         shell: msys2 {0}
@@ -36,10 +40,14 @@ jobs:
         with:
           msystem: UCRT64
           update: true
+          cache: true
           install: >-
             mingw-w64-ucrt-x86_64-gtk4
             mingw-w64-ucrt-x86_64-rust
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-gcc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-msys2
       - run: cargo build --locked
       - run: cargo test --locked

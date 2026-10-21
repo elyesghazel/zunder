@@ -69,6 +69,9 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    env:
+      # one cargo home for MSYS2's cargo and rust-cache, so the registry gets cached too
+      CARGO_HOME: D:\cargo-home
     defaults:
       run:
         shell: msys2 {0}
@@ -78,6 +81,7 @@ jobs:
         with:
           msystem: UCRT64
           update: true
+          cache: true
           install: >-
             mingw-w64-ucrt-x86_64-gtk4
             mingw-w64-ucrt-x86_64-rust
@@ -85,6 +89,10 @@ jobs:
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-adwaita-icon-theme
             zip
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-msys2
+          cache-directories: target-console
       - name: version
         run: echo "VER=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> "$GITHUB_ENV"
       - name: build
@@ -123,6 +131,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: brew install gtk4 pkgconf dylibbundler adwaita-icon-theme
+      - uses: Swatinem/rust-cache@v2
       - name: version
         run: echo "VER=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> "$GITHUB_ENV"
       - name: build
