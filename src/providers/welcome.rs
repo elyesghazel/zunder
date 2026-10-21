@@ -78,7 +78,7 @@ impl Provider for Welcome {
         let explained = |item: Item, text: &str| Item { text: Some(Text::Literal(text.to_owned())), ..item };
         let themes = crate::theme::names().join("\n");
         let pages = "General      terminal, search, money\nSwitcher     Alt release, previews\nStart screen windows, apps\nAppearance   font, theme, size\nProviders    sections on / off\nFavorites    what you pinned\nShortcuts    global keys\nPlugins      installed scripts\nAbout        version, files";
-        vec![
+        let mut items = vec![
             explained(item("Run setup", "keybinds, autostart and theme, a few questions", "\u{f0ad}", Action::Term("zunder setup".into()), 4), SETUP),
             explained(item("Pick a theme", "Enter applies live, keep trying", "\u{f1fc}", Action::Fill("theme ".into()), 3), &format!("Built in\n\n{themes}\n\nOr your own: ~/.config/zunder/themes/<name>.css")),
             explained(item("Settings", "Ctrl+, from anywhere in zunder", "\u{f013}", Action::Run("zunder settings".into()), 2), &format!("The settings window\n\n{pages}")),
@@ -86,6 +86,11 @@ impl Provider for Welcome {
                 item("Keys and tricks", "Enter opens the full guide", "\u{f11c}", Action::Open("https://github.com/elyesghazel/zunder/blob/main/docs/usage.md".into()), 1),
                 KEYS,
             ),
-        ]
+        ];
+        // `zunder setup` is Hyprland setup; the Windows installer and the macOS app do it themselves
+        if !cfg!(target_os = "linux") {
+            items.remove(0);
+        }
+        items
     }
 }
