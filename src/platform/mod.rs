@@ -122,11 +122,16 @@ pub fn install_command(tool: &str) -> Option<String> {
         std::env::var_os("PATH").is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(program).is_file()))
     };
     if cfg!(windows) {
+        // fd ships with the Windows installer; this is for the zip. Scoop needs no admin and
+        // works where winget is turned off (company laptops).
+        if has("scoop.cmd") || has("scoop.ps1") {
+            return Some(format!("scoop install {tool}"));
+        }
         let id = match tool {
             "fd" => "sharkdp.fd",
             _ => return None,
         };
-        return Some(format!("winget install -e --id {id}"));
+        return has("winget.exe").then(|| format!("winget install -e --id {id}"));
     }
     if cfg!(target_os = "macos") {
         return has("brew").then(|| format!("brew install {tool}"));
