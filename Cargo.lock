@@ -1501,7 +1501,7 @@ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[package]]
 name = "zunder"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "async-channel",
  "chrono",
