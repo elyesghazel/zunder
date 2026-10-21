@@ -109,9 +109,14 @@ else
         esac
     fi
 
-    # an older daemon would keep running the old version
-    if has zunder; then zunder quit 2>/dev/null || true; fi
-    say "zunder $ver is ready"
+    # restart a running daemon so the new version is the one that answers
+    if has zunder && zunder quit 2>/dev/null; then
+        sleep 0.3
+        if has setsid; then setsid -f zunder server >/dev/null 2>&1; else nohup zunder server >/dev/null 2>&1 & fi
+        say "zunder $ver is ready and running"
+    else
+        say "zunder $ver is ready"
+    fi
 fi
 
 zbin=$(command -v zunder || echo "$BIN_DIR/zunder")
