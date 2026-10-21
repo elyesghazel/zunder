@@ -464,6 +464,22 @@ impl Ui {
 
     /// Show `sections`. `keep` holds the selection and scroll (late results merging in).
     fn render(&self, sections: Vec<Section>, keep: bool) {
+        // same results as on screen (reopening the start screen): keep the rows, just reset
+        if !keep && !sections.is_empty() && self.state.borrow().sections == sections {
+            let first = {
+                let s = self.state.borrow();
+                usize::from(s.switch && s.items.len() > 1 && self.entry.text().is_empty())
+            };
+            let column = {
+                let s = self.state.borrow();
+                s.items.iter().any(|i| i.image.is_some() || i.text.is_some())
+                    || (s.switch && config::get().previews && s.items.iter().any(|i| i.preview.is_some()))
+            };
+            self.fit_panel(column);
+            self.scroll.vadjustment().set_value(0.0);
+            self.select(first);
+            return;
+        }
         let (previous, scroll) = (self.state.borrow().selected, self.scroll.vadjustment().value());
         self.state.borrow_mut().sections = sections.clone();
         self.list.remove_all();

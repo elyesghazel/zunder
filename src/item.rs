@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::platform;
 
 /// One selectable result row.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Item {
     /// Stable key for frecency, e.g. `app:firefox.desktop`.

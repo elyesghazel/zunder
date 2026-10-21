@@ -8,7 +8,7 @@ use crate::store::{Binds, Favorites};
 use crate::item::Item;
 use crate::providers::{self, windows::Client};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Section {
     pub title: String,
     pub items: Vec<Item>,
