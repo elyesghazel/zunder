@@ -82,7 +82,13 @@ impl Apps {
 
 /// The result row for an app.
 pub fn item(app: &App) -> Item {
-    let cmd = if app.terminal { crate::platform::terminal_command(&app.exec) } else { app.exec.clone() };
+    let action = if cfg!(windows) {
+        Action::Open(app.exec.clone()) // the .lnk itself
+    } else if app.terminal {
+        Action::Run(crate::platform::terminal_command(&app.exec))
+    } else {
+        Action::Run(app.exec.clone())
+    };
     let subtitle = [&app.comment, &app.generic].into_iter().find(|s| !s.is_empty()).cloned().unwrap_or_default();
     Item {
         id: format!("app:{}", app.id),
@@ -91,7 +97,7 @@ pub fn item(app: &App) -> Item {
         hint: "app".into(),
         glyph: "\u{f135}".into(),
         icon: app.icon.clone(),
-        action: Action::Run(cmd),
+        action,
         ..Default::default()
     }
 }

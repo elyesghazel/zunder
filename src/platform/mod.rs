@@ -79,8 +79,10 @@ pub fn shell(cmd: &str) -> Command {
     };
     #[cfg(windows)]
     let mut c = {
+        // raw: Rust's argument escaping (\") isn't what cmd.exe expects, which broke quotes
+        use std::os::windows::process::CommandExt;
         let mut c = Command::new("cmd");
-        c.args(["/C", cmd]);
+        c.raw_arg(format!("/C {cmd}"));
         c
     };
     c.stdin(Stdio::null());
@@ -89,10 +91,15 @@ pub fn shell(cmd: &str) -> Command {
 
 /// Run a command line in the background.
 pub fn run_shell(cmd: &str) {
-    #[cfg(unix)]
-    spawn(&["sh", "-c", cmd]);
-    #[cfg(windows)]
-    spawn(&["cmd", "/C", cmd]);
+    let mut c = shell(cmd);
+    c.stdout(Stdio::null()).stderr(Stdio::null());
+    detach(&mut c);
+    match c.spawn() {
+        Ok(mut child) => {
+            thread::spawn(move || child.wait());
+        }
+        Err(e) => eprintln!("zunder: failed to run {cmd}: {e}"),
+    }
 }
 
 /// Put text on the clipboard by piping it into a helper program.

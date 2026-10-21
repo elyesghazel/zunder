@@ -158,8 +158,16 @@ pub fn capture_window(_id: &str, _path: &Path) -> bool {
     false
 }
 
+/// Files, folders, URLs and Start-menu shortcuts, the way Explorer opens them.
 pub fn open(target: &str) {
-    spawn(&["cmd", "/C", "start", "", target]);
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let wide = |s: &str| s.encode_utf16().chain([0]).collect::<Vec<u16>>();
+    let (verb, file) = (wide("open"), wide(target));
+    // SAFETY: null-terminated UTF-16 strings that outlive the call; no parent window.
+    unsafe {
+        ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), file.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL);
+    }
 }
 
 pub fn copy(text: &str) {
@@ -330,7 +338,8 @@ fn walk(dir: &Path, apps: &mut Vec<App>) {
             }
             apps.push(App {
                 id: path.to_string_lossy().into_owned(),
-                exec: format!("start \"\" \"{}\"", path.display()),
+                // opened with ShellExecute (see `open`), not through cmd
+                exec: path.to_string_lossy().into_owned(),
                 name,
                 ..Default::default()
             });
