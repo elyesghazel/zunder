@@ -134,7 +134,7 @@ jobs:
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
-          & $iscc /Qp "/DVer=$env:VER" "/DSrc=$PWD\zunder-$env:VER" "/DOut=$PWD\dist" packaging\windows\zunder.iss
+          & $iscc /Qp "/DZunderVersion=$env:VER" "/DSrc=$PWD\zunder-$env:VER" "/DOut=$PWD\dist" packaging\windows\zunder.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Get-ChildItem dist | Format-Table Name, @{n='MB'; e={[math]::Round($_.Length / 1MB, 1)}}
       - uses: actions/upload-artifact@v4

@@ -1,16 +1,16 @@
 ; zunder installer for Windows. Built by .github/workflows/release.yml:
-;   iscc /DVer=0.2.1 /DSrc=<unpacked bundle> /DOut=<folder> zunder.iss
+;   iscc /DZunderVersion=0.2.1 /DSrc=<unpacked bundle> /DOut=<folder> zunder.iss
 ; Installs for the current user (no admin), so updates can run silently from zunder itself.
 
-#ifndef Ver
-  #define Ver "0.0.0"
+#ifndef ZunderVersion
+  #define ZunderVersion "0.0.0"
 #endif
 
 [Setup]
 AppId={{6E1D5C3A-8F2B-4C7E-9A51-2D4B7F0E3C91}
 AppName=zunder
-AppVersion={#Ver}
-AppVerName=zunder {#Ver}
+AppVersion={#ZunderVersion}
+AppVerName=zunder {#ZunderVersion}
 AppPublisher=Elyes Ghazel
 AppPublisherURL=https://github.com/elyesghazel/zunder
 AppSupportURL=https://github.com/elyesghazel/zunder/issues
