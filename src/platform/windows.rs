@@ -18,8 +18,10 @@ pub fn init_overlay(window: &gtk::ApplicationWindow) {
     window.set_resizable(false);
 }
 
-/// Called once at startup, before GTK.
-pub fn init() {}
+/// Startup: make the bundled Nerd Font available (the glyphs need it).
+pub fn init() {
+    install_fonts();
+}
 
 /// Windows lets GTK put the window anywhere: center it on the monitor under the mouse, keep it
 /// above other windows and give it the keyboard. Runs again a moment later, after GTK has
@@ -62,6 +64,51 @@ fn place(window: &gtk::ApplicationWindow) {
         let y = area.top + (area.bottom - area.top - h) / 2;
         SetWindowPos(hwnd, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_SHOWWINDOW);
         SetForegroundWindow(hwnd);
+    }
+}
+
+/// Fonts that ship in `share\fonts` next to `bin\zunder.exe`, installed for the current user
+/// only (no admin), like "Install for me" in Explorer: copied to
+/// %LOCALAPPDATA%\Microsoft\Windows\Fonts and registered under HKCU, then loaded for this session.
+fn install_fonts() {
+    use windows_sys::Win32::Graphics::Gdi::AddFontResourceW;
+    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, REG_SZ, RegSetKeyValueW};
+
+    let wide = |s: &str| s.encode_utf16().chain([0]).collect::<Vec<u16>>();
+    let Some(bundled) = std::env::current_exe().ok().and_then(|e| Some(e.parent()?.parent()?.join("share").join("fonts"))) else {
+        return;
+    };
+    let Ok(entries) = fs::read_dir(&bundled) else { return };
+    let target = dirs::data_local_dir().unwrap_or_default().join("Microsoft\\Windows\\Fonts");
+    let _ = fs::create_dir_all(&target);
+    for entry in entries.flatten() {
+        let source = entry.path();
+        if source.extension().is_none_or(|e| !e.eq_ignore_ascii_case("ttf")) {
+            continue;
+        }
+        let Some(name) = source.file_name() else { continue };
+        let installed = target.join(name);
+        if installed.exists() {
+            continue;
+        }
+        if fs::copy(&source, &installed).is_err() {
+            continue;
+        }
+        let path = installed.to_string_lossy().into_owned();
+        let label = format!("{} (TrueType)", source.file_stem().unwrap_or_default().to_string_lossy());
+        let (key, value, data) = (wide("Software\\Microsoft\\Windows NT\\CurrentVersion\\Fonts"), wide(&label), wide(&path));
+        // SAFETY: null-terminated UTF-16 strings that live for the duration of the calls.
+        unsafe {
+            RegSetKeyValueW(
+                HKEY_CURRENT_USER,
+                key.as_ptr(),
+                value.as_ptr(),
+                REG_SZ,
+                data.as_ptr().cast(),
+                (data.len() * 2) as u32,
+            );
+            AddFontResourceW(data.as_ptr());
+        }
     }
 }
 

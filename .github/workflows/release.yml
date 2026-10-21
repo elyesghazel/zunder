@@ -102,6 +102,10 @@ jobs:
           cp -r /ucrt64/lib/gdk-pixbuf-2.0 "$app/lib/"
           cp /ucrt64/share/glib-2.0/schemas/gschemas.compiled "$app/share/glib-2.0/schemas/"
           cp -r /ucrt64/share/icons/Adwaita /ucrt64/share/icons/hicolor "$app/share/icons/"
+          # the Nerd Font zunder's glyphs need; zunder installs it for the user on first start
+          mkdir -p "$app/share/fonts"
+          curl -fsSL -o nf.tar.xz https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.tar.xz
+          tar -xJf nf.tar.xz -C "$app/share/fonts" JetBrainsMonoNerdFont-Regular.ttf JetBrainsMonoNerdFont-Bold.ttf
           cp README.md LICENSE "$app/"
           cp -r docs examples "$app/"
           printf '@start "" "%%~dp0bin\\zunder.exe" %%*\r\n' > "$app/zunder.cmd"
