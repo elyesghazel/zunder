@@ -44,8 +44,30 @@ fn suggestion_weight(app: &App) -> i64 {
         ("System", -15),
         ("Qt", -5),
     ];
+    if app.categories.is_empty() {
+        return weight_by_name(app);
+    }
     let cats: Vec<&str> = app.categories.split(';').collect();
     WEIGHTS.iter().filter(|(c, _)| cats.contains(c)).map(|(_, w)| w).sum()
+}
+
+/// macOS and Windows apps have no categories: guess from well-known names. Every app gets at
+/// least 1, so the start screen is never empty there.
+fn weight_by_name(app: &App) -> i64 {
+    const NAMES: &[(&str, i64)] = &[
+        ("chrome", 60), ("firefox", 60), ("edge", 55), ("brave", 60), ("zen", 60), ("safari", 60), ("arc", 55),
+        ("terminal", 55), ("powershell", 45), ("iterm", 55), ("warp", 50), ("ghostty", 55),
+        ("explorer", 50), ("finder", 50),
+        ("visual studio code", 50), ("code", 45), ("zed", 45), ("intellij", 40), ("notepad", 35),
+        ("spotify", 40), ("discord", 40), ("slack", 40), ("teams", 35), ("whatsapp", 35), ("telegram", 35),
+        ("outlook", 30), ("word", 25), ("excel", 25), ("obsidian", 35), ("notion", 30), ("steam", 25),
+        ("settings", 20), ("calculator", 15),
+    ];
+    let name = app.name.to_lowercase();
+    if ["uninstall", "readme", "help", "manual", "website", "license"].iter().any(|w| name.contains(w)) {
+        return 0;
+    }
+    1 + NAMES.iter().filter(|(n, _)| name.contains(n)).map(|(_, w)| w).max().copied().unwrap_or(0)
 }
 
 impl Apps {
