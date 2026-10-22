@@ -159,17 +159,47 @@ jobs:
       - name: zunder.app
         run: |
           app=dist/zunder.app/Contents
-          mkdir -p "$app/MacOS" "$app/Frameworks" "$app/Resources/share/glib-2.0/schemas" "$app/Resources/share/icons" "$app/Resources/lib"
+          res="$app/Resources"
+          mkdir -p "$app/MacOS" "$app/Frameworks" "$res/share/glib-2.0/schemas" "$res/share/icons" "$res/share/fonts"
           cp target/release/zunder "$app/MacOS/zunder-bin"
           cp packaging/macos/launcher.sh "$app/MacOS/zunder"
           chmod +x "$app/MacOS/zunder"
           sed "s/@VERSION@/$VER/" packaging/macos/Info.plist > "$app/Info.plist"
-          # copy every Homebrew dylib into Frameworks and point the binary at them
+          # every Homebrew dylib the binary needs goes into Frameworks
           dylibbundler -od -b -x "$app/MacOS/zunder-bin" -d "$app/Frameworks" -p @executable_path/../Frameworks/
           prefix=$(brew --prefix)
-          cp "$prefix/share/glib-2.0/schemas/gschemas.compiled" "$app/Resources/share/glib-2.0/schemas/"
-          cp -r "$prefix/share/icons/Adwaita" "$prefix/share/icons/hicolor" "$app/Resources/share/icons/"
-          cp -r "$prefix/lib/gdk-pixbuf-2.0" "$app/Resources/lib/"
+          cp "$prefix/share/glib-2.0/schemas/gschemas.compiled" "$res/share/glib-2.0/schemas/"
+          cp -r "$prefix/share/icons/Adwaita" "$prefix/share/icons/hicolor" "$res/share/icons/"
+          rm -rf "$res/share/icons/Adwaita/cursors"
+          # image loaders: their dylibs into Frameworks too, and a cache with paths inside the app
+          # (the launcher fills in where the app actually is)
+          loaders="$res/lib/gdk-pixbuf-2.0/2.10.0/loaders"
+          mkdir -p "$loaders"
+          cp "$prefix"/lib/gdk-pixbuf-2.0/2.10.0/loaders/*.so "$loaders/"
+          for f in "$loaders"/*.so; do
+            dylibbundler -of -b -x "$f" -d "$app/Frameworks" -p @executable_path/../Frameworks/
+          done
+          GDK_PIXBUF_MODULEDIR="$loaders" gdk-pixbuf-query-loaders \
+            | sed "s|$PWD/$res|@RES@|g" > "$res/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache.in"
+          # the Nerd Font for the glyphs; zunder loads it from Resources/share/fonts
+          curl -fsSL -o nf.tar.xz https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.tar.xz
+          tar -xJf nf.tar.xz -C "$res/share/fonts" JetBrainsMonoNerdFont-Regular.ttf
+      - name: sign and check
+        run: |
+          app=dist/zunder.app/Contents
+          # dylibbundler rewrote the binaries, which breaks their signatures; Apple Silicon refuses
+          # to run that ("damaged"). Ad-hoc sign everything inside, then the app.
+          find "$app/Frameworks" "$app/Resources/lib" -type f \( -name "*.dylib" -o -name "*.so" \) -exec codesign --force --sign - {} \;
+          codesign --force --sign - "$app/MacOS/zunder-bin"
+          codesign --force --sign - dist/zunder.app
+          codesign --verify --deep --strict --verbose=2 dist/zunder.app
+          # nothing may still point into Homebrew, or it breaks on Macs without it
+          if otool -L "$app/MacOS/zunder-bin" "$app"/Frameworks/*.dylib "$app"/Resources/lib/gdk-pixbuf-2.0/2.10.0/loaders/*.so \
+              | grep -E "^\s+(/opt/homebrew|/usr/local/(opt|Cellar|lib))"; then
+            echo "Homebrew paths left in the bundle"; exit 1
+          fi
+          # dyld loads every linked library at start: this fails if one is missing
+          dist/zunder.app/Contents/MacOS/zunder --version
       - name: dmg
         run: |
           mkdir -p out
