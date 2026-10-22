@@ -178,9 +178,12 @@ jobs:
           # (the launcher fills in where the app actually is)
           loaders="$res/lib/gdk-pixbuf-2.0/2.10.0/loaders"
           mkdir -p "$loaders"
-          cp "$prefix"/lib/gdk-pixbuf-2.0/2.10.0/loaders/*.so "$loaders/"
+          cp -L "$prefix"/lib/gdk-pixbuf-2.0/2.10.0/loaders/*.so "$loaders/"
+          chmod u+w "$loaders"/*.so
           for f in "$loaders"/*.so; do
             bundle "$f" -of
+            # a loader's own name (its install id) still points into Homebrew
+            install_name_tool -id "@loader_path/$(basename "$f")" "$f"
           done
           GDK_PIXBUF_MODULEDIR="$loaders" gdk-pixbuf-query-loaders \
             | sed "s|$PWD/$res|@RES@|g" > "$res/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache.in"
