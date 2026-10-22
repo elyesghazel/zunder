@@ -128,7 +128,14 @@ fn apply_config_css() {
 /// GTK's font map, so they work without being installed and without the OS looking them up.
 fn add_bundled_fonts() {
     use gtk::pango::prelude::FontMapExt;
-    let Some(dir) = std::env::current_exe().ok().and_then(|e| Some(e.parent()?.parent()?.join("share").join("fonts"))) else {
+    // Windows: <prefix>\share\fonts; macOS app: Contents/Resources/share/fonts
+    let Some(base) = std::env::current_exe().ok().and_then(|e| Some(e.parent()?.parent()?.to_path_buf())) else {
+        return;
+    };
+    let Some(dir) = [base.join("share").join("fonts"), base.join("Resources").join("share").join("fonts")]
+        .into_iter()
+        .find(|d| d.is_dir())
+    else {
         return;
     };
     let Ok(entries) = std::fs::read_dir(&dir) else { return };
