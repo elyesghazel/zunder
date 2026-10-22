@@ -169,7 +169,7 @@ jobs:
           prefix=$(brew --prefix)
           # every Homebrew dylib the binary needs goes into Frameworks. -s resolves @rpath
           # references; `yes quit` makes it abort instead of asking for a folder forever
-          bundle() { yes quit | dylibbundler -b -x "$1" -d "$app/Frameworks" -p @executable_path/../Frameworks/ -s "$prefix/lib" "${@:2}"; }
+          bundle() { dylibbundler -b -x "$1" -d "$app/Frameworks" -p @executable_path/../Frameworks/ -s "$prefix/lib" "${@:2}" < <(yes quit); }
           bundle "$app/MacOS/zunder-bin" -od
           cp "$prefix/share/glib-2.0/schemas/gschemas.compiled" "$res/share/glib-2.0/schemas/"
           cp -r "$prefix/share/icons/Adwaita" "$prefix/share/icons/hicolor" "$res/share/icons/"
