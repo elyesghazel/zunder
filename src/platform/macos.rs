@@ -154,9 +154,13 @@ pub fn app_dirs() -> Vec<std::path::PathBuf> {
     ]
 }
 
-/// `.app` bundles in /Applications, /System/Applications and ~/Applications.
+/// `.app` bundles in /Applications, /System/Applications and ~/Applications. Their icons are
+/// `.icns` files GTK can't read: they're turned into PNGs in the background (see `convert_icons`)
+/// and show up from the next open on.
 pub fn scan_apps() -> Vec<App> {
+    let cache = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("zunder").join("icons");
     let mut apps = Vec::new();
+    let mut missing = Vec::new();
     for root in app_dirs() {
         let Ok(entries) = fs::read_dir(&root) else { continue };
         for entry in entries.flatten() {
@@ -165,14 +169,65 @@ pub fn scan_apps() -> Vec<App> {
                 continue;
             }
             let name = path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let plist = path.join("Contents").join("Info.plist");
+            let stamp = fs::metadata(&plist)
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map_or(0, |d| d.as_secs());
+            let png = cache.join(format!("{}.png", crate::store::bind_key(&format!("{}{stamp}", path.display()))));
+            if !png.exists() {
+                missing.push((path.clone(), png.clone()));
+            }
             apps.push(App {
                 id: path.to_string_lossy().into_owned(),
                 exec: format!("open -a {}", crate::item::shell_quote(&path.to_string_lossy())),
                 wm_class: name.clone(),
+                icon: png.to_string_lossy().into_owned(),
                 name,
                 ..Default::default()
             });
         }
     }
+    if !missing.is_empty() {
+        let _ = fs::create_dir_all(&cache);
+        std::thread::spawn(move || convert_icons(missing));
+    }
     apps
+}
+
+/// `.app` → its `.icns` (named in Info.plist, usually AppIcon) → a 64px PNG, with the `plutil`
+/// and `sips` every Mac has.
+fn convert_icons(apps: Vec<(std::path::PathBuf, std::path::PathBuf)>) {
+    use std::process::{Command, Stdio};
+    static RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if RUNNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    for (app, png) in apps {
+        let resources = app.join("Contents").join("Resources");
+        let named = Command::new("plutil")
+            .args(["-extract", "CFBundleIconFile", "raw", "-o", "-"])
+            .arg(app.join("Contents").join("Info.plist"))
+            .stderr(Stdio::null())
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
+            .filter(|n| !n.is_empty())
+            .map(|n| if n.ends_with(".icns") { n } else { format!("{n}.icns") });
+        let Some(icns) = named.map(|n| resources.join(n)).into_iter().chain([resources.join("AppIcon.icns")]).find(|p| p.exists())
+        else {
+            continue;
+        };
+        let _ = Command::new("sips")
+            .args(["-s", "format", "png", "-Z", "64"])
+            .arg(&icns)
+            .arg("--out")
+            .arg(&png)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
 }
