@@ -30,8 +30,49 @@ pub fn update_hint() -> &'static str {
 /// Called once at startup, before GTK.
 pub fn init() {}
 
-/// Called right after the launcher is shown.
-pub fn after_show(_window: &gtk::ApplicationWindow) {}
+/// Called right after the launcher is shown: center it on its screen, again on every size change
+/// (the window grows with the results and the preview column). GTK can't place windows on macOS,
+/// so this goes through the NSWindow behind it.
+pub fn after_show(window: &gtk::ApplicationWindow) {
+    let w = window.clone();
+    gtk::glib::idle_add_local_once(move || place(&w));
+    thread_local! {
+        static HOOKED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+    if let Some(surface) = window.surface()
+        && !HOOKED.with(|h| h.replace(true))
+    {
+        let w = window.downgrade();
+        surface.connect_layout(move |_, _, _| {
+            if let Some(w) = w.upgrade() {
+                place(&w);
+            }
+        });
+    }
+}
+
+fn place(window: &gtk::ApplicationWindow) {
+    use objc2_app_kit::{NSFloatingWindowLevel, NSWindow};
+    use objc2_foundation::NSPoint;
+
+    let Some(surface) = window.surface() else { return };
+    let Ok(surface) = surface.downcast::<gdk4_macos::MacosSurface>() else { return };
+    let native = surface.native();
+    if native.is_null() {
+        return;
+    }
+    // SAFETY: GDK hands out the NSWindow it owns for this surface; it lives as long as the
+    // surface, and we're on the main thread as AppKit requires.
+    let ns: &NSWindow = unsafe { &*native.cast::<NSWindow>() };
+    let Some(screen) = ns.screen() else { return };
+    let area = screen.visibleFrame();
+    let frame = ns.frame();
+    // AppKit's origin is the bottom left corner
+    let x = area.origin.x + (area.size.width - frame.size.width) / 2.0;
+    let y = area.origin.y + (area.size.height - frame.size.height) / 2.0;
+    ns.setFrameOrigin(NSPoint::new(x.round(), y.round()));
+    ns.setLevel(NSFloatingWindowLevel);
+}
 
 /// The window is only as big as the panel; it closes when it loses focus instead.
 pub const FULL_SCREEN_OVERLAY: bool = false;
