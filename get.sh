@@ -5,7 +5,8 @@
 #
 # Arch: installs the release package with pacman. Other distros: puts the binary in ~/.local/bin
 # (needs gtk4 4.14+ and gtk4-layer-shell from your distro, it tells you the command).
-# Then runs `zunder setup` for the keybinds. Run it again to update.
+# Then runs `zunder setup` for the keybinds. macOS (Apple Silicon): installs zunder.app; a curl
+# download isn't quarantined, so Gatekeeper doesn't block it. Run it again to update.
 #
 #   … | sh -s -- --uninstall      remove zunder (your config stays)
 #   … | sh -s -- --no-setup       install only
@@ -37,19 +38,56 @@ if [ "${action:-}" = uninstall ]; then
         $SUDO pacman -R --noconfirm zunder
     fi
     rm -f "$BIN_DIR/zunder"
+    rm -rf /Applications/zunder.app "$HOME/Applications/zunder.app"
     say "zunder removed. Your settings are still in ~/.config/zunder"
     exit 0
 fi
 
 has curl || die "curl is needed"
 has tar || die "tar is needed"
-[ "$(uname -s)" = Linux ] || die "this script is for Linux; macOS and Windows builds are on the releases page"
-[ "$(uname -m)" = x86_64 ] || die "only x86_64 builds exist so far, build from source: https://github.com/$REPO#from-source"
+os=$(uname -s)
+case "$os" in
+    Linux) [ "$(uname -m)" = x86_64 ] || die "only x86_64 builds exist so far, build from source: https://github.com/$REPO#from-source" ;;
+    Darwin) [ "$(uname -m)" = arm64 ] || die "only Apple Silicon builds exist so far" ;;
+    *) die "this script is for Linux and macOS; the Windows installer is on the releases page" ;;
+esac
 
 tag=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
 [ -n "$tag" ] || die "couldn't find the latest release (GitHub API rate limit?)"
 ver="${tag#v}"
 base="https://github.com/$REPO/releases/download/$tag"
+
+if [ "$os" = Darwin ]; then
+    apps=/Applications
+    [ -w "$apps" ] || { apps="$HOME/Applications"; mkdir -p "$apps"; }
+    if [ "$("$apps/zunder.app/Contents/MacOS/zunder" --version 2>/dev/null)" = "zunder $ver" ]; then
+        say "zunder $ver is already installed"
+    else
+        tmp=$(mktemp -d)
+        trap 'rm -rf "$tmp"' EXIT
+        file="zunder-$ver-macos-arm64.dmg"
+        say "downloading zunder $ver for macOS"
+        curl -fsSL --retry 2 -o "$tmp/$file" "$base/$file" || die "download failed: $base/$file"
+        if curl -fsSL -o "$tmp/SHA256SUMS" "$base/SHA256SUMS" 2>/dev/null; then
+            (cd "$tmp" && grep " $file\$" SHA256SUMS | shasum -a 256 -c --quiet -) || die "checksum mismatch for $file"
+        fi
+        "$apps/zunder.app/Contents/MacOS/zunder" quit 2>/dev/null || true
+        mkdir "$tmp/mnt"
+        hdiutil attach -nobrowse -quiet -mountpoint "$tmp/mnt" "$tmp/$file" || die "couldn't open the dmg"
+        rm -rf "$apps/zunder.app"
+        cp -R "$tmp/mnt/zunder.app" "$apps/" || { hdiutil detach -quiet "$tmp/mnt"; die "couldn't copy zunder.app to $apps"; }
+        hdiutil detach -quiet "$tmp/mnt"
+        # downloaded with curl, so it carries no quarantine flag; clear it anyway in case
+        xattr -dr com.apple.quarantine "$apps/zunder.app" 2>/dev/null || true
+        mkdir -p "$BIN_DIR"
+        printf '#!/bin/sh\nexec "%s/zunder.app/Contents/MacOS/zunder" "$@"\n' "$apps" > "$BIN_DIR/zunder"
+        chmod +x "$BIN_DIR/zunder"
+        say "installed $apps/zunder.app and the zunder command in $BIN_DIR"
+    fi
+    open -a "$apps/zunder.app"
+    say "zunder is running. Open it from Spotlight, or bind \`zunder toggle\` to a key (skhd, Raycast…)"
+    exit 0
+fi
 
 if has zunder && [ "$(zunder --version 2>/dev/null)" = "zunder $ver" ]; then
     say "zunder $ver is already installed"

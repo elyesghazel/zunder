@@ -69,16 +69,25 @@ Fedora: `sudo dnf install gtk4 gtk4-layer-shell`. On Debian and Ubuntu, check th
 has GTK 4.14+ and packages gtk4-layer-shell (`apt search gtk4-layer-shell`); older releases
 don't.
 
-## macOS (early)
+## macOS
 
-Apple Silicon only for now. Download `zunder-<version>-macos-arm64.dmg` from the
-[latest release](https://github.com/elyesghazel/zunder/releases), open it and drag `zunder` to
-Applications. The app isn't signed, so the first time right-click it and choose Open (or run
-`xattr -dr com.apple.quarantine /Applications/zunder.app`).
+Apple Silicon only for now. The easiest way, with no Gatekeeper warning:
 
-The launcher, apps, search, calculator, conversion, time, emoji, files, plugins, themes and
-settings work. The window switcher, previews and global shortcuts don't exist on macOS yet, so
-start it from Spotlight or a hotkey tool like skhd (`zunder toggle`).
+```sh
+curl -fsSL https://raw.githubusercontent.com/elyesghazel/zunder/main/get.sh | sh
+```
+
+It installs `zunder.app` to `/Applications` (or `~/Applications`) and a `zunder` command to
+`~/.local/bin`. Run it again to update, `… | sh -s -- --uninstall` to remove it.
+
+Or download `zunder-<version>-macos-arm64.dmg` from the
+[latest release](https://github.com/elyesghazel/zunder/releases/latest) and drag `zunder` to
+Applications. zunder isn't notarized by Apple (that needs a paid developer account), so the first
+start is blocked: System Settings → Privacy & Security → **Open Anyway**. Or once in a terminal:
+`xattr -dr com.apple.quarantine /Applications/zunder.app`.
+
+The window switcher, previews and global shortcuts don't exist on macOS yet, so open it from
+Spotlight or bind `zunder toggle` to a key (skhd, Raycast…).
 
 ## Windows
 
