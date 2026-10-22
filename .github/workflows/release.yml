@@ -148,6 +148,7 @@ jobs:
 
   macos:
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - run: brew install gtk4 pkgconf dylibbundler adwaita-icon-theme
@@ -165,9 +166,11 @@ jobs:
           cp packaging/macos/launcher.sh "$app/MacOS/zunder"
           chmod +x "$app/MacOS/zunder"
           sed "s/@VERSION@/$VER/" packaging/macos/Info.plist > "$app/Info.plist"
-          # every Homebrew dylib the binary needs goes into Frameworks
-          dylibbundler -od -b -x "$app/MacOS/zunder-bin" -d "$app/Frameworks" -p @executable_path/../Frameworks/
           prefix=$(brew --prefix)
+          # every Homebrew dylib the binary needs goes into Frameworks. -s resolves @rpath
+          # references; `yes quit` makes it abort instead of asking for a folder forever
+          bundle() { yes quit | dylibbundler -b -x "$1" -d "$app/Frameworks" -p @executable_path/../Frameworks/ -s "$prefix/lib" "${@:2}"; }
+          bundle "$app/MacOS/zunder-bin" -od
           cp "$prefix/share/glib-2.0/schemas/gschemas.compiled" "$res/share/glib-2.0/schemas/"
           cp -r "$prefix/share/icons/Adwaita" "$prefix/share/icons/hicolor" "$res/share/icons/"
           rm -rf "$res/share/icons/Adwaita/cursors"
@@ -177,7 +180,7 @@ jobs:
           mkdir -p "$loaders"
           cp "$prefix"/lib/gdk-pixbuf-2.0/2.10.0/loaders/*.so "$loaders/"
           for f in "$loaders"/*.so; do
-            dylibbundler -of -b -x "$f" -d "$app/Frameworks" -p @executable_path/../Frameworks/
+            bundle "$f" -of
           done
           GDK_PIXBUF_MODULEDIR="$loaders" gdk-pixbuf-query-loaders \
             | sed "s|$PWD/$res|@RES@|g" > "$res/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache.in"
