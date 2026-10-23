@@ -29,6 +29,7 @@ OutputBaseFilename=zunder-windows-setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\..\assets\icons\zunder.ico
 UninstallDisplayIcon={app}\bin\zunder.exe
 UninstallDisplayName=zunder
 LicenseFile={#Src}\LICENSE

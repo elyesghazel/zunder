@@ -166,6 +166,7 @@ jobs:
           cp packaging/macos/launcher.sh "$app/MacOS/zunder"
           chmod +x "$app/MacOS/zunder"
           sed "s/@VERSION@/$VER/" packaging/macos/Info.plist > "$app/Info.plist"
+          cp assets/icons/zunder.icns "$res/"
           prefix=$(brew --prefix)
           # every Homebrew dylib the binary needs goes into Frameworks. -s resolves @rpath
           # references; `yes quit` makes it abort instead of asking for a folder forever

@@ -10,6 +10,8 @@
   <string>dev.zunder.Zunder</string>
   <key>CFBundleExecutable</key>
   <string>zunder</string>
+  <key>CFBundleIconFile</key>
+  <string>zunder</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

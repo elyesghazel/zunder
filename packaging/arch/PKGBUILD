@@ -44,4 +44,8 @@ package() {
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
   cp -r docs "$pkgdir/usr/share/doc/$pkgname/"
   install -Dm755 -t "$pkgdir/usr/share/$pkgname/plugins" examples/plugins/*
+  install -Dm644 assets/logo.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/zunder.svg"
+  for size in 16 22 24 32 48 64 128 256 512; do
+    install -Dm644 "assets/icons/zunder-$size.png" "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/zunder.png"
+  done
 }
