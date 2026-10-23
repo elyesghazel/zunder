@@ -1,3 +1,5 @@
+<img src="assets/logo.svg" width="96" alt="zunder logo">
+
 # zunder
 
 A launcher and ALT+TAB window switcher for Hyprland that looks like a terminal.
