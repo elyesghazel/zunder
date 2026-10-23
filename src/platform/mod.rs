@@ -37,7 +37,14 @@ pub use tray::{init_tray, stop_tray, sync_tray};
 /// The tray menu on every system: label and the command it sends (as `zunder <command>` would).
 /// An empty label is a separator.
 const TRAY_MENU: &[(&str, &str)] =
-    &[("Open", "show"), ("Settings", "open-settings"), ("Reload", "reload"), ("", ""), ("Quit", "quit")];
+    &[
+        ("Open", "show"),
+        ("Settings", "open-settings"),
+        ("Check for Updates", "show update"),
+        ("Reload", "reload"),
+        ("", ""),
+        ("Quit", "quit"),
+    ];
 
 /// The zunder logo (`assets/logo.svg`) at the sizes trays ask for, built into the binary so
 /// there is no icon file to install. `packaging/icons.py` renders them.
