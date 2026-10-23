@@ -1,5 +1,31 @@
 # Development
 
+## How it works
+
+```
+keybind ─► zunder switch ─► $XDG_RUNTIME_DIR/zunder.sock ─► daemon
+                                                              │
+                     hyprctl clients -j ◄─────────────────────┤ on open
+                     .desktop files     ◄─────────────────────┤
+                     grim -T <window>   ◄─────────────────────┘ ALT+TAB only, in threads
+```
+
+The daemon keeps GTK and the app index loaded, so opening is instant; the CLI only writes a word
+to the socket. The overlay is a full-screen layer-shell surface with exclusive keyboard focus.
+Results come from providers, one Rust file each in `src/providers/`, and adding one is about 30
+lines.
+
+Measured on a laptop with Hyprland (release build, `ZUNDER_TIMING=1 zunder server` prints these):
+
+| Step | Time |
+|------|------|
+| open, start screen unchanged since last time | 3–8 ms |
+| open, start screen changed | about 25 ms |
+| search per keystroke | 0.3–2.6 ms |
+
+The window list comes from Hyprland's event socket instead of `hyprctl` on every open, apps are
+rescanned only when an `applications/` folder changes, and unchanged results reuse their rows.
+
 ## Build and run
 
 ```sh

@@ -1,5 +1,28 @@
 # Usage
 
+## At a glance
+
+| | |
+|---|---|
+| **Window switcher** | ALT+TAB as a grid of live window thumbnails, any workspace |
+| **App launcher** | every `.desktop` app (flatpak too), fuzzy matched on name, keywords and binary |
+| **Start screen** | favorites, open windows, your most used apps, suggestions so it's never empty |
+| **Favorites** | `Ctrl+F` pins any result to the start screen |
+| **Global shortcuts** | `Ctrl+B` gives any result a system-wide Hyprland keybind |
+| **Launch history** | `history`: everything you ever ran, searchable, never cleared |
+| **World clock** | `time in ny`, `time in 2h in tokyo`, `3pm ny in zurich` |
+| **Calculator** | `2^10/3`, `sqrt(2)*pi`, Enter copies |
+| **Conversion** | `5 km in mi`, `30c`, `2 gb in mib`, `100 usd in chf`: units and 160 currencies |
+| **Files** | files from your home folder show up as you type; `f name` for only files, images get a preview |
+| **Emoji** | `fire` already shows 🔥; `:heart` for the whole picker |
+| **Clipboard** | `clip`: cliphist history with fuzzy search; full text or image on the right; `Ctrl+F` pins a clip |
+| **Shell** | `> cmd` runs in your terminal or in the background |
+| **System** | lock, suspend, reboot, shut down, log out |
+| **Other** | fallback for anything: web search (engine of your choice), or Ask AI when an `ai` plugin is installed |
+| **Plugins** | any script that prints lines, e.g. `kill zen` |
+| **Themes** | 12 built in (catppuccin, rose-pine, gruvbox, tokyo-night, nord…), or your own |
+| **Settings** | a settings window with a sidebar, plus `settings` inside the launcher |
+
 ## Keys
 
 | Key | What it does |
@@ -16,6 +39,26 @@
 
 Once you type something after ALT+TAB, releasing Alt no longer switches, so you can search
 instead. You can turn release-to-switch off in the settings.
+
+## Commands
+
+```sh
+zunder                  # toggle; starts the daemon first if it isn't running
+zunder setup            # keybinds, autostart and theme for Hyprland (--dry-run, --yes)
+zunder server           # run the daemon (autostart)
+zunder toggle           # show / hide
+zunder show [query]     # show, optionally with the query typed, e.g. zunder show 'time in '
+zunder hide
+zunder switch           # window switcher, or the next window if it's open
+zunder switch-prev      # same, backwards
+zunder overview         # the switcher without Alt: stays open until you pick a window
+zunder settings [page]  # settings window, e.g. zunder settings appearance
+zunder reload           # reread config.toml, rescan apps and plugins
+zunder import vicinae   # take over vicinae's favorites and launch counts
+zunder run <key>        # run a saved shortcut (the generated binds call this)
+zunder quit             # stop the daemon
+zunder --version
+```
 
 ## What you can type
 

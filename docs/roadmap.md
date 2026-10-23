@@ -11,6 +11,58 @@ Enter) faster; zunder isn't trying to be a Raycast clone.
 4. Deep Hyprland integration: real binds, workspaces, `hide_windows`.
 5. One small native binary that opens instantly.
 
+## Status
+
+**0.2: install to daily driver in two minutes**
+- [x] one-line installer: `curl … | sh`
+- [x] interactive `zunder setup`: keybinds, autostart, theme, import from vicinae / rofi / wofi
+- [x] update notice in the launcher
+- [ ] ALT+TAB: reliable quick tap, multiple monitors, fullscreen windows
+- [x] opens and closes with a quick fade instead of the layer slide
+- [x] speed budget: open in under 30 ms, search in under 5 ms, measured
+- [x] first-run screen
+
+**0.2.5**
+- [x] ALT+TAB as a grid of window thumbnails
+- [x] pin clipboard entries with `Ctrl+F`
+- [x] tray icon: shows the server runs, menu with open, settings, reload, quit
+
+**0.2.6**
+- [x] logo, used as the app icon on all three systems
+- [x] tray icon on Windows (notification area) and macOS (menu bar)
+
+**0.2.x: Windows** (side track)
+- [x] centered window, glyphs and app icons
+- [x] smaller bundle (16 MB installer; GTK alone is about 40 MB of DLLs)
+- [x] `zunder-windows-setup.exe` installer with autostart, Start menu entry and hotkey
+- [x] ALT+SPACE opens zunder on Windows
+- [x] updates in place from the notice on Windows
+
+**0.3: setup and presence**
+- [ ] setup as a page inside zunder instead of a terminal, on every system
+
+**0.3: switcher actions**
+- [ ] close, move to workspace, fullscreen and minimize windows from the switcher
+- [ ] `Ctrl+K` action menu for every result
+- [ ] group by workspace, current workspace only
+
+**0.4: installable plugins**
+- [ ] plugin registry and `zunder plugin install <name>`
+- [ ] plugin settings
+- [ ] starter set: wifi, bluetooth, audio, pass, github, color picker, screenshot…
+- [ ] streaming plugin results
+
+**0.5: sync**
+- [ ] log in with GitHub; favorites, themes, plugins and settings in a private gist
+
+**0.6: macOS and Windows parity**
+- [ ] global shortcuts and clipboard history on both (ALT+TAB stays Linux-only: both systems have their own)
+
+**Later**
+- [ ] Raycast extension bridge (optional)
+- [ ] AUR, winget and Homebrew packages
+- [ ] 1.0: stable config and plugin protocol
+
 ---
 
 ## 0.2: "five minutes from install to daily driver" (about 1 week)
