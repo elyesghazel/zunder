@@ -14,7 +14,7 @@
 //! | `system_commands`    | lock, sleep, restart…                                      |
 //! | `install_binds`      | turn zunder's keybinds into global shortcuts               |
 //! | `is_executable`      | whether a file in the plugins folder can be run            |
-//! | `init_tray` / `sync_tray` | tray icon with open, settings, reload, quit (Linux)   |
+//! | `init_tray` / `sync_tray` / `stop_tray` | tray icon: open, settings, reload, quit |
 
 use std::process::{Command, Stdio};
 use std::thread;
@@ -24,15 +24,31 @@ mod linux;
 #[cfg(target_os = "linux")]
 pub use linux::*;
 #[cfg(target_os = "linux")]
+#[path = "tray_linux.rs"]
 mod tray;
-#[cfg(target_os = "linux")]
-pub use tray::{init_tray, sync_tray};
+#[cfg(target_os = "macos")]
+#[path = "tray_macos.rs"]
+mod tray;
+#[cfg(windows)]
+#[path = "tray_windows.rs"]
+mod tray;
+pub use tray::{init_tray, stop_tray, sync_tray};
 
-/// macOS and Windows have no tray icon yet.
-#[cfg(not(target_os = "linux"))]
-pub fn init_tray(_tx: async_channel::Sender<String>) {}
-#[cfg(not(target_os = "linux"))]
-pub fn sync_tray() {}
+/// The tray menu on every system: label and the command it sends (as `zunder <command>` would).
+/// An empty label is a separator.
+const TRAY_MENU: &[(&str, &str)] =
+    &[("Open", "show"), ("Settings", "open-settings"), ("Reload", "reload"), ("", ""), ("Quit", "quit")];
+
+/// The zunder logo (`assets/logo.svg`) at the sizes trays ask for, built into the binary so
+/// there is no icon file to install. `packaging/icons.py` renders them.
+const TRAY_ICONS: &[(i32, &[u8])] = &[
+    (16, include_bytes!("../../assets/icons/zunder-16.png")),
+    (22, include_bytes!("../../assets/icons/zunder-22.png")),
+    (24, include_bytes!("../../assets/icons/zunder-24.png")),
+    (32, include_bytes!("../../assets/icons/zunder-32.png")),
+    (48, include_bytes!("../../assets/icons/zunder-48.png")),
+    (64, include_bytes!("../../assets/icons/zunder-64.png")),
+];
 
 #[cfg(target_os = "macos")]
 mod macos;

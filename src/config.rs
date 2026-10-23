@@ -42,7 +42,7 @@ pub struct Config {
     pub hide_windows: Vec<String>,
     /// Look for new zunder releases once a day (GitHub API) and say so on the start screen.
     pub update_check: bool,
-    /// A tray icon while the server runs (Linux).
+    /// A tray icon while the server runs (menu bar on macOS).
     pub tray: bool,
 }
 

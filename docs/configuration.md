@@ -61,7 +61,7 @@ hide_windows = []                            # window classes to leave out, e.g.
 | `icons` | on/off | app icons from your icon theme instead of glyphs |
 | `previews` | on/off | window screenshots in ALT+TAB |
 | `alt_release` | on/off | releasing Alt switches windows |
-| `tray` | on/off | tray icon while the server runs (Linux), menu with open, settings, reload, quit |
+| `tray` | on/off | tray icon while the server runs (menu bar on macOS), menu with open, settings, reload, quit |
 | `start_windows` | on/off | windows on the start screen |
 | `start_apps` | number | apps on the start screen |
 | `hide_windows` | list | window classes the switcher and search never show (`hyprctl clients` shows the class) |

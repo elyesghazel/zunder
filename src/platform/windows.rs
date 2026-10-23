@@ -1,5 +1,5 @@
-//! Windows. Apps (Start menu shortcuts), actions and system commands work; the window switcher,
-//! previews and global shortcuts are still to come (EnumWindows, DWM thumbnails, RegisterHotKey).
+//! Windows. Apps (Start menu shortcuts), actions, system commands and the tray work; global
+//! shortcuts are still to come. No ALT+TAB switcher: Windows has its own.
 
 use std::fs;
 use std::path::{Path, PathBuf};

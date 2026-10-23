@@ -95,7 +95,6 @@ pub fn run(initial: Option<&'static str>) -> ExitCode {
         eprintln!("zunder: {e}");
         return ExitCode::FAILURE;
     }
-    crate::platform::init_tray(tx);
     let app = gtk::Application::builder()
         .application_id("dev.zunder.Zunder")
         .flags(gtk::gio::ApplicationFlags::NON_UNIQUE)
@@ -103,6 +102,8 @@ pub fn run(initial: Option<&'static str>) -> ExitCode {
     app.connect_activate(move |app| {
         std::mem::forget(app.hold());
         load_css();
+        // after GTK is up: the macOS menu bar item needs the running NSApplication
+        crate::platform::init_tray(tx.clone());
         let ui = Ui::build(app);
         if let Some(cmd) = initial {
             ui.command(cmd);
@@ -115,6 +116,7 @@ pub fn run(initial: Option<&'static str>) -> ExitCode {
         });
     });
     let code = app.run_with_args::<&str>(&[]);
+    crate::platform::stop_tray();
     let _ = std::fs::remove_file(ipc::socket_path());
     if code == glib::ExitCode::SUCCESS { ExitCode::SUCCESS } else { ExitCode::FAILURE }
 }

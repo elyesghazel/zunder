@@ -29,7 +29,7 @@ impl ksni::Tray for Tray {
     }
 
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
-        ICONS.iter().filter_map(|(_, png)| icon(png)).collect()
+        super::TRAY_ICONS.iter().filter_map(|(_, png)| icon(png)).collect()
     }
 
     fn activate(&mut self, _x: i32, _y: i32) {
@@ -42,13 +42,10 @@ impl ksni::Tray for Tray {
             StandardItem { label: label.into(), activate: Box::new(move |t: &mut Self| t.send(cmd)), ..Default::default() }
                 .into()
         };
-        vec![
-            item("Open", "show"),
-            item("Settings", "open-settings"),
-            item("Reload", "reload"),
-            ksni::MenuItem::Separator,
-            item("Quit", "quit"),
-        ]
+        super::TRAY_MENU
+            .iter()
+            .map(|&(label, cmd)| if label.is_empty() { ksni::MenuItem::Separator } else { item(label, cmd) })
+            .collect()
     }
 }
 
@@ -82,15 +79,8 @@ pub fn sync_tray() {
     }
 }
 
-/// The zunder logo (`assets/logo.svg`), rendered to PNG at the sizes trays ask for and built
-/// into the binary, so there is no icon file to install.
-const ICONS: &[(i32, &[u8])] = &[
-    (16, include_bytes!("../../assets/icons/zunder-16.png")),
-    (22, include_bytes!("../../assets/icons/zunder-22.png")),
-    (32, include_bytes!("../../assets/icons/zunder-32.png")),
-    (48, include_bytes!("../../assets/icons/zunder-48.png")),
-    (64, include_bytes!("../../assets/icons/zunder-64.png")),
-];
+/// The icon goes away with the process (it's a D-Bus name), nothing to clean up.
+pub fn stop_tray() {}
 
 /// One PNG as the ARGB32 (big-endian) pixmap StatusNotifierItem wants.
 fn icon(png: &[u8]) -> Option<ksni::Icon> {
@@ -113,7 +103,7 @@ fn icon(png: &[u8]) -> Option<ksni::Icon> {
 mod tests {
     #[test]
     fn icons_decode_to_argb() {
-        for (size, png) in super::ICONS {
+        for (size, png) in super::super::TRAY_ICONS {
             let icon = super::icon(png).expect("png decodes");
             assert_eq!((icon.width, icon.height), (*size, *size));
             assert_eq!(icon.data.len(), (size * size * 4) as usize);

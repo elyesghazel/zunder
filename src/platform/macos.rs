@@ -1,5 +1,5 @@
-//! macOS. Apps, actions and system commands work; the window switcher, previews and global
-//! shortcuts are still to come (Accessibility API, ScreenCaptureKit, hotkey registration).
+//! macOS. Apps, actions, system commands and the menu bar icon work; global shortcuts are still
+//! to come. No ALT+TAB switcher: macOS has ⌘Tab.
 
 use std::fs;
 use std::path::Path;
