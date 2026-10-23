@@ -67,7 +67,8 @@ pub fn sync_tray() {
     let Some(tx) = TX.get() else { return };
     let Ok(mut handle) = HANDLE.lock() else { return };
     match (on, handle.is_some()) {
-        (true, false) => match (Tray { tx: tx.clone() }).spawn() {
+        // registers whenever the bar's tray shows up, so starting before waybar is fine
+        (true, false) => match (Tray { tx: tx.clone() }).assume_sni_available(true).spawn() {
             Ok(h) => *handle = Some(h),
             // no session bus or no tray host: zunder works the same without the icon
             Err(e) => eprintln!("zunder: no tray icon: {e}"),
