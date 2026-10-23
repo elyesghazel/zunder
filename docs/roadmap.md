@@ -5,7 +5,7 @@ later. Releases are small and frequent. Every feature has to make the core loop 
 Enter) faster; zunder isn't trying to be a Raycast clone.
 
 **What makes zunder worth switching to**, and every release should sharpen at least one of these:
-1. One tool for launching *and* ALT+TAB, with live window previews.
+1. One tool for launching *and* ALT+TAB on Hyprland, with live window previews.
 2. Plugins are any script that prints lines. No SDK, no Node.
 3. A terminal look with CSS themes.
 4. Deep Hyprland integration: real binds, workspaces, `hide_windows`.
@@ -134,15 +134,21 @@ icons, and comes back after a reboot. Tested on real Windows.
 
 - [x] "Install fd" / "Install cliphist" results: Enter runs the right package manager in a terminal
 
+## 0.2.5: grid switcher, pinned clips, tray
+
+- [x] ALT+TAB as a grid of window thumbnails instead of a list with one preview
+- [x] `Ctrl+F` pins a clipboard entry: its content is saved, so it outlives cliphist
+- [x] tray icon on Linux (StatusNotifierItem through `ksni`): open, settings, reload, quit;
+  `tray = false` removes it
+
 ## 0.3: setup and presence
 
 1. **Setup as a page inside zunder.** `setup` opens a page like `settings`: toggles for the
    keys, switching over from other launchers, autostart, theme and example plugins, and an
    Apply row. It uses the same logic as `zunder setup` (`src/setup.rs`), so the terminal version
    stays for scripts. On Windows and macOS it shows what applies there (hotkey, autostart).
-2. **Tray icon.** A small zunder icon while the server runs, with a menu: open, settings,
-   reload, quit. StatusNotifierItem over D-Bus on Linux (`ksni`), the notification area on
-   Windows, the menu bar on macOS.
+2. **Tray icon on macOS and Windows.** Linux has it since 0.2.5; here it's the notification area
+   on Windows and the menu bar on macOS.
 
 ## 0.3: the switcher nobody else has (about 1–2 weeks)
 
@@ -227,9 +233,10 @@ themes and plugins match on both.
 
 Everything goes behind the existing `src/platform/{macos,windows}.rs` functions.
 
+No ALT+TAB switcher on either: macOS has ⌘Tab and Windows has Alt+Tab built in, so the switcher
+and window previews stay Linux-only.
+
 **macOS:**
-- Window list and focus: `CGWindowListCopyWindowInfo` plus the AX API.
-- Previews: `ScreenCaptureKit`.
 - Hotkeys: the `global-hotkey` crate.
 - Clipboard history: our own watcher with `arboard` polling.
 - A centered `NSPanel`, through the `objc2` crates.
@@ -238,9 +245,7 @@ Everything goes behind the existing `src/platform/{macos,windows}.rs` functions.
   first launch stays right-click → Open.
 
 **Windows:**
-- Window list: `EnumWindows`.
-- Previews: `DwmRegisterThumbnail` or `PrintWindow`.
-- Hotkeys: `RegisterHotKey`. ALT+TAB itself needs a low-level keyboard hook, opt-in.
+- Hotkeys: `RegisterHotKey`.
 - Clipboard history: `AddClipboardFormatListener`.
 
 ---

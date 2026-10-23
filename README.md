@@ -58,7 +58,8 @@ three on every push), with these parts working there so far:
 | open with a key | ✓ any Hyprland bind | planned | ✓ ALT+SPACE (and Ctrl+Alt+Space) |
 | lock, sleep, restart, shut down | ✓ | ✓ | ✓ |
 | full-screen overlay with backdrop | ✓ | borderless window | borderless window, centered |
-| window switcher and previews | ✓ | planned | planned |
+| ALT+TAB switcher and previews | ✓ | — (⌘Tab is built in) | — (Alt+Tab is built in) |
+| tray icon | ✓ | planned | planned |
 | global shortcuts (Ctrl+B) | ✓ | planned | planned |
 | clipboard history | ✓ cliphist | planned | planned |
 | install | one-line installer, Arch package | `.dmg` | `zunder-windows-setup.exe` |
@@ -385,6 +386,11 @@ The full plan, with the reasons and details, is in [docs/roadmap.md](docs/roadma
 - [x] speed budget: open in under 30 ms, search in under 5 ms, measured
 - [x] first-run screen
 
+**0.2.5**
+- [x] ALT+TAB as a grid of window thumbnails
+- [x] pin clipboard entries with `Ctrl+F`
+- [x] tray icon: shows the server runs, menu with open, settings, reload, quit
+
 **0.2.x: Windows** (side track)
 - [x] centered window, glyphs and app icons
 - [x] smaller bundle (16 MB installer; GTK alone is about 40 MB of DLLs)
@@ -394,7 +400,6 @@ The full plan, with the reasons and details, is in [docs/roadmap.md](docs/roadma
 
 **0.3: setup and presence**
 - [ ] setup as a page inside zunder instead of a terminal, on every system
-- [ ] tray icon: shows the server runs, menu with open, settings, quit
 
 **0.3: switcher actions**
 - [ ] close, move to workspace, fullscreen and minimize windows from the switcher
@@ -411,7 +416,7 @@ The full plan, with the reasons and details, is in [docs/roadmap.md](docs/roadma
 - [ ] log in with GitHub; favorites, themes, plugins and settings in a private gist
 
 **0.6: macOS and Windows parity**
-- [ ] window switcher, previews, global shortcuts and clipboard history on both
+- [ ] global shortcuts, clipboard history and the tray icon on both (ALT+TAB stays Linux-only: both systems have their own)
 
 **Later**
 - [ ] Raycast extension bridge (optional)
