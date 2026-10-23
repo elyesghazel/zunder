@@ -29,7 +29,7 @@ impl ksni::Tray for Tray {
     }
 
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
-        [22, 32, 48, 64].into_iter().map(icon).collect()
+        ICONS.iter().filter_map(|(_, png)| icon(png)).collect()
     }
 
     fn activate(&mut self, _x: i32, _y: i32) {
@@ -82,49 +82,45 @@ pub fn sync_tray() {
     }
 }
 
-/// The icon, drawn here so there is no image file to install: an accent `❯` on a dark rounded
-/// square, like the launcher's prompt. ARGB32, big-endian.
-fn icon(size: i32) -> ksni::Icon {
-    let s = size as f32;
-    let (bg, fg): ([u8; 3], [u8; 3]) = ([0x0e, 0x0e, 0x14], [0xb4, 0xbe, 0xfe]);
-    let radius = s * 0.22;
-    let stroke = s * 0.085;
-    // the chevron: two strokes meeting at the right
-    let (a, b, c) = ((s * 0.36, s * 0.27), (s * 0.62, s * 0.5), (s * 0.36, s * 0.73));
-    let mut data = Vec::with_capacity((size * size * 4) as usize);
-    for y in 0..size {
-        for x in 0..size {
-            let (px, py) = (x as f32 + 0.5, y as f32 + 0.5);
-            // rounded square coverage
-            let qx = (px - s / 2.0).abs() - (s / 2.0 - radius);
-            let qy = (py - s / 2.0).abs() - (s / 2.0 - radius);
-            let outside = qx.max(0.0).hypot(qy.max(0.0)) + qx.max(qy).min(0.0) - radius;
-            let alpha = (0.5 - outside).clamp(0.0, 1.0);
-            let d = segment_distance((px, py), a, b).min(segment_distance((px, py), b, c));
-            let ink = (stroke - d + 0.5).clamp(0.0, 1.0);
-            let mix = |i: usize| (f32::from(bg[i]) + (f32::from(fg[i]) - f32::from(bg[i])) * ink).round() as u8;
-            data.extend([(alpha * 255.0).round() as u8, mix(0), mix(1), mix(2)]);
+/// The zunder logo (`assets/logo.svg`), rendered to PNG at the sizes trays ask for and built
+/// into the binary, so there is no icon file to install.
+const ICONS: &[(i32, &[u8])] = &[
+    (16, include_bytes!("../../assets/icons/zunder-16.png")),
+    (22, include_bytes!("../../assets/icons/zunder-22.png")),
+    (32, include_bytes!("../../assets/icons/zunder-32.png")),
+    (48, include_bytes!("../../assets/icons/zunder-48.png")),
+    (64, include_bytes!("../../assets/icons/zunder-64.png")),
+];
+
+/// One PNG as the ARGB32 (big-endian) pixmap StatusNotifierItem wants.
+fn icon(png: &[u8]) -> Option<ksni::Icon> {
+    use gtk4::gdk_pixbuf::Pixbuf;
+    use gtk4::gio::MemoryInputStream;
+    let stream = MemoryInputStream::from_bytes(&gtk4::glib::Bytes::from(png));
+    let pixbuf = Pixbuf::from_stream(&stream, None::<&gtk4::gio::Cancellable>).ok()?.add_alpha(false, 0, 0, 0).ok()?;
+    let (width, height, stride) = (pixbuf.width(), pixbuf.height(), pixbuf.rowstride() as usize);
+    let pixels = pixbuf.read_pixel_bytes();
+    let mut data = Vec::with_capacity((width * height * 4) as usize);
+    for y in 0..height as usize {
+        for px in pixels[y * stride..][..width as usize * 4].as_chunks::<4>().0 {
+            data.extend([px[3], px[0], px[1], px[2]]);
         }
     }
-    ksni::Icon { width: size, height: size, data }
-}
-
-fn segment_distance(p: (f32, f32), a: (f32, f32), b: (f32, f32)) -> f32 {
-    let (abx, aby) = (b.0 - a.0, b.1 - a.1);
-    let t = (((p.0 - a.0) * abx + (p.1 - a.1) * aby) / (abx * abx + aby * aby)).clamp(0.0, 1.0);
-    (p.0 - a.0 - abx * t).hypot(p.1 - a.1 - aby * t)
+    Some(ksni::Icon { width, height, data })
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
-    fn icon_is_argb_of_the_right_size() {
-        let icon = super::icon(32);
-        assert_eq!(icon.data.len(), 32 * 32 * 4);
-        // corners are transparent, the middle of the left stroke is accent-colored
-        assert_eq!(icon.data[0], 0);
-        let at = |x: usize, y: usize| &icon.data[(y * 32 + x) * 4..][..4];
-        assert_eq!(at(16, 16)[0], 255);
-        assert!(at(15, 13)[3] > 0xd0, "{:?}", at(15, 13));
+    fn icons_decode_to_argb() {
+        for (size, png) in super::ICONS {
+            let icon = super::icon(png).expect("png decodes");
+            assert_eq!((icon.width, icon.height), (*size, *size));
+            assert_eq!(icon.data.len(), (size * size * 4) as usize);
+            // the rounded corner is transparent, the middle is opaque
+            assert_eq!(icon.data[0], 0);
+            let mid = ((size / 2 * size + size / 2) * 4) as usize;
+            assert_eq!(icon.data[mid], 255);
+        }
     }
 }
