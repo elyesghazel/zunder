@@ -61,6 +61,8 @@ jobs:
           mkdir -p dist "stage/zunder-$VER"
           cp target/release/zunder install.sh README.md LICENSE "stage/zunder-$VER/"
           cp -r docs examples "stage/zunder-$VER/"
+          mkdir -p "stage/zunder-$VER/assets"
+          cp -r assets/logo.svg assets/icons "stage/zunder-$VER/assets/"
           tar -C stage -czf "dist/zunder-$VER-x86_64-linux.tar.gz" "zunder-$VER"
       - uses: actions/upload-artifact@v4
         with:
