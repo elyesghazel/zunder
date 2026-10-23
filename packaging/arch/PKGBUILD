@@ -1,6 +1,6 @@
 # Maintainer: Elyes Ghazel <elyes@elyesghazel.ch>
 pkgname=zunder
-pkgver=0.2.5
+pkgver=0.2.6
 pkgrel=1
 pkgdesc='Terminal-styled launcher and ALT+TAB window switcher for Hyprland'
 arch=('x86_64' 'aarch64')
