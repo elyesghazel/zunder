@@ -2,7 +2,7 @@
 
 <h1 align="center">zunder</h1>
 
-<p align="center">A launcher and ALT+TAB window switcher for Hyprland that looks like a terminal.</p>
+<p align="center"><b>One prompt for your apps and your windows.</b><br>A launcher and ALT+TAB window switcher for Hyprland that looks like a terminal.</p>
 
 <p align="center">
   <a href="https://elyesghazel.tech/zunder/">Website</a> ·
@@ -15,10 +15,11 @@
 
 ![zunder demo](assets/demo.gif)
 
-One prompt for everything: open windows, apps, files, math, unit and currency conversion, time
-zones, clipboard history, emoji, shell commands and your own scripts. ALT+TAB shows a live
-thumbnail of every window, on any workspace. It's a small Rust daemon, so it opens in a few
-milliseconds.
+Most Hyprland setups glue together a launcher, a clipboard script and a separate ALT+TAB tool.
+zunder is all of it in one small Rust daemon: one terminal-style prompt for apps, windows, files,
+math, currencies, time zones and clipboard history, and an ALT+TAB that shows live thumbnails of
+every window on every workspace. Extending it means dropping a script that prints lines into a
+folder.
 
 You can [try it in the browser](https://elyesghazel.tech/zunder/) before installing.
 
