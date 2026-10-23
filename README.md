@@ -63,7 +63,7 @@ three on every push), with these parts working there so far:
 | lock, sleep, restart, shut down | ✓ | ✓ | ✓ |
 | full-screen overlay with backdrop | ✓ | borderless window | borderless window, centered |
 | ALT+TAB switcher and previews | ✓ | — (⌘Tab is built in) | — (Alt+Tab is built in) |
-| tray icon | ✓ | planned | planned |
+| tray icon | ✓ | ✓ menu bar | ✓ notification area |
 | global shortcuts (Ctrl+B) | ✓ | planned | planned |
 | clipboard history | ✓ cliphist | planned | planned |
 | install | one-line installer, Arch package | `.dmg` | `zunder-windows-setup.exe` |
@@ -395,6 +395,10 @@ The full plan, with the reasons and details, is in [docs/roadmap.md](docs/roadma
 - [x] pin clipboard entries with `Ctrl+F`
 - [x] tray icon: shows the server runs, menu with open, settings, reload, quit
 
+**0.2.6**
+- [x] logo, used as the app icon on all three systems
+- [x] tray icon on Windows (notification area) and macOS (menu bar)
+
 **0.2.x: Windows** (side track)
 - [x] centered window, glyphs and app icons
 - [x] smaller bundle (16 MB installer; GTK alone is about 40 MB of DLLs)
@@ -420,7 +424,7 @@ The full plan, with the reasons and details, is in [docs/roadmap.md](docs/roadma
 - [ ] log in with GitHub; favorites, themes, plugins and settings in a private gist
 
 **0.6: macOS and Windows parity**
-- [ ] global shortcuts, clipboard history and the tray icon on both (ALT+TAB stays Linux-only: both systems have their own)
+- [ ] global shortcuts and clipboard history on both (ALT+TAB stays Linux-only: both systems have their own)
 
 **Later**
 - [ ] Raycast extension bridge (optional)

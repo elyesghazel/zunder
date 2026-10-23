@@ -141,15 +141,18 @@ icons, and comes back after a reboot. Tested on real Windows.
 - [x] tray icon on Linux (StatusNotifierItem through `ksni`): open, settings, reload, quit;
   `tray = false` removes it
 
+## 0.2.6: logo and tray everywhere
+
+- [x] the flame logo (`assets/logo.svg`), rendered to every icon format by `packaging/icons.py`
+- [x] app icon: `zunder.exe` and the installer on Windows, `zunder.app` on macOS, hicolor on Arch
+- [x] tray icon on Windows (notification area) and macOS (menu bar), same menu as on Linux
+
 ## 0.3: setup and presence
 
 1. **Setup as a page inside zunder.** `setup` opens a page like `settings`: toggles for the
    keys, switching over from other launchers, autostart, theme and example plugins, and an
    Apply row. It uses the same logic as `zunder setup` (`src/setup.rs`), so the terminal version
    stays for scripts. On Windows and macOS it shows what applies there (hotkey, autostart).
-2. **Tray icon on macOS and Windows.** Linux has it since 0.2.5; here it's the notification area
-   on Windows and the menu bar on macOS.
-
 ## 0.3: the switcher nobody else has (about 1–2 weeks)
 
 All in `src/providers/windows.rs`, `src/ui.rs` and `src/platform/linux.rs`.
