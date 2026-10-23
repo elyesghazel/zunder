@@ -153,6 +153,10 @@ a release with:
 Release notes are generated from the commit subjects since the last tag. Run the workflow by hand
 from the Actions tab to build the files without publishing anything.
 
+After the release workflow has published the files, `packaging/aur/update.sh <version>` pins
+their checksums, writes `.SRCINFO` and pushes `zunder` (builds from source) and `zunder-bin` (the
+release binary) to the AUR. It needs the AUR SSH key in `~/.ssh/aur`.
+
 Nothing releases on a normal push; `ci.yml` only builds and tests on all three systems.
 
 `packaging/release.sh` still builds the Linux files locally, for testing the package before a
