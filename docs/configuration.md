@@ -7,7 +7,7 @@ straight on a page. Changes are saved right away and most apply immediately.
 
 | Page | What's on it |
 |------|--------------|
-| General | terminal, web search engine, currency |
+| General | terminal, web search engine, update check, tray icon, currency |
 | Switcher | release Alt to switch, window previews |
 | Start screen | show windows, number of apps |
 | Appearance | icons, font, font size, theme, accent, backdrop dim, width, height |
@@ -61,6 +61,7 @@ hide_windows = []                            # window classes to leave out, e.g.
 | `icons` | on/off | app icons from your icon theme instead of glyphs |
 | `previews` | on/off | window screenshots in ALT+TAB |
 | `alt_release` | on/off | releasing Alt switches windows |
+| `tray` | on/off | tray icon while the server runs (Linux), menu with open, settings, reload, quit |
 | `start_windows` | on/off | windows on the start screen |
 | `start_apps` | number | apps on the start screen |
 | `hide_windows` | list | window classes the switcher and search never show (`hyprctl clients` shows the class) |

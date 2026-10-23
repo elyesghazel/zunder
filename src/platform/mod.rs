@@ -14,6 +14,7 @@
 //! | `system_commands`    | lock, sleep, restart…                                      |
 //! | `install_binds`      | turn zunder's keybinds into global shortcuts               |
 //! | `is_executable`      | whether a file in the plugins folder can be run            |
+//! | `init_tray` / `sync_tray` | tray icon with open, settings, reload, quit (Linux)   |
 
 use std::process::{Command, Stdio};
 use std::thread;
@@ -22,6 +23,16 @@ use std::thread;
 mod linux;
 #[cfg(target_os = "linux")]
 pub use linux::*;
+#[cfg(target_os = "linux")]
+mod tray;
+#[cfg(target_os = "linux")]
+pub use tray::{init_tray, sync_tray};
+
+/// macOS and Windows have no tray icon yet.
+#[cfg(not(target_os = "linux"))]
+pub fn init_tray(_tx: async_channel::Sender<String>) {}
+#[cfg(not(target_os = "linux"))]
+pub fn sync_tray() {}
 
 #[cfg(target_os = "macos")]
 mod macos;

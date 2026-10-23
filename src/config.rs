@@ -42,6 +42,8 @@ pub struct Config {
     pub hide_windows: Vec<String>,
     /// Look for new zunder releases once a day (GitHub API) and say so on the start screen.
     pub update_check: bool,
+    /// A tray icon while the server runs (Linux).
+    pub tray: bool,
 }
 
 impl Default for Config {
@@ -65,6 +67,7 @@ impl Default for Config {
             disabled: Vec::new(),
             hide_windows: Vec::new(),
             update_check: true,
+            tray: true,
         }
     }
 }
@@ -149,6 +152,7 @@ pub const SETTINGS: &[Setting] = &[
     Setting { key: "terminal", group: "General", title: "Terminal", help: "for > commands, empty = $TERMINAL or kitty" },
     Setting { key: "search_url", group: "General", title: "Search engine", help: "URL with {q} for the query" },
     Setting { key: "update_check", group: "General", title: "Check for updates", help: "once a day, shows a note on the start screen" },
+    Setting { key: "tray", group: "General", title: "Tray icon", help: "shows zunder runs; menu with open, settings, reload, quit" },
     Setting { key: "currency", group: "General", title: "Currency", help: "for `100 usd`, e.g. CHF; empty = from your time zone" },
 ];
 

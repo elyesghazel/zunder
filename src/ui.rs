@@ -91,10 +91,11 @@ struct Preview {
 pub fn run(initial: Option<&'static str>) -> ExitCode {
     crate::platform::init();
     let (tx, rx) = async_channel::unbounded::<String>();
-    if let Err(e) = ipc::listen(tx) {
+    if let Err(e) = ipc::listen(tx.clone()) {
         eprintln!("zunder: {e}");
         return ExitCode::FAILURE;
     }
+    crate::platform::init_tray(tx);
     let app = gtk::Application::builder()
         .application_id("dev.zunder.Zunder")
         .flags(gtk::gio::ApplicationFlags::NON_UNIQUE)
@@ -485,6 +486,7 @@ impl Ui {
             "reload" => {
                 config::reload();
                 apply_config_css();
+                crate::platform::sync_tray();
                 self.state.borrow_mut().engine.reload();
                 if visible {
                     self.refresh();
@@ -1005,6 +1007,7 @@ impl Ui {
         let ui = self.clone();
         let changed: Rc<dyn Fn()> = Rc::new(move || {
             apply_config_css();
+            crate::platform::sync_tray();
             let mut s = ui.state.borrow_mut();
             s.engine.favorites = store::Favorites::load();
             s.engine.binds = store::Binds::load();
@@ -1101,6 +1104,7 @@ impl Ui {
             None => result = c.set(key, value),
         });
         apply_config_css();
+        crate::platform::sync_tray();
         let height = config::get().height;
         // read first: the borrow in the argument would still be alive inside fit_panel's borrow_mut
         let column = self.state.borrow().preview_column;

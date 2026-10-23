@@ -42,6 +42,7 @@ toml = "1.1.8"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk4-layer-shell = "0.8.1"
+ksni = { version = "0.3.7", default-features = false, features = ["blocking", "async-io"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 gdk4-macos = "0.11.5"
