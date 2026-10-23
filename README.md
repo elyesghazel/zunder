@@ -2,6 +2,8 @@
 
 A launcher and ALT+TAB window switcher for Hyprland that looks like a terminal.
 
+**Website:** [elyesghazel.tech/zunder](https://elyesghazel.tech/zunder/), with a launcher you can try in the browser.
+
 [![ci](https://github.com/elyesghazel/zunder/actions/workflows/ci.yml/badge.svg)](https://github.com/elyesghazel/zunder/actions/workflows/ci.yml)
 
 ![zunder demo](assets/demo.gif)
