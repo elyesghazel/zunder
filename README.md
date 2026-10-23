@@ -1,436 +1,103 @@
-<img src="assets/logo.svg" width="96" alt="zunder logo">
+<p align="center"><img src="assets/logo.svg" width="96" alt="zunder logo"></p>
 
-# zunder
+<h1 align="center">zunder</h1>
 
-A launcher and ALT+TAB window switcher for Hyprland that looks like a terminal.
+<p align="center">A launcher and ALT+TAB window switcher for Hyprland that looks like a terminal.</p>
 
-**Website:** [elyesghazel.tech/zunder](https://elyesghazel.tech/zunder/), with a launcher you can try in the browser.
-
-[![ci](https://github.com/elyesghazel/zunder/actions/workflows/ci.yml/badge.svg)](https://github.com/elyesghazel/zunder/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://elyesghazel.tech/zunder/">Website</a> ·
+  <a href="https://github.com/elyesghazel/zunder/releases/latest">Download</a> ·
+  <a href="docs/README.md">Docs</a> ·
+  <a href="docs/roadmap.md">Roadmap</a>
+  <br><br>
+  <a href="https://github.com/elyesghazel/zunder/actions/workflows/ci.yml"><img src="https://github.com/elyesghazel/zunder/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
+</p>
 
 ![zunder demo](assets/demo.gif)
 
-zunder runs as a small daemon. A keybind sends it a command over a unix socket, and it shows a
-layer-shell overlay on top of everything: one prompt, results grouped in sections, monospace,
-colored app icons. Open windows, apps, a calculator, a world clock, clipboard history, shell
-commands, power actions and your own scripts all live in the same list.
+One prompt for everything: open windows, apps, files, math, unit and currency conversion, time
+zones, clipboard history, emoji, shell commands and your own scripts. ALT+TAB shows a live
+thumbnail of every window, on any workspace. It's a small Rust daemon, so it opens in a few
+milliseconds.
 
-ALT+TAB shows a live screenshot of each window, even ones on other workspaces. Anything in the
-list can be pinned to the start screen or get its own global shortcut, and everything you launch
-is kept in a history that never gets cleared. Plugins are executables that print lines, so you
-can write them in whatever language you like.
-
-Written in Rust with GTK4 and gtk4-layer-shell. Built and tested on Arch with Hyprland 0.56
-(Lua config); the classic `hyprland.conf` works too.
-
-**Docs:** [installation](docs/installation.md) · [setup](docs/setup.md) ·
-[usage](docs/usage.md) · [configuration](docs/configuration.md) · [plugins](docs/plugins.md) ·
-[development](docs/development.md) · [troubleshooting](docs/troubleshooting.md)
-
-## Features
-
-| | |
-|---|---|
-| **Window switcher** | ALT+TAB as a grid of live window thumbnails, any workspace |
-| **App launcher** | every `.desktop` app (flatpak too), fuzzy matched on name, keywords and binary |
-| **Start screen** | favorites, open windows, your most used apps, suggestions so it's never empty |
-| **Favorites** | `Ctrl+F` pins any result to the start screen |
-| **Global shortcuts** | `Ctrl+B` gives any result a system-wide Hyprland keybind |
-| **Launch history** | `history`: everything you ever ran, searchable, never cleared |
-| **World clock** | `time in ny`, `time in 2h in tokyo`, `3pm ny in zurich` |
-| **Calculator** | `2^10/3`, `sqrt(2)*pi`, Enter copies |
-| **Conversion** | `5 km in mi`, `30c`, `2 gb in mib`, `100 usd in chf`: units and 160 currencies |
-| **Files** | files from your home folder show up as you type; `f name` for only files, images get a preview |
-| **Emoji** | `fire` already shows 🔥; `:heart` for the whole picker |
-| **Clipboard** | `clip`: cliphist history with fuzzy search; full text or image on the right; `Ctrl+F` pins a clip |
-| **Shell** | `> cmd` runs in your terminal or in the background |
-| **System** | lock, suspend, reboot, shut down, log out |
-| **Other** | fallback for anything: web search (engine of your choice), or Ask AI when an `ai` plugin is installed |
-| **Plugins** | any script that prints lines, e.g. `kill zen` |
-| **Themes** | 12 built in (catppuccin, rose-pine, gruvbox, tokyo-night, nord…), or your own |
-| **Settings** | a settings window with a sidebar, plus `settings` inside the launcher |
-
-## Platforms
-
-zunder is built for Hyprland first. The same code also builds on macOS and Windows (CI checks all
-three on every push), with these parts working there so far:
-
-| | Linux (Hyprland) | macOS | Windows |
-|---|---|---|---|
-| launcher, search, calculator, conversion, time, emoji, files, plugins, themes, settings | ✓ | ✓ | ✓ |
-| apps | ✓ `.desktop` | ✓ `.app` bundles | ✓ Start menu, with their icons |
-| open with a key | ✓ any Hyprland bind | planned | ✓ ALT+SPACE (and Ctrl+Alt+Space) |
-| lock, sleep, restart, shut down | ✓ | ✓ | ✓ |
-| full-screen overlay with backdrop | ✓ | borderless window | borderless window, centered |
-| ALT+TAB switcher and previews | ✓ | — (⌘Tab is built in) | — (Alt+Tab is built in) |
-| tray icon | ✓ | ✓ menu bar | ✓ notification area |
-| global shortcuts (Ctrl+B) | ✓ | planned | planned |
-| clipboard history | ✓ cliphist | planned | planned |
-| install | one-line installer, Arch package | `.dmg` | `zunder-windows-setup.exe` |
-| updates from the start screen | ✓ | opens the download | ✓ installs silently |
+You can [try it in the browser](https://elyesghazel.tech/zunder/) before installing.
 
 ## Install
 
-**Windows:** download [zunder-windows-setup.exe](https://github.com/elyesghazel/zunder/releases/latest/download/zunder-windows-setup.exe)
-and run it. It installs for your user (no admin), and asks about starting with Windows and a
-desktop shortcut. ALT+SPACE opens zunder. Windows warns about unsigned programs: More info →
-Run anyway.
-
-**macOS (Apple Silicon):** the `.dmg` from the [latest release](https://github.com/elyesghazel/zunder/releases/latest);
-drag zunder to Applications, then right-click → Open the first time.
-
-**Linux:**
+**Linux (Hyprland)**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/elyesghazel/zunder/main/get.sh | sh
 ```
 
-On Arch it installs the release package with pacman; on other distros it puts the binary in
-`~/.local/bin` and tells you if gtk4 or gtk4-layer-shell are missing. Then it runs
-`zunder setup`, which asks a few questions and sets up the keybinds, autostart and theme
-(and takes over from vicinae, rofi or wofi if you used one). When a new version is out, zunder
-says so on its start screen and Enter updates it; `… | sh -s -- --uninstall` removes zunder.
+On Arch it installs the release package, elsewhere the binary goes to `~/.local/bin`. Then
+`zunder setup` asks a few questions and sets up the keybinds, autostart and theme. If you used
+vicinae, rofi or wofi, it takes over from them.
 
-The other ways:
+**Windows:** run [zunder-windows-setup.exe](https://github.com/elyesghazel/zunder/releases/latest/download/zunder-windows-setup.exe).
+It installs for your user, no admin needed. ALT+SPACE opens zunder.
 
-### Arch Linux
+**macOS (Apple Silicon):** the `.dmg` from the [latest release](https://github.com/elyesghazel/zunder/releases/latest).
+Drag it to Applications, then right-click → Open the first time.
 
-Prebuilt package from the [latest release](https://github.com/elyesghazel/zunder/releases):
+New versions show up on zunder's start screen, and Enter installs them. Type `update` to check
+right away. More ways to install, and what works on which system:
+[docs/installation.md](docs/installation.md).
 
-```sh
-sudo pacman -U https://github.com/elyesghazel/zunder/releases/download/v0.1.0/zunder-0.1.0-1-x86_64.pkg.tar.zst
-sudo pacman -S --needed grim cliphist fd ttf-jetbrains-mono-nerd   # previews, clipboard, files, font
-```
-
-Or build the package yourself from the [PKGBUILD](packaging/arch/PKGBUILD):
-
-```sh
-git clone https://github.com/elyesghazel/zunder
-cd zunder/packaging/arch && makepkg -si
-```
-
-### Other distros
-
-You need GTK 4.14+ and gtk4-layer-shell from your distro (Fedora: `gtk4 gtk4-layer-shell`).
-Then use the release tarball:
-
-```sh
-curl -LO https://github.com/elyesghazel/zunder/releases/download/v0.1.0/zunder-0.1.0-x86_64-linux.tar.gz
-tar xf zunder-0.1.0-x86_64-linux.tar.gz && cd zunder-0.1.0
-./install.sh --plugins
-```
-
-### From source
-
-```sh
-sudo pacman -S --needed rust gtk4 gtk4-layer-shell wl-clipboard ttf-jetbrains-mono-nerd grim cliphist fd
-git clone https://github.com/elyesghazel/zunder
-cd zunder
-./install.sh --plugins      # cargo build --release, copies to ~/.local/bin, links example plugins
-```
-
-| Dependency | For | Required |
-|------------|-----|----------|
-| `gtk4` 4.14+, `gtk4-layer-shell` | the UI | yes |
-| `wl-clipboard` | copying results | yes |
-| a Nerd Font | glyphs, default font | recommended |
-| `grim` 1.5+ | window previews | no |
-| `fd` | file search | no |
-| `curl` | exchange rates | no |
-| `cliphist` | clipboard history | no |
-
-More in [docs/installation.md](docs/installation.md), including updating and uninstalling.
-
-## Setup
-
-`zunder setup` does all of this for you (`--dry-run` shows the changes first). By hand, with a
-Lua config:
-
-```lua
--- conf/autostart.lua, inside hl.on("hyprland.start", function() … end)
-hl.exec_cmd("zunder server")
-hl.exec_cmd("wl-paste --type text --watch cliphist store")    -- clipboard history
-
--- conf/binds.lua
-hl.bind("ALT + TAB",         hl.dsp.exec_cmd("zunder switch"))
-hl.bind("ALT + SHIFT + TAB", hl.dsp.exec_cmd("zunder switch-prev"))
-hl.bind("ALT + SPACE",       hl.dsp.exec_cmd("zunder toggle"))
-hl.bind("SUPER + V",         hl.dsp.exec_cmd("zunder show 'clip '"))
-
--- conf/windowrules.lua: settings window floats, the launcher fades in
-hl.window_rule({ name = "zunder-settings", match = { title = "^zunder settings$" },
-                 float = true, size = "980 660", center = true })
-hl.layer_rule({ name = "zunder-fade", match = { namespace = "^zunder$" }, animation = "fade" })
-
--- hyprland.lua, after your binds: the shortcuts you make with Ctrl+B
-pcall(require, "zunder")
-```
-
-With a classic `hyprland.conf`:
-
-```ini
-exec-once = zunder server
-exec-once = wl-paste --type text --watch cliphist store
-bind = ALT, TAB, exec, zunder switch
-bind = ALT SHIFT, TAB, exec, zunder switch-prev
-bind = ALT, SPACE, exec, zunder toggle
-bind = SUPER, V, exec, zunder show 'clip '
-windowrule = float, title:^zunder settings$
-source = ~/.config/hypr/zunder.conf
-```
-
-Then `hyprctl reload`, start `zunder server` once by hand (or log out and in) and press
-ALT+SPACE. Coming from vicinae? `zunder import vicinae` brings your favorites and launch counts
-over. [docs/setup.md](docs/setup.md) has more binds and notes for moving over from vicinae,
-rofi or wofi.
-
-## Usage
-
-### Keys
-
-| Key | What it does |
-|-----|--------------|
-| `ALT+TAB` | switcher, opens on the previous window |
-| `Tab` while holding Alt | next window, `ALT+SHIFT+TAB` goes back |
-| release Alt | switch to the selected window |
-| `↑` `↓` / `Tab` `Shift+Tab` / `Ctrl+J` `Ctrl+K` / `Ctrl+N` `Ctrl+P` | move |
-| `Enter` or click | run the selected result |
-| `Ctrl+F` | add to / remove from favorites |
-| `Ctrl+B` | global shortcut: press the keys, `⌫` removes it, `Esc` cancels |
-| `Ctrl+,` | open the settings window (`Ctrl+.` works too) |
-| `Esc` or click outside | close |
-
-Typing something after ALT+TAB turns it into a search; releasing Alt then doesn't switch.
-
-### What you can type
+## A quick tour
 
 | Type | You get |
 |------|---------|
-| nothing | favorites, open windows, recent and suggested apps |
-| `firefox` | windows, apps, commands and plugins, best section first |
-| `2^10/3`, `sqrt(2)*pi`, `(4+4)*12%5` | calculator, Enter copies |
-| `5 km in mi`, `30c`, `1.5 l to cups`, `2 gb in mib` | unit conversion (no target: metric ⇄ imperial) |
-| `100 usd`, `€20 in tnd`, `50 chf to jpy` | currency, daily rates (no target: your currency) |
-| `readme`, `f readme`, `file invoice` | files in your home folder; inline from 3 letters, or only files with `f ` |
-| `fire`, `:heart`, `emoji party` | emoji; a few inline, all of them with `:` or `emoji `. Enter copies |
-| `time in ny`, `tokyo time` | the time there, UTC offset, how far ahead or behind you |
-| `time in 2h in london`, `in 90 min in la` | the time there, later |
-| `3pm in ny`, `9am tokyo`, `3pm ny in zurich` | convert between places |
-| `clip`, `clip ssh` | clipboard history, Enter copies again |
-| `history`, `history firefox` | everything you ran from zunder, newest first |
-| `> htop` | run in your terminal or in the background |
-| `theme` | pick a color scheme, applies live |
-| `settings` | quick settings; the window is `zunder settings` |
-| `update` | check for a new zunder now; Enter installs it |
-| `kill zen` | a plugin, `<prefix> <query>` |
-| anything | web search as the last result |
+| `firefox` | windows, apps, files and commands, fuzzy matched |
+| `2^10/3` · `100 usd in chf` · `30c` | calculator, currency and unit conversion |
+| `3pm ny in zurich` | time zones |
+| `clip` | clipboard history; `Ctrl+F` pins an entry for good |
+| `> htop` | a shell command |
+| `theme` | 12 color schemes, applied live |
+| `history` | everything you ever launched |
 
-### Commands
+| Key | Does |
+|-----|------|
+| `ALT+TAB` | the window switcher, opens on the previous window |
+| `Ctrl+F` | pin any result to the start screen |
+| `Ctrl+B` | give any result its own global shortcut |
+| `Ctrl+,` | settings |
 
-```sh
-zunder                  # toggle; starts the daemon first if it isn't running
-zunder server           # run the daemon (autostart)
-zunder toggle           # show / hide
-zunder show [query]     # show, optionally with the query typed, e.g. zunder show 'time in '
-zunder hide
-zunder switch           # window switcher, or the next window if it's open
-zunder switch-prev      # same, backwards
-zunder settings [page]  # settings window, e.g. zunder settings appearance
-zunder reload           # reread config.toml, rescan apps and plugins
-zunder import vicinae   # take over vicinae's favorites and launch counts
-zunder run <key>        # run a saved shortcut (the generated binds call this)
-zunder quit             # stop the daemon
-zunder --version
-```
-
-Every detail is in [docs/usage.md](docs/usage.md).
-
-## Settings
-
-`zunder settings` opens the settings window: pages in a sidebar on the left, the settings on the
-right. Changes save right away and most apply immediately.
-
-| Page | What's on it |
-|------|--------------|
-| General | terminal, web search engine, currency |
-| Switcher | release Alt to switch, window previews |
-| Start screen | show windows, number of apps |
-| Appearance | icons, font, size, theme, accent, backdrop dim, width, height |
-| Providers | turn whole sections on or off (Other, System, Clipboard…) |
-| Favorites | everything you pinned, with remove buttons |
-| Shortcuts | every global shortcut, with remove buttons |
-| Plugins | installed plugins and how to call them |
-| About | version, open config.toml and style.css |
-
-Everything is stored in `~/.config/zunder/config.toml`, which you can edit by hand too
-(`zunder reload` afterwards):
-
-```toml
-theme = "rose-pine"
-terminal = "ghostty"
-search_url = "https://www.google.com/search?q={q}"
-font = "JetBrainsMono Nerd Font"
-font_size = 11.0
-previews = true
-alt_release = true
-start_apps = 24
-disabled = ["Other"]
-```
-
-The full reference, every file zunder writes and the CSS selectors are in
-[docs/configuration.md](docs/configuration.md).
-
-## Themes
-
-![themes](assets/themes.png)
-
-Type `theme` to list the color schemes. `Enter` applies one right away and keeps the list open,
-so you can step through them. The Theme dropdown in the settings (or `theme = "nord"` in
-`config.toml`) does the same.
-
-Built in: `graphite` (the default), `catppuccin-mocha`, `catppuccin-latte` (light), `rose-pine`,
-`rose-pine-dawn` (light), `gruvbox-dark`, `tokyo-night`, `nord`, `everforest-dark`, `dracula`,
-`kanagawa` and `one-dark`.
-
-Your own theme is a file in `~/.config/zunder/themes/`, named after the theme, with one
-`@define-color` line per color. It shows up in the list next to the built-ins, and a file with a
-built-in's name replaces that built-in. Colors you leave out stay graphite.
-
-```css
-/* ~/.config/zunder/themes/solarized.css */
-@define-color bg     #002b36;
-@define-color fg     #eee8d5;
-@define-color muted  #93a1a1;
-@define-color faint  #657b83;
-@define-color ghost  #2a4a54;
-@define-color accent #b58900;
-@define-color green  #859900;
-@define-color sel    #0d3a46;
-@define-color hover  #07323d;
-```
-
-| Color | Used for |
-|-------|----------|
-| `bg` | backgrounds |
-| `fg` | titles and the query |
-| `muted` | key hints, selected hint |
-| `faint` | subtitles, placeholder, glyphs |
-| `ghost` | borders, separators, row markers |
-| `accent` | prompt, section titles, selection |
-| `green` | not used by the built-in CSS, there for your own rules |
-| `sel` / `hover` | selected / hovered row |
-
-The `accent` setting wins over the theme's accent. For anything beyond colors,
-`~/.config/zunder/style.css` loads on top of everything; see
-[docs/configuration.md](docs/configuration.md#css) for the selectors.
+The rest is in [docs/usage.md](docs/usage.md).
 
 ## Plugins
 
-A plugin is any executable in `~/.config/zunder/plugins/`. Header comments configure it, and
-every line it prints is a result:
+A plugin is any executable in `~/.config/zunder/plugins/` that prints lines:
 
 ```sh
 #!/bin/sh
 # @zunder.name   Notes
 # @zunder.prefix note
-# @zunder.glyph  
-grep -ri -- "$1" ~/notes | head -50        # plain lines: Enter copies them
+grep -ri -- "$1" ~/notes | head -50
 ```
 
-Typing `note groceries` runs `script "groceries"` in the background on each keystroke. For more
-control, print JSON lines:
+Now `note groceries` searches your notes. Print JSON lines instead for titles, icons and actions.
+See [docs/plugins.md](docs/plugins.md).
 
-```json
-{"title": "zen-bin", "subtitle": "pid 4242", "hint": "6%", "action": {"run": "kill 4242"}}
-```
+## Docs
 
-Actions: `run`, `term`, `open`, `copy`, `focus` and `fill`. Plugins in `command` mode show up
-in normal search and run once. Plugin results can be favorites and get shortcuts like anything
-else.
+- [Installation](docs/installation.md): every way to install, and what works on Linux, macOS and Windows
+- [Setup](docs/setup.md): keybinds, autostart, clipboard, moving over from another launcher
+- [Usage](docs/usage.md): every feature, key and command
+- [Configuration](docs/configuration.md) and [themes](docs/themes.md): settings, `config.toml`, CSS
+- [Plugins](docs/plugins.md): writing your own, in any language
+- [Troubleshooting](docs/troubleshooting.md)
+- [Development](docs/development.md): how it works inside, building from source, releasing
+- [Roadmap](docs/roadmap.md): what's done and what's next
 
-Two examples come with it, in [`examples/plugins`](examples/plugins): `kill` (search processes,
-Enter kills) and `ip` (copy your local IP). [docs/plugins.md](docs/plugins.md) has the whole
-format and more examples: GitHub repos, quicklinks, menus.
+## Some notes
 
-## How it works
+zunder is built for Hyprland first. The launcher, themes, plugins and tray icon also work on
+macOS and Windows. The ALT+TAB switcher stays Linux-only, because both of those already have
+their own.
 
-```
-keybind ─► zunder switch ─► $XDG_RUNTIME_DIR/zunder.sock ─► daemon
-                                                              │
-                     hyprctl clients -j ◄─────────────────────┤ on open
-                     .desktop files     ◄─────────────────────┤
-                     grim -T <window>   ◄─────────────────────┘ ALT+TAB only, in threads
-```
-
-The daemon keeps GTK and the app index loaded, so opening is instant; the CLI only writes a word
-to the socket. The overlay is a full-screen layer-shell surface with exclusive keyboard focus.
-Results come from providers, one Rust file each in `src/providers/`, and adding one is about 30
-lines.
-
-Measured on a laptop with Hyprland (release build, `ZUNDER_TIMING=1 zunder server` prints these):
-
-| Step | Time |
-|------|------|
-| open, start screen unchanged since last time | 3–8 ms |
-| open, start screen changed | about 25 ms |
-| search per keystroke | 0.3–2.6 ms |
-
-The window list comes from Hyprland's event socket instead of `hyprctl` on every open, apps are
-rescanned only when an `applications/` folder changes, and unchanged results reuse their rows. See [docs/development.md](docs/development.md).
-
-## Roadmap
-
-The full plan, with the reasons and details, is in [docs/roadmap.md](docs/roadmap.md).
-
-**0.2: install to daily driver in two minutes**
-- [x] one-line installer: `curl … | sh`
-- [x] interactive `zunder setup`: keybinds, autostart, theme, import from vicinae / rofi / wofi
-- [x] update notice in the launcher
-- [ ] ALT+TAB: reliable quick tap, multiple monitors, fullscreen windows
-- [x] opens and closes with a quick fade instead of the layer slide
-- [x] speed budget: open in under 30 ms, search in under 5 ms, measured
-- [x] first-run screen
-
-**0.2.5**
-- [x] ALT+TAB as a grid of window thumbnails
-- [x] pin clipboard entries with `Ctrl+F`
-- [x] tray icon: shows the server runs, menu with open, settings, reload, quit
-
-**0.2.6**
-- [x] logo, used as the app icon on all three systems
-- [x] tray icon on Windows (notification area) and macOS (menu bar)
-
-**0.2.x: Windows** (side track)
-- [x] centered window, glyphs and app icons
-- [x] smaller bundle (16 MB installer; GTK alone is about 40 MB of DLLs)
-- [x] `zunder-windows-setup.exe` installer with autostart, Start menu entry and hotkey
-- [x] ALT+SPACE opens zunder on Windows
-- [x] updates in place from the notice on Windows
-
-**0.3: setup and presence**
-- [ ] setup as a page inside zunder instead of a terminal, on every system
-
-**0.3: switcher actions**
-- [ ] close, move to workspace, fullscreen and minimize windows from the switcher
-- [ ] `Ctrl+K` action menu for every result
-- [ ] group by workspace, current workspace only
-
-**0.4: installable plugins**
-- [ ] plugin registry and `zunder plugin install <name>`
-- [ ] plugin settings
-- [ ] starter set: wifi, bluetooth, audio, pass, github, color picker, screenshot…
-- [ ] streaming plugin results
-
-**0.5: sync**
-- [ ] log in with GitHub; favorites, themes, plugins and settings in a private gist
-
-**0.6: macOS and Windows parity**
-- [ ] global shortcuts and clipboard history on both (ALT+TAB stays Linux-only: both systems have their own)
-
-**Later**
-- [ ] Raycast extension bridge (optional)
-- [ ] AUR, winget and Homebrew packages
-- [ ] 1.0: stable config and plugin protocol
+Written in Rust with GTK4. Bug reports and small fixes are welcome; for bigger ideas, open an
+issue first.
 
 ## License
 
