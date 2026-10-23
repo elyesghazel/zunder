@@ -35,6 +35,7 @@ instead. You can turn release-to-switch off in the settings.
 | `> htop` | run a command |
 | `theme`, `theme nord` | color schemes, Enter applies live and keeps the list open |
 | `settings` | quick settings in the launcher |
+| `update` | check for a new zunder now (the start screen also says so once a day) |
 | `<plugin prefix> query` | a plugin, e.g. `kill zen` |
 | anything | web search as the last result |
 

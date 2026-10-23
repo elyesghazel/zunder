@@ -1,5 +1,6 @@
 //! Start screen notice when a newer zunder is out. Checks GitHub at most once a day, in the
 //! background; turn it off with `update_check = false`. Enter updates in a terminal.
+//! `update` checks right now, whatever the setting says.
 
 use std::fs;
 use std::path::PathBuf;
@@ -7,11 +8,12 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::engine::{Ctx, Provider};
-use crate::item::Item;
+use crate::engine::{Ctx, Job, Provider};
+use crate::item::{Action, Item};
 
 pub struct Update;
 
+const PREFIX: &str = "update";
 const API: &str = "https://api.github.com/repos/elyesghazel/zunder/releases/latest";
 
 #[derive(Serialize, Deserialize, Default)]
@@ -34,7 +36,8 @@ fn cached() -> (Option<String>, bool) {
     (tag, stale)
 }
 
-fn refresh() {
+/// Ask GitHub for the latest tag and cache it. `None` when GitHub can't be reached.
+fn refresh() -> Option<String> {
     let path = cache();
     // touch first, so a failing check (offline) isn't retried on every open
     if let Some(dir) = path.parent() {
@@ -51,7 +54,44 @@ fn refresh() {
         && !latest.tag_name.is_empty()
     {
         let _ = fs::write(&path, serde_json::to_string(&latest).unwrap_or_default());
+        return Some(latest.tag_name);
     }
+    None
+}
+
+/// "zunder 0.3.0 is out", Enter installs it.
+fn notice(tag: &str) -> Item {
+    Item {
+        title: format!("zunder {} is out", tag.trim_start_matches('v')),
+        subtitle: format!("you have {} · {}", env!("CARGO_PKG_VERSION"), crate::platform::update_hint()),
+        hint: "update".into(),
+        glyph: "\u{f01b}".into(),
+        id: "cmd:update".into(),
+        action: crate::platform::update_action(),
+        score: 1_000_000,
+        ..Default::default()
+    }
+}
+
+/// The answer to `update`: the new version, or that this one is the newest.
+fn check_now() -> Vec<Item> {
+    let current = env!("CARGO_PKG_VERSION");
+    let item = match refresh() {
+        Some(tag) if newer(&tag, current) => notice(&tag),
+        Some(_) => Item {
+            title: format!("zunder {current} is the latest version"),
+            subtitle: "checked GitHub just now".into(),
+            glyph: "\u{f00c}".into(),
+            ..Default::default()
+        },
+        None => Item {
+            title: "Couldn't reach GitHub".into(),
+            subtitle: "no connection, or GitHub is rate-limiting; try again in a minute".into(),
+            glyph: "\u{f071}".into(),
+            ..Default::default()
+        },
+    };
+    vec![item]
 }
 
 /// "0.10.1" → [0, 10, 1], for comparing versions as numbers.
@@ -68,28 +108,52 @@ impl Provider for Update {
         "Update"
     }
 
+    fn exclusive(&self, query: &str) -> bool {
+        query.trim_end() == PREFIX
+    }
+
     fn search(&self, cx: &Ctx) -> Vec<Item> {
-        if !cx.query.is_empty() || cx.switch || !crate::config::get().update_check {
+        if cx.switch {
+            return Vec::new();
+        }
+        if self.exclusive(cx.query) {
+            // replaced by `check_now`'s answer as soon as GitHub replies
+            return vec![Item {
+                id: "pending:update".into(),
+                title: "Checking GitHub for a newer zunder…".into(),
+                subtitle: format!("you have {}", env!("CARGO_PKG_VERSION")),
+                glyph: "\u{f021}".into(),
+                ..Default::default()
+            }];
+        }
+        if !cx.query.is_empty() {
+            return cx
+                .score("Check for Updates")
+                .map(|score| Item {
+                    id: "cmd:check-update".into(),
+                    title: "Check for Updates".into(),
+                    subtitle: format!("you have zunder {}", env!("CARGO_PKG_VERSION")),
+                    hint: "update".into(),
+                    glyph: "\u{f021}".into(),
+                    action: Action::Fill(PREFIX.into()),
+                    score,
+                    ..Default::default()
+                })
+                .into_iter()
+                .collect();
+        }
+        if !crate::config::get().update_check {
             return Vec::new();
         }
         let (tag, stale) = cached();
         if stale {
             std::thread::spawn(refresh);
         }
-        let current = env!("CARGO_PKG_VERSION");
-        tag.filter(|t| newer(t, current))
-            .map(|t| Item {
-                title: format!("zunder {} is out", t.trim_start_matches('v')),
-                subtitle: format!("you have {current} · {}", crate::platform::update_hint()),
-                hint: "update".into(),
-                glyph: "\u{f01b}".into(),
-                id: "cmd:update".into(),
-                action: crate::platform::update_action(),
-                score: 1_000_000,
-                ..Default::default()
-            })
-            .into_iter()
-            .collect()
+        tag.filter(|t| newer(t, env!("CARGO_PKG_VERSION"))).map(|t| notice(&t)).into_iter().collect()
+    }
+
+    fn deferred(&self, cx: &Ctx) -> Option<(String, Job)> {
+        self.exclusive(cx.query).then(|| ("Update".to_owned(), Box::new(check_now) as Job))
     }
 }
 

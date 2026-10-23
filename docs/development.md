@@ -94,7 +94,8 @@ switch in the settings.
 `Ctx` gives you `query`, `windows`, `history`, `switch` (ALT+TAB mode), `score(text)` for fuzzy
 matching against the query and `matcher_score(pattern, text)` for matching part of it.
 
-`Item` fields: `id` (needed for favorites, shortcuts and ranking), `title`, `subtitle`, `hint`,
+`Item` fields: `id` (needed for favorites, shortcuts and ranking; an id starting with `pending:`
+marks a placeholder that a `deferred` section with the same title replaces), `title`, `subtitle`, `hint`,
 `glyph`, `icon`, `preview` (a window `stableId`), `group` (split into several sections),
 `action`, `score`.
 

@@ -221,6 +221,7 @@ Typing something after ALT+TAB turns it into a search; releasing Alt then doesn'
 | `> htop` | run in your terminal or in the background |
 | `theme` | pick a color scheme, applies live |
 | `settings` | quick settings; the window is `zunder settings` |
+| `update` | check for a new zunder now; Enter installs it |
 | `kill zen` | a plugin, `<prefix> <query>` |
 | anything | web search as the last result |
 

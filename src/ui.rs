@@ -330,7 +330,17 @@ impl Ui {
                     continue;
                 }
                 let mut sections = ui2.state.borrow().sections.clone();
-                let at = sections.iter().position(|s| s.title == "Other").unwrap_or(sections.len());
+                // a "pending:" placeholder (e.g. "checking GitHub…") makes room for the real answer
+                let placeholder = sections
+                    .iter()
+                    .position(|s| s.title == title && s.items.iter().all(|i| i.id.starts_with("pending:")));
+                let at = match placeholder {
+                    Some(i) => {
+                        sections.remove(i);
+                        i
+                    }
+                    None => sections.iter().position(|s| s.title == "Other").unwrap_or(sections.len()),
+                };
                 sections.insert(at, Section { title, items });
                 ui2.render(sections, true);
             }
