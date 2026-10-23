@@ -140,6 +140,29 @@ impl Engine {
             sections.sort_by_key(|x| std::cmp::Reverse(x.0));
         }
         let mut sections: Vec<Section> = sections.into_iter().map(|(_, s)| s).collect();
+        // pinned clips lead the clipboard history
+        if exclusive.is_some_and(|p| p.title() == "Clipboard") {
+            let rest = query.strip_prefix("clip").unwrap_or(query).trim();
+            let pinned: Vec<Item> = self
+                .favorites
+                .items
+                .iter()
+                .filter(|i| i.id.starts_with(crate::providers::clipboard::PINNED))
+                .filter(|i| rest.is_empty() || self.matcher.fuzzy_match(&i.title, rest).is_some())
+                .map(|i| {
+                    // the full clip in the preview pane, like the history entries below
+                    let mut i = i.clone();
+                    match &i.action {
+                        crate::item::Action::Copy(text) => i.text = Some(crate::item::Text::Literal(text.clone())),
+                        _ => i.image = Some(i.icon.clone()).filter(|p| !p.is_empty()),
+                    }
+                    i
+                })
+                .collect();
+            if !pinned.is_empty() {
+                sections.insert(0, Section { title: "Pinned".into(), items: pinned });
+            }
+        }
         if query.is_empty() && !switch && !self.favorites.items.is_empty() {
             sections.insert(0, Section { title: "Favorites".into(), items: self.favorites.items.clone() });
         }

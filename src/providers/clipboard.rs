@@ -76,6 +76,7 @@ impl Provider for Clipboard {
                     hint: format!("#{id}"),
                     glyph: if image { "\u{f03e}".into() } else { GLYPH.into() },
                     subtitle: if image { "image".into() } else { String::new() },
+                    pin: Some(line.to_owned()),
                     // cliphist decode takes the whole list line on stdin
                     action: Action::Run(format!("printf '%s' {} | cliphist decode | wl-copy", shell_quote(line))),
                     score: score * 1000 - i as i64,
@@ -84,6 +85,47 @@ impl Provider for Clipboard {
             })
             .collect()
     }
+}
+
+/// Id prefix of pinned clips in favorites.json.
+pub const PINNED: &str = "clip:";
+
+/// A favorite holding the content of a cliphist entry, so it outlives the history.
+/// Text is copied straight from favorites.json, images from ~/.local/share/zunder/clips.
+pub fn pinned(line: &str, entry: &Item) -> Option<Item> {
+    let out = Command::new("sh")
+        .args(["-c", &format!("printf '%s' {} | cliphist decode", shell_quote(line))])
+        .output()
+        .ok()
+        .filter(|o| o.status.success() && !o.stdout.is_empty())?;
+    let id = format!("{PINNED}{:016x}", fnv1a(&out.stdout));
+    let item = Item { id, glyph: entry.glyph.clone(), hint: "pinned".into(), ..Default::default() };
+    if entry.image.is_some() {
+        let ext = entry.image.as_deref().and_then(|p| p.rsplit_once('.')).map_or("png", |(_, e)| e);
+        let path = crate::store::data_dir().join("clips").join(format!("{}.{ext}", &item.id[PINNED.len()..]));
+        std::fs::create_dir_all(path.parent()?).ok()?;
+        std::fs::write(&path, &out.stdout).ok()?;
+        let path = path.to_string_lossy().into_owned();
+        return Some(Item {
+            title: entry.title.clone(),
+            subtitle: "image".into(),
+            icon: path.clone(),
+            action: Action::Run(format!("wl-copy < {}", shell_quote(&path))),
+            ..item
+        });
+    }
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let first = text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or_default();
+    let mut title: String = first.chars().take(80).collect();
+    if title.len() < first.len() || text.trim() != first {
+        title.push('…');
+    }
+    Some(Item { title, action: Action::Copy(text), ..item })
+}
+
+/// Stable across builds, unlike `DefaultHasher`, so a clip keeps its id.
+fn fnv1a(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3))
 }
 
 static BINARY: LazyLock<Regex> =

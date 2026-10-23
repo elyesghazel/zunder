@@ -12,7 +12,7 @@ fn config_dir() -> PathBuf {
     dirs::config_dir().unwrap_or_default().join("zunder")
 }
 
-fn data_dir() -> PathBuf {
+pub fn data_dir() -> PathBuf {
     dirs::data_dir().unwrap_or_default().join("zunder")
 }
 

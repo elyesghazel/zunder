@@ -64,7 +64,8 @@ All three can be turned off or resized in the settings.
 
 Select anything with an id (apps, system commands, plugin results, shell commands, settings
 entries) and press Ctrl+F. It shows up at the top of the start screen with a ★. Ctrl+F again
-removes it. Calculator and clipboard results can't be favorites, they change too often.
+removes it. Calculator results can't be favorites, they change too often. Clipboard entries
+can: see [Clipboard](#clipboard).
 
 ## Global shortcuts
 
@@ -165,8 +166,13 @@ or the GitHub shortcode: `:red hea` → ❤️. Enter copies.
 `clip` shows cliphist's history, newest first, images included. Text after `clip ` fuzzy searches
 it. Enter copies the entry again. The pane on the right shows the selected entry in full: the
 whole text, scrollable and wrapped, or the image. Both are decoded the first time you select the
-entry, so the list itself opens instantly. zunder reads cliphist and doesn't store anything itself, so
+entry, so the list itself opens instantly. zunder doesn't keep a history of its own, so
 cliphist's own `-max-items` decides how far back it goes.
+
+Ctrl+F pins an entry. zunder saves its content (text in `favorites.json`, images in
+`~/.local/share/zunder/clips`), so it stays even after cliphist drops it. Pinned clips sit at the
+top of `clip` and on the start screen with your other favorites; Enter copies them again, Ctrl+F
+unpins.
 
 ## Shell
 

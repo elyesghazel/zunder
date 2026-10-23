@@ -1019,7 +1019,12 @@ impl Ui {
     }
 
     fn toggle_favorite(self: &Rc<Self>) {
-        let Some(item) = self.selected_item().filter(|i| !i.id.is_empty()) else {
+        // a clipboard entry is pinned by its content, decoded now
+        let item = self.selected_item().and_then(|i| match &i.pin {
+            Some(line) => crate::providers::clipboard::pinned(line, &i),
+            None => Some(i),
+        });
+        let Some(item) = item.filter(|i| !i.id.is_empty()) else {
             self.status.set_text("can't favorite this one");
             return;
         };

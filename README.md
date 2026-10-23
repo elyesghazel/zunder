@@ -38,7 +38,7 @@ Written in Rust with GTK4 and gtk4-layer-shell. Built and tested on Arch with Hy
 | **Conversion** | `5 km in mi`, `30c`, `2 gb in mib`, `100 usd in chf`: units and 160 currencies |
 | **Files** | files from your home folder show up as you type; `f name` for only files, images get a preview |
 | **Emoji** | `fire` already shows 🔥; `:heart` for the whole picker |
-| **Clipboard** | `clip`: cliphist history with fuzzy search; full text or image on the right |
+| **Clipboard** | `clip`: cliphist history with fuzzy search; full text or image on the right; `Ctrl+F` pins a clip |
 | **Shell** | `> cmd` runs in your terminal or in the background |
 | **System** | lock, suspend, reboot, shut down, log out |
 | **Other** | fallback for anything: web search (engine of your choice), or Ask AI when an `ai` plugin is installed |

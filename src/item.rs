@@ -29,6 +29,10 @@ pub struct Item {
     /// Full text for the preview pane, e.g. a clipboard entry longer than its one-line title.
     #[serde(skip)]
     pub text: Option<Text>,
+    /// A cliphist list line: Ctrl+F pins the decoded content instead of this entry, which
+    /// cliphist may drop later.
+    #[serde(skip)]
+    pub pin: Option<String>,
     /// Splits a provider's results into several sections (the settings page uses it).
     #[serde(skip)]
     pub group: String,
