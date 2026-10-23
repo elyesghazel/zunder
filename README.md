@@ -27,7 +27,7 @@ Written in Rust with GTK4 and gtk4-layer-shell. Built and tested on Arch with Hy
 
 | | |
 |---|---|
-| **Window switcher** | ALT+TAB with app icons and a live preview of the selected window, any workspace |
+| **Window switcher** | ALT+TAB as a grid of live window thumbnails, any workspace |
 | **App launcher** | every `.desktop` app (flatpak too), fuzzy matched on name, keywords and binary |
 | **Start screen** | favorites, open windows, your most used apps, suggestions so it's never empty |
 | **Favorites** | `Ctrl+F` pins any result to the start screen |

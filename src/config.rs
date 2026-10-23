@@ -28,7 +28,7 @@ pub struct Config {
     pub accent: String,
     /// Colored app icons instead of glyphs.
     pub icons: bool,
-    /// Window screenshots next to the ALT+TAB list.
+    /// Window screenshots in the ALT+TAB grid (app icons otherwise).
     pub previews: bool,
     /// Releasing Alt switches to the selected window.
     pub alt_release: bool,
@@ -135,7 +135,7 @@ pub struct Setting {
 
 pub const SETTINGS: &[Setting] = &[
     Setting { key: "alt_release", group: "Switcher", title: "Release Alt to switch", help: "ALT+TAB switches when you let go of Alt" },
-    Setting { key: "previews", group: "Switcher", title: "Window previews", help: "screenshot of the selected window next to the list" },
+    Setting { key: "previews", group: "Switcher", title: "Window previews", help: "window screenshots in the ALT+TAB grid" },
     Setting { key: "start_windows", group: "Start screen", title: "Show open windows", help: "list open windows when the query is empty" },
     Setting { key: "start_apps", group: "Start screen", title: "Apps shown", help: "recent and suggested apps when the query is empty" },
     Setting { key: "icons", group: "Appearance", title: "App icons", help: "colored icons instead of glyphs" },

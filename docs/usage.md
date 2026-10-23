@@ -40,13 +40,14 @@ instead. You can turn release-to-switch off in the settings.
 
 ## Switcher
 
-ALT+TAB lists every window, most recently focused first, with its app icon, class and workspace.
-The previous window is preselected, so a quick ALT+TAB tap goes back and forth between two
-windows like on any other desktop.
+ALT+TAB shows a grid of thumbnails, one per window, most recently focused first, with the app
+icon and title underneath. The previous window is preselected, so a quick ALT+TAB tap goes back
+and forth between two windows like on any other desktop. `Tab` and the arrow keys move, a click
+switches, and typing anything turns the grid into the normal searchable list.
 
-Next to the list is a screenshot of the selected window. zunder takes them with `grim -T` every
-time the switcher opens, in the background, one thread per window. Windows on other workspaces
-work too. Until the fresh screenshot is ready, you see the one from last time.
+zunder takes the screenshots with `grim -T` every time the switcher opens, in the background,
+one thread per window. Windows on other workspaces work too. Until the fresh screenshot is
+ready, you see the one from last time, or the app icon if there is none yet.
 
 ## Start screen
 

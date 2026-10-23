@@ -22,6 +22,10 @@ const PREVIEW_WIDTH: i32 = 420;
 /// The switcher's window screenshots get a wider column than launcher image previews.
 const SWITCH_PREVIEW_WIDTH: i32 = 760;
 const ICON_SIZE: i32 = 20;
+/// ALT+TAB thumbnail size; the screenshot is fitted inside.
+const TILE_WIDTH: i32 = 280;
+const TILE_HEIGHT: i32 = 175;
+const TILE_COLUMNS: usize = 5;
 
 struct State {
     engine: Engine,
@@ -43,6 +47,18 @@ struct State {
     preview_column: bool,
     /// Ctrl+B was pressed: the next key combo becomes a global keybind for this item.
     recording: Option<Item>,
+    /// ALT+TAB shows the thumbnail grid instead of the panel (until you type).
+    strip: bool,
+    /// One per item while `strip` is on.
+    tiles: Vec<Tile>,
+}
+
+/// One window in the ALT+TAB grid: its screenshot, or the app icon until there is one.
+struct Tile {
+    child: gtk::FlowBoxChild,
+    picture: gtk::Picture,
+    placeholder: gtk::Widget,
+    preview: Option<String>,
 }
 
 struct Ui {
@@ -53,6 +69,8 @@ struct Ui {
     scroll: gtk::ScrolledWindow,
     status: gtk::Label,
     preview: Preview,
+    switcher: gtk::Box,
+    grid: gtk::FlowBox,
     state: RefCell<State>,
     plugin_tx: async_channel::Sender<(u64, String, Vec<Item>)>,
     capture_tx: async_channel::Sender<String>,
@@ -109,7 +127,7 @@ thread_local! {
 fn apply_config_css() {
     let cfg = config::get();
     let css = format!(
-        ".panel {{ font-family: \"{}\", \"JetBrainsMono NF\", monospace; font-size: {}pt; }}\nwindow.zunder {{ background: alpha(black, {}); }}\n",
+        ".panel, .switcher {{ font-family: \"{}\", \"JetBrainsMono NF\", monospace; font-size: {}pt; }}\nwindow.zunder {{ background: alpha(black, {}); }}\n",
         cfg.font.replace('"', ""),
         cfg.font_size,
         cfg.dim.clamp(0.0, 1.0)
@@ -229,7 +247,27 @@ impl Ui {
         panel.append(&body);
         panel.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
         panel.append(&footer);
-        window.set_child(Some(&panel));
+        let grid = gtk::FlowBox::new();
+        grid.add_css_class("tiles");
+        grid.set_selection_mode(gtk::SelectionMode::None);
+        grid.set_homogeneous(true);
+        grid.set_activate_on_single_click(true);
+        grid.set_column_spacing(10);
+        grid.set_row_spacing(10);
+        let switcher = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        switcher.add_css_class("switcher");
+        switcher.set_halign(gtk::Align::Center);
+        switcher.set_valign(gtk::Align::Center);
+        switcher.set_visible(false);
+        switcher.append(&grid);
+
+        let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        for w in [&panel, &switcher] {
+            w.set_hexpand(true);
+            w.set_vexpand(true);
+            root.append(w);
+        }
+        window.set_child(Some(&root));
 
         let (plugin_tx, plugin_rx) = async_channel::unbounded();
         let (capture_tx, capture_rx) = async_channel::unbounded::<String>();
@@ -241,6 +279,8 @@ impl Ui {
             scroll,
             status,
             preview,
+            switcher,
+            grid,
             state: RefCell::new(State {
                 engine: Engine::new(),
                 windows: Vec::new(),
@@ -254,6 +294,8 @@ impl Ui {
                 recording: None,
                 preview_column: false,
                 had_focus: false,
+                strip: false,
+                tiles: Vec::new(),
             }),
             plugin_tx,
             capture_tx,
@@ -264,6 +306,10 @@ impl Ui {
         let ui2 = ui.clone();
         glib::spawn_future_local(async move {
             while let Ok(id) = capture_rx.recv().await {
+                if ui2.state.borrow().strip {
+                    ui2.update_tile(&id);
+                    continue;
+                }
                 let selected = {
                     let s = ui2.state.borrow();
                     s.items.get(s.selected).and_then(|i| i.preview.clone())
@@ -301,6 +347,14 @@ impl Ui {
             }
         });
 
+        let ui = self.clone();
+        self.grid.connect_child_activated(move |_, child| {
+            let i = ui.state.borrow().tiles.iter().position(|t| &t.child == child);
+            if let Some(i) = i {
+                ui.activate(i);
+            }
+        });
+
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
         let ui = self.clone();
@@ -310,6 +364,20 @@ impl Ui {
                 return glib::Propagation::Stop;
             }
             let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
+            if ui.state.borrow().strip {
+                match key {
+                    gdk::Key::Right => return ui.step_stop(1),
+                    gdk::Key::Left => return ui.step_stop(-1),
+                    gdk::Key::Down => return ui.step_stop(TILE_COLUMNS as isize),
+                    gdk::Key::Up => return ui.step_stop(-(TILE_COLUMNS as isize)),
+                    _ => {}
+                }
+                // typing turns the grid into the searchable list
+                if let Some(c) = key.to_unicode().filter(|c| !c.is_control() && !ctrl) {
+                    ui.leave_strip(&c.to_string());
+                    return glib::Propagation::Stop;
+                }
+            }
             match key {
                 gdk::Key::Escape => ui.hide(),
                 gdk::Key::f if ctrl => ui.toggle_favorite(),
@@ -370,8 +438,9 @@ impl Ui {
         let click = gtk::GestureClick::new();
         let ui = self.clone();
         click.connect_released(move |_, _, x, y| {
-            let p = ui.window.compute_point(&ui.panel, &graphene::Point::new(x as f32, y as f32));
-            if p.is_some_and(|p| !ui.panel.contains(f64::from(p.x()), f64::from(p.y()))) {
+            let target = if ui.state.borrow().strip { ui.switcher.clone() } else { ui.panel.clone() };
+            let p = ui.window.compute_point(&target, &graphene::Point::new(x as f32, y as f32));
+            if p.is_some_and(|p| !target.contains(f64::from(p.x()), f64::from(p.y()))) {
                 ui.hide();
             }
         });
@@ -435,6 +504,7 @@ impl Ui {
         {
             let mut s = self.state.borrow_mut();
             s.switch = switch;
+            s.strip = switch;
             s.had_focus = false;
             s.windows = windows::list();
             timing("windows", started);
@@ -452,6 +522,8 @@ impl Ui {
             capture_all(&self.state.borrow().windows, &self.capture_tx);
         }
         let _ = width;
+        self.panel.set_visible(!switch);
+        self.switcher.set_visible(switch);
         self.fit_panel(switch && previews);
         self.scroll.set_min_content_height(height);
         self.scroll.set_max_content_height(height);
@@ -461,9 +533,26 @@ impl Ui {
         let t = std::time::Instant::now();
         self.window.present();
         crate::platform::after_show(&self.window);
-        self.entry.grab_focus();
+        if !switch {
+            self.entry.grab_focus();
+        }
         timing("present", t);
         timing("show", started);
+    }
+
+    /// From the ALT+TAB grid to the full panel, searching for `text`.
+    fn leave_strip(self: &Rc<Self>, text: &str) {
+        {
+            let mut s = self.state.borrow_mut();
+            s.strip = false;
+            s.tiles.clear();
+        }
+        self.grid.remove_all();
+        self.switcher.set_visible(false);
+        self.panel.set_visible(true);
+        self.entry.set_text(text);
+        self.entry.grab_focus();
+        self.entry.set_position(-1);
     }
 
     fn hide(&self) {
@@ -481,6 +570,12 @@ impl Ui {
             timing(&format!("search {query:?}"), t);
             (sections, jobs, s.seq)
         };
+        if self.state.borrow().strip {
+            let t = std::time::Instant::now();
+            self.render_strip(sections);
+            timing("render tiles", t);
+            return;
+        }
         for (title, job) in jobs {
             let tx = self.plugin_tx.clone();
             std::thread::spawn(move || {
@@ -550,6 +645,58 @@ impl Ui {
         }
     }
 
+    /// The ALT+TAB grid: one thumbnail per window, the previous one selected.
+    fn render_strip(&self, sections: Vec<Section>) {
+        let items: Vec<Item> = sections
+            .into_iter()
+            .flat_map(|s| s.items)
+            .filter(|i| matches!(i.action, crate::item::Action::Focus(_)))
+            .collect();
+        self.grid.remove_all();
+        let columns = items.len().clamp(1, TILE_COLUMNS) as u32;
+        self.grid.set_min_children_per_line(columns);
+        self.grid.set_max_children_per_line(columns);
+        let previews = config::get().previews;
+        let tiles: Vec<Tile> = items
+            .iter()
+            .map(|item| {
+                let t = tile(item);
+                self.grid.append(&t.child);
+                if previews && let Some(id) = &t.preview {
+                    t.load(&preview_path(id));
+                }
+                t
+            })
+            .collect();
+        let count = items.len();
+        {
+            let mut s = self.state.borrow_mut();
+            s.items = items;
+            s.tiles = tiles;
+            // the list's rows no longer match `items`: the next render must rebuild them
+            s.rows.clear();
+            s.sections.clear();
+        }
+        if count == 0 {
+            self.grid.append(&label("no open windows", "empty"));
+            return;
+        }
+        self.select(usize::from(count > 1));
+    }
+
+    /// A fresh screenshot of `id` landed.
+    fn update_tile(&self, id: &str) {
+        let s = self.state.borrow();
+        for t in s.tiles.iter().filter(|t| t.preview.as_deref() == Some(id)) {
+            t.load(&preview_path(id));
+        }
+    }
+
+    fn step_stop(&self, delta: isize) -> glib::Propagation {
+        self.step(delta);
+        glib::Propagation::Stop
+    }
+
     fn step(&self, delta: isize) {
         let (selected, n) = {
             let s = self.state.borrow();
@@ -562,6 +709,16 @@ impl Ui {
 
     fn select(&self, i: usize) {
         let mut s = self.state.borrow_mut();
+        if s.strip {
+            if let Some(t) = s.tiles.get(s.selected) {
+                t.child.remove_css_class("selected");
+            }
+            s.selected = i;
+            if let Some(t) = s.tiles.get(i) {
+                t.child.add_css_class("selected");
+            }
+            return;
+        }
         if let Some((_, old)) = s.rows.get(s.selected) {
             old.set_text("▏");
         }
@@ -770,6 +927,56 @@ fn capture_all(windows: &[Client], tx: &async_channel::Sender<String>) {
             }
         });
     }
+}
+
+impl Tile {
+    /// Show the screenshot at `path`, decoded at the tile's size so a big window stays cheap.
+    /// Not times the scale factor: a texture's pixel size is also the picture's natural size.
+    fn load(&self, path: &Path) {
+        let Some(texture) = scaled_texture(path, TILE_WIDTH, TILE_HEIGHT, 1) else { return };
+        self.picture.set_paintable(Some(&texture));
+        self.placeholder.set_visible(false);
+    }
+}
+
+fn tile(item: &Item) -> Tile {
+    let picture = gtk::Picture::new();
+    picture.set_content_fit(gtk::ContentFit::Contain);
+    picture.set_can_shrink(true);
+    picture.set_size_request(TILE_WIDTH, TILE_HEIGHT);
+    let placeholder: gtk::Widget = match icon(item) {
+        Some(image) => {
+            image.set_pixel_size(64);
+            image.upcast()
+        }
+        None => label(&item.glyph, "tile-glyph").upcast(),
+    };
+    placeholder.set_halign(gtk::Align::Center);
+    placeholder.set_valign(gtk::Align::Center);
+    let thumb = gtk::Overlay::new();
+    thumb.add_css_class("thumb");
+    thumb.set_child(Some(&picture));
+    thumb.add_overlay(&placeholder);
+
+    let caption = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    caption.add_css_class("caption");
+    caption.set_halign(gtk::Align::Center);
+    if let Some(image) = icon(item) {
+        image.set_pixel_size(16);
+        caption.append(&image);
+    }
+    let title = label(&item.title, "tile-title");
+    title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    title.set_max_width_chars(24);
+    caption.append(&title);
+
+    let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    b.append(&thumb);
+    b.append(&caption);
+    let child = gtk::FlowBoxChild::new();
+    child.add_css_class("tile");
+    child.set_child(Some(&b));
+    Tile { child, picture, placeholder, preview: item.preview.clone() }
 }
 
 fn icon(item: &Item) -> Option<gtk::Image> {

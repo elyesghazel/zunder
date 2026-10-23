@@ -97,3 +97,28 @@ row:selected .hint   { color: @muted; }
 textview.preview-text,
 textview.preview-text > text { background: transparent; color: @fg; }
 textview.preview-text { padding: 10px 12px; font-family: inherit; }
+
+/* ── switcher grid (ALT+TAB) ──────────── */
+.switcher {
+  background: alpha(@bg, 0.92);
+  border: 1px solid @ghost;
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 24px 64px alpha(black, 0.55);
+}
+flowbox.tiles { background: none; }
+flowbox.tiles > flowboxchild.tile {
+  background: none;
+  padding: 8px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  outline: none;
+}
+flowbox.tiles > flowboxchild.tile:hover    { background: @hover; }
+flowbox.tiles > flowboxchild.tile.selected { background: @sel; border-color: @accent; }
+.thumb picture { border-radius: 6px; }
+.tile-glyph    { color: @faint; font-size: 32pt; }
+.caption       { margin-top: 8px; }
+.caption .icon { margin-right: 6px; }
+.tile-title    { color: @muted; font-size: 0.9em; }
+flowboxchild.tile.selected .tile-title { color: @fg; font-weight: bold; }
