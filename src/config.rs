@@ -36,7 +36,7 @@ pub struct Config {
     pub start_windows: bool,
     /// How many apps the start screen shows.
     pub start_apps: usize,
-    /// Section titles of providers that are turned off, e.g. ["Web"].
+    /// Section titles of providers that are turned off, e.g. ["Other"].
     pub disabled: Vec<String>,
     /// Window classes zunder never lists, e.g. ["teams-for-linux"].
     pub hide_windows: Vec<String>,
@@ -201,14 +201,17 @@ impl Config {
     }
 
     pub fn enabled(&self, provider: &str) -> bool {
-        !self.disabled.iter().any(|d| d.eq_ignore_ascii_case(provider))
+        // "Web" is the old title of the "Other" section; keep existing configs working.
+        let legacy = provider.eq_ignore_ascii_case("other").then_some("web");
+        !self.disabled.iter().any(|d| d.eq_ignore_ascii_case(provider) || Some(d.to_ascii_lowercase().as_str()) == legacy)
     }
 
     pub fn toggle_provider(&mut self, provider: &str) {
         if self.enabled(provider) {
             self.disabled.push(provider.to_owned());
         } else {
-            self.disabled.retain(|d| !d.eq_ignore_ascii_case(provider));
+            let legacy = provider.eq_ignore_ascii_case("other");
+            self.disabled.retain(|d| !d.eq_ignore_ascii_case(provider) && !(legacy && d.eq_ignore_ascii_case("web")));
         }
     }
 }
@@ -228,8 +231,12 @@ mod tests {
         assert_eq!(c.width, 900);
         assert!(c.set("width", Some("wide")).is_err());
         assert_eq!(c.value("previews").as_deref(), Some("on"));
-        c.toggle_provider("Web");
-        assert!(!c.enabled("web"));
+        c.toggle_provider("Other");
+        assert!(!c.enabled("other"));
+        c.disabled = vec!["Web".into()];
+        assert!(!c.enabled("Other"));
+        c.toggle_provider("Other");
+        assert!(c.enabled("Other"));
     }
 
     #[test]

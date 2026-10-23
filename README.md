@@ -41,7 +41,7 @@ Written in Rust with GTK4 and gtk4-layer-shell. Built and tested on Arch with Hy
 | **Clipboard** | `clip`: cliphist history with fuzzy search; full text or image on the right |
 | **Shell** | `> cmd` runs in your terminal or in the background |
 | **System** | lock, suspend, reboot, shut down, log out |
-| **Web search** | fallback for anything, engine of your choice |
+| **Other** | fallback for anything: web search (engine of your choice), or Ask AI when an `ai` plugin is installed |
 | **Plugins** | any script that prints lines, e.g. `kill zen` |
 | **Themes** | 12 built in (catppuccin, rose-pine, gruvbox, tokyo-night, nord…), or your own |
 | **Settings** | a settings window with a sidebar, plus `settings` inside the launcher |
@@ -250,7 +250,7 @@ right. Changes save right away and most apply immediately.
 | Switcher | release Alt to switch, window previews |
 | Start screen | show windows, number of apps |
 | Appearance | icons, font, size, theme, accent, backdrop dim, width, height |
-| Providers | turn whole sections on or off (Web, System, Clipboard…) |
+| Providers | turn whole sections on or off (Other, System, Clipboard…) |
 | Favorites | everything you pinned, with remove buttons |
 | Shortcuts | every global shortcut, with remove buttons |
 | Plugins | installed plugins and how to call them |
@@ -268,7 +268,7 @@ font_size = 11.0
 previews = true
 alt_release = true
 start_apps = 24
-disabled = ["Web"]
+disabled = ["Other"]
 ```
 
 The full reference, every file zunder writes and the CSS selectors are in

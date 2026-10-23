@@ -281,7 +281,7 @@ impl Ui {
                     continue;
                 }
                 let mut sections = ui2.state.borrow().sections.clone();
-                let at = sections.iter().position(|s| s.title == "Web").unwrap_or(sections.len());
+                let at = sections.iter().position(|s| s.title == "Other").unwrap_or(sections.len());
                 sections.insert(at, Section { title, items });
                 ui2.render(sections, true);
             }

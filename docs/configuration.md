@@ -11,7 +11,7 @@ straight on a page. Changes are saved right away and most apply immediately.
 | Switcher | release Alt to switch, window previews |
 | Start screen | show windows, number of apps |
 | Appearance | icons, font, font size, theme, accent, backdrop dim, width, height |
-| Providers | turn sections like Web, System or Clipboard on and off |
+| Providers | turn sections like Other, System or Clipboard on and off |
 | Favorites | everything you pinned, with remove buttons |
 | Shortcuts | every global shortcut, with remove buttons |
 | Plugins | installed plugins, how to call them, open the folder |
@@ -42,7 +42,7 @@ previews = true
 alt_release = true
 start_windows = true
 start_apps = 24
-disabled = []                                # e.g. ["Web", "System"]
+disabled = []                                # e.g. ["Other", "System"]
 hide_windows = []                            # window classes to leave out, e.g. ["teams-for-linux"]
 ```
 
@@ -64,7 +64,7 @@ hide_windows = []                            # window classes to leave out, e.g.
 | `start_windows` | on/off | windows on the start screen |
 | `start_apps` | number | apps on the start screen |
 | `hide_windows` | list | window classes the switcher and search never show (`hyprctl clients` shows the class) |
-| `disabled` | list | section titles to hide: `Calculator`, `Time`, `Convert`, `Windows`, `Apps`, `System`, `Shell`, `Clipboard`, `History`, `Themes`, `Emoji`, `Files`, `Web`, `Plugins` |
+| `disabled` | list | section titles to hide: `Calculator`, `Time`, `Convert`, `Windows`, `Apps`, `System`, `Shell`, `Clipboard`, `History`, `Themes`, `Emoji`, `Files`, `Other`, `Plugins` |
 
 Search engines for `search_url`:
 
