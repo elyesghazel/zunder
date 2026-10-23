@@ -1,7 +1,7 @@
 # Maintainer: Elyes Ghazel <elyes@elyesghazel.ch>
 pkgname=zunder-bin
 _pkgname=zunder
-pkgver=0.2.6
+pkgver=0.2.7
 pkgrel=1
 pkgdesc='Terminal-styled launcher and ALT+TAB window switcher for Hyprland (prebuilt)'
 arch=('x86_64')
@@ -18,7 +18,7 @@ optdepends=(
 provides=('zunder')
 conflicts=('zunder')
 source=("$_pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/$_pkgname-$pkgver-x86_64-linux.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('4aaa27d5235e26874629d055431a6abb2b8266e882c4bbf5b7acfb887abfc336')
 
 package() {
   cd "$_pkgname-$pkgver"

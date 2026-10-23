@@ -1,0 +1,24 @@
+pkgbase = zunder-bin
+	pkgdesc = Terminal-styled launcher and ALT+TAB window switcher for Hyprland (prebuilt)
+	pkgver = 0.2.7
+	pkgrel = 1
+	url = https://github.com/elyesghazel/zunder
+	arch = x86_64
+	license = MIT
+	depends = gtk4
+	depends = gtk4-layer-shell
+	depends = wl-clipboard
+	depends = hyprland
+	depends = glibc
+	depends = gcc-libs
+	optdepends = grim: window previews in ALT+TAB
+	optdepends = cliphist: clipboard history
+	optdepends = fd: file search
+	optdepends = curl: currency conversion
+	optdepends = ttf-jetbrains-mono-nerd: default font and glyphs
+	provides = zunder
+	conflicts = zunder
+	source = zunder-0.2.7.tar.gz::https://github.com/elyesghazel/zunder/releases/download/v0.2.7/zunder-0.2.7-x86_64-linux.tar.gz
+	sha256sums = 4aaa27d5235e26874629d055431a6abb2b8266e882c4bbf5b7acfb887abfc336
+
+pkgname = zunder-bin
