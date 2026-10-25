@@ -38,13 +38,11 @@ Enter) faster; zunder isn't trying to be a Raycast clone.
 - [x] ALT+SPACE opens zunder on Windows
 - [x] updates in place from the notice on Windows
 
-**0.3: setup and presence**
-- [ ] setup as a page inside zunder instead of a terminal, on every system
-
-**0.3: switcher actions**
-- [ ] close, move to workspace, fullscreen and minimize windows from the switcher
-- [ ] `Ctrl+K` action menu for every result
-- [ ] group by workspace, current workspace only
+**0.3: actions and the overview**
+- [x] `Ctrl+K` action menu for every result, plugins can add their own
+- [x] close, move to workspace, fullscreen and minimize windows from the switcher and search
+- [x] SUPER+TAB overview: every window grouped by workspace, Mission Control style
+- [x] setup as a page inside zunder (`setup`), the terminal version stays
 
 **0.4: installable plugins**
 - [ ] plugin registry and `zunder plugin install <name>`
@@ -199,40 +197,20 @@ icons, and comes back after a reboot. Tested on real Windows.
 - [x] app icon: `zunder.exe` and the installer on Windows, `zunder.app` on macOS, hicolor on Arch
 - [x] tray icon on Windows (notification area) and macOS (menu bar), same menu as on Linux
 
-## 0.3: setup and presence
+## 0.3: actions and the overview
 
-1. **Setup as a page inside zunder.** `setup` opens a page like `settings`: toggles for the
-   keys, switching over from other launchers, autostart, theme and example plugins, and an
-   Apply row. It uses the same logic as `zunder setup` (`src/setup.rs`), so the terminal version
-   stays for scripts. On Windows and macOS it shows what applies there (hotkey, autostart).
-## 0.3: the switcher nobody else has (about 1–2 weeks)
-
-All in `src/providers/windows.rs`, `src/ui.rs` and `src/platform/linux.rs`.
-
-1. **Window actions in ALT+TAB and search:**
-   - `Ctrl+W` close
-   - `Ctrl+1…9` move to that workspace
-   - `Ctrl+F` fullscreen
-   - `Ctrl+M` send to the minimized special workspace
-   - `Ctrl+Shift+Enter` focus and pull to the current workspace
-
-   Implementation:
-   - New `platform` functions: `close_window`, `move_window(ws)`, `fullscreen_window`. On Linux
-     they use hyprctl Lua dispatch; on the other systems they're no-ops for now.
-   - The footer shows the keys when a window is selected.
-2. **An action menu (`Ctrl+K`)** for any item:
-   - Windows: the actions above.
-   - Files: open, open folder, copy path, open in terminal.
-   - Apps: launch, launch new window, show the desktop file.
-   - Plugins can declare extra actions with a new `"actions": [...]` field in their JSON lines
-     (`providers/plugins.rs` `Line`).
-3. **Switcher options** in Settings → Switcher:
-   - Group by workspace.
-   - Current workspace only.
-   - Windows of the same app next to each other.
-
-**Done when:** you can close or move any window without leaving the keyboard, and there's a GIF of
-it for the 0.3 post.
+1. **`Ctrl+K` on any result** lists what else it can do (`src/actions.rs`): windows get focus,
+   bring here, fullscreen, minimize, close and move; files get open folder, terminal here and
+   copy path; apps get their desktop file; plugins add entries with `"actions": [...]`.
+2. **Window keys** wherever a window is selected: `Ctrl+W` close, `Ctrl+M` minimize, `Ctrl+1…9`
+   move, `Ctrl+Enter` bring here. Closing and moving keep zunder open and redraw it.
+3. **The overview** (`zunder overview`, SUPER+TAB): one column per workspace, side by side,
+   arrow keys move by position, a ✕ on each thumbnail. It replaced the "group by workspace"
+   option: ALT+TAB stays a plain switcher.
+4. **Setup as a page**: `setup` shows each choice as a row and Apply writes it; the preview
+   pane shows the exact file first. `src/setup.rs` is split into detect, choose and apply, so the
+   terminal version runs the same code. On Windows and macOS the page says what the installer
+   already did.
 
 ---
 

@@ -5,6 +5,8 @@
 | | |
 |---|---|
 | **Window switcher** | ALT+TAB as a grid of live window thumbnails, any workspace |
+| **Overview** | SUPER+TAB: every window grouped by workspace; close, move and minimize from the keyboard |
+| **Actions** | `Ctrl+K` on any result: everything besides Enter, like open folder, copy path, close window |
 | **App launcher** | every `.desktop` app (flatpak too), fuzzy matched on name, keywords and binary |
 | **Start screen** | favorites, open windows, your most used apps, suggestions so it's never empty |
 | **Favorites** | `Ctrl+F` pins any result to the start screen |
@@ -30,8 +32,11 @@
 | `ALT+TAB` | open the switcher on the previous window |
 | `Tab` while holding Alt | next window (`ALT+SHIFT+TAB` goes back) |
 | release Alt | switch to the selected window |
-| `↑` `↓`, `Tab` `Shift+Tab`, `Ctrl+J` `Ctrl+K`, `Ctrl+N` `Ctrl+P` | move |
+| `↑` `↓`, `Tab` `Shift+Tab`, `Ctrl+J` `Ctrl+P`, `Ctrl+N` | move |
 | `Enter` or click | run the selected result |
+| `Ctrl+K` | the actions of the selected result; `Esc` goes back |
+| `Ctrl+W` `Ctrl+M` `Ctrl+1…9` | on a window: close, minimize, move to that workspace |
+| `Ctrl+Enter` | on a window: bring it to the workspace you're on |
 | `Ctrl+F` | add to or remove from favorites |
 | `Ctrl+B` | give the selected result a global shortcut |
 | `Ctrl+,` | open the settings window (`Ctrl+.` works too) |
@@ -44,14 +49,15 @@ instead. You can turn release-to-switch off in the settings.
 
 ```sh
 zunder                  # toggle; starts the daemon first if it isn't running
-zunder setup            # keybinds, autostart and theme for Hyprland (--dry-run, --yes)
+zunder setup            # keybinds, autostart and theme in the terminal (--dry-run, --yes)
+zunder show setup       # the same as a page in the launcher
 zunder server           # run the daemon (autostart)
 zunder toggle           # show / hide
 zunder show [query]     # show, optionally with the query typed, e.g. zunder show 'time in '
 zunder hide
 zunder switch           # window switcher, or the next window if it's open
 zunder switch-prev      # same, backwards
-zunder overview         # the switcher without Alt: stays open until you pick a window
+zunder overview         # every window by workspace, stays open until you pick one (SUPER+TAB)
 zunder settings [page]  # settings window, e.g. zunder settings appearance
 zunder reload           # reread config.toml, rescan apps and plugins
 zunder import vicinae   # take over vicinae's favorites and launch counts
@@ -78,6 +84,7 @@ zunder --version
 | `> htop` | run a command |
 | `theme`, `theme nord` | color schemes, Enter applies live and keeps the list open |
 | `settings` | quick settings in the launcher |
+| `setup` | keys, autostart and switching over from another launcher, then Apply |
 | `update` | check for a new zunder now (the start screen also says so once a day) |
 | `<plugin prefix> query` | a plugin, e.g. `kill zen` |
 | anything | web search as the last result |
@@ -88,6 +95,42 @@ ALT+TAB shows a grid of thumbnails, one per window, most recently focused first,
 icon and title underneath. The previous window is preselected, so a quick ALT+TAB tap goes back
 and forth between two windows like on any other desktop. `Tab` and the arrow keys move, a click
 switches, and typing anything turns the grid into the normal searchable list.
+
+## Overview
+
+`zunder overview` (SUPER+TAB after `setup`) shows every window like Mission Control: one column
+per workspace, side by side, with thumbnails. It stays open until you pick a window, so you can
+tidy up first:
+
+| Key | What it does |
+|-----|--------------|
+| arrows | move to the nearest window in that direction |
+| `Enter` or click | focus it |
+| `Ctrl+Enter` | bring it to the workspace you're on |
+| `Ctrl+W` or the `✕` on the thumbnail | close it |
+| `Ctrl+M` | minimize it (to the `special:minimized` workspace) |
+| `Ctrl+1…9` | move it to that workspace, without following it |
+| `Ctrl+K` | every other action |
+| typing | search instead, like the launcher |
+
+Closing and moving keep the overview open and redraw it. The same keys work in the ALT+TAB grid
+and on windows in the search results.
+
+## Actions
+
+`Ctrl+K` on a result lists what else you can do with it. Type to filter, `Enter` runs one, `Esc`
+goes back to your results.
+
+| Result | Actions |
+|--------|---------|
+| window | focus, bring here, fullscreen, minimize, close, move to workspace 1–9, copy title or class |
+| file or folder | open, open containing folder, open a terminal there, copy path, copy name |
+| app | launch, launch in a terminal, open or copy its desktop file, copy the command |
+| command | run, run in a terminal, copy it |
+| link | open, copy link |
+| anything with an id | add to favorites, set a global shortcut |
+
+Plugins add their own with an `actions` list, see [plugins](plugins.md).
 
 zunder takes the screenshots with `grim -T` every time the switcher opens, in the background,
 one thread per window. Windows on other workspaces work too. Until the fresh screenshot is

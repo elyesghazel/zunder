@@ -1,5 +1,9 @@
 # Setup
 
+Type `setup` in zunder (the first-run screen opens it too). Each row is a choice, Enter turns
+it on or off, and the preview pane of **Apply** shows exactly what will be written. Apply writes
+it and reloads Hyprland. The same in a terminal:
+
 ```sh
 zunder setup              # asks, defaults on Enter
 zunder setup --dry-run    # shows every change, writes nothing
@@ -12,7 +16,8 @@ It finds your Hyprland config (Lua or classic) and:
   daemons get commented out, and the key that opened them now opens zunder (each changed file
   keeps a `.bak`)
 - imports vicinae's favorites and launch counts
-- binds ALT+TAB, a launcher key and SUPER+V, telling you when a key is already taken
+- binds ALT+TAB, SUPER+TAB (the overview), a launcher key and SUPER+V, telling you when a key
+  is already taken
 - starts cliphist with Hyprland if it isn't running
 - picks a theme and adds the example plugins
 
@@ -36,6 +41,7 @@ end)
 -- conf/binds.lua
 hl.bind("ALT + TAB",         hl.dsp.exec_cmd("zunder switch"))
 hl.bind("ALT + SHIFT + TAB", hl.dsp.exec_cmd("zunder switch-prev"))
+hl.bind("SUPER + TAB",       hl.dsp.exec_cmd("zunder overview"))
 hl.bind("ALT + SPACE",       hl.dsp.exec_cmd("zunder toggle"))
 hl.bind("SUPER + V",         hl.dsp.exec_cmd("zunder show 'clip '"))
 
@@ -72,6 +78,7 @@ exec-once = wl-paste --type text --watch cliphist store
 
 bind = ALT, TAB, exec, zunder switch
 bind = ALT SHIFT, TAB, exec, zunder switch-prev
+bind = SUPER, TAB, exec, zunder overview
 bind = ALT, SPACE, exec, zunder toggle
 bind = SUPER, V, exec, zunder show 'clip '
 

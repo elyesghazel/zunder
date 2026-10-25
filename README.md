@@ -32,7 +32,7 @@ curl -fsSL https://raw.githubusercontent.com/elyesghazel/zunder/main/get.sh | sh
 ```
 
 On Arch it installs the release package, elsewhere the binary goes to `~/.local/bin`. Then
-`zunder setup` asks a few questions and sets up the keybinds, autostart and theme. If you used
+`zunder setup` (or `setup` inside zunder) sets up the keybinds, autostart and theme. If you used
 vicinae, rofi or wofi, it takes over from them.
 
 **Windows:** run [zunder-windows-setup.exe](https://github.com/elyesghazel/zunder/releases/latest/download/zunder-windows-setup.exe).
@@ -60,6 +60,8 @@ right away. More ways to install, and what works on which system:
 | Key | Does |
 |-----|------|
 | `ALT+TAB` | the window switcher, opens on the previous window |
+| `SUPER+TAB` | every window by workspace; `Ctrl+W` closes, `Ctrl+1…9` moves |
+| `Ctrl+K` | everything you can do with a result: open folder, copy path, close window… |
 | `Ctrl+F` | pin any result to the start screen |
 | `Ctrl+B` | give any result its own global shortcut |
 | `Ctrl+,` | settings |

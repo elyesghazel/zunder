@@ -55,6 +55,7 @@ grep -ri -- "$1" ~/notes | head -50
 | `image` | no | path to an image, shown in the preview pane when the line is selected |
 | `preview` | no | text shown in the preview pane, e.g. a whole note or a command's output |
 | `action` | no | what Enter does, see below. Without one, Enter does nothing |
+| `actions` | no | more entries for the `Ctrl+K` menu: `[{"title": "Copy id", "copy": "42"}]`, each with an action from the table below and an optional `glyph` |
 
 | Action | Enter does |
 |--------|------------|
@@ -64,6 +65,7 @@ grep -ri -- "$1" ~/notes | head -50
 | `{"copy": "text"}` | copies to the clipboard |
 | `{"focus": "0x55a3…"}` | focuses a Hyprland window by address |
 | `{"fill": "text"}` | replaces the query and keeps zunder open, for menus and sub-pages |
+| `{"window": {"address": "0x55a3…", "op": "close"}}` | `close`, `fullscreen`, `minimize`, `pull` (to your workspace) or `{"move": "3"}` |
 
 Results get an id from the plugin name and title, so they can be favorites (Ctrl+F) and get
 global shortcuts (Ctrl+B) like apps.

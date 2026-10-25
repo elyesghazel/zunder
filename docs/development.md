@@ -57,6 +57,8 @@ src/
   ipc.rs              unix socket, one command word per connection
   ui.rs               the overlay: layer-shell window, list, keys, preview pane, keybind recording
   settings_window.rs  the settings window
+  setup.rs            `zunder setup`: detects the Hyprland config, writes zunder-setup.lua
+  actions.rs          the Ctrl+K menu: every action a result has besides Enter
   engine.rs           runs providers, groups and ranks results into sections
   item.rs             Item and Action (what Enter does), spawning processes
   config.rs           config.toml, the settings table
