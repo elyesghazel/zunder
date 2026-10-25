@@ -72,7 +72,7 @@ const PER_SECTION: usize = 12;
 impl Engine {
     pub fn new() -> Self {
         let mut providers = providers::all();
-        let titles = providers.iter().map(|p| p.title().to_owned()).chain(["Plugins".to_owned()]).collect();
+        let titles = providers.iter().map(|p| p.title().to_owned()).filter(|t| t != "Setup").chain(["Plugins".to_owned()]).collect();
         providers.push(Box::new(providers::settings::Settings::new(titles)));
         Engine {
             providers,
@@ -86,7 +86,7 @@ impl Engine {
 
     /// Section titles that can be turned on and off.
     pub fn provider_titles(&self) -> Vec<String> {
-        self.providers.iter().map(|p| p.title().to_owned()).filter(|t| t != "Settings").chain(["Plugins".to_owned()]).collect()
+        self.providers.iter().map(|p| p.title().to_owned()).filter(|t| t != "Settings" && t != "Setup").chain(["Plugins".to_owned()]).collect()
     }
 
     pub fn reload(&mut self) {
@@ -106,7 +106,7 @@ impl Engine {
         let providers = self.providers.iter().map(|p| p.as_ref()).chain([&self.plugins as &dyn Provider]);
         let all: Vec<&dyn Provider> = {
             let cfg = crate::config::get();
-            providers.filter(|p| p.title() == "Settings" || cfg.enabled(p.title())).collect()
+            providers.filter(|p| matches!(p.title(), "Settings" | "Setup") || cfg.enabled(p.title())).collect()
         };
         let exclusive = all.iter().find(|p| p.exclusive(query)).copied();
         let active: Vec<&dyn Provider> = match exclusive {

@@ -7,6 +7,7 @@ pub mod convert;
 pub mod launches;
 pub mod plugins;
 pub mod settings;
+pub mod setup;
 pub mod shell;
 pub mod system;
 pub mod themes;
@@ -23,6 +24,7 @@ use crate::engine::Provider;
 pub fn all() -> Vec<Box<dyn Provider>> {
     vec![
         Box::new(welcome::Welcome),
+        Box::new(setup::Setup),
         Box::new(update::Update),
         Box::new(calc::Calc),
         Box::new(time::Time),

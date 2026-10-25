@@ -564,6 +564,7 @@ impl Ui {
             s.menu = None;
             s.windows = windows::list();
             timing("windows", started);
+            crate::providers::setup::reset();
             if !switch {
                 let t = std::time::Instant::now();
                 s.engine.reload();
@@ -1481,6 +1482,24 @@ impl Ui {
     }
 
     fn set_setting(self: &Rc<Self>, key: &str, value: Option<&str>) {
+        if let Some(name) = key.strip_prefix("setup:") {
+            let note = crate::providers::setup::set(name);
+            if name == "apply" {
+                // setup may have changed the config (first run ends) and added plugins
+                config::reload();
+                apply_config_css();
+                crate::platform::sync_tray();
+                self.state.borrow_mut().engine.reload();
+            }
+            let selected = self.state.borrow().selected;
+            self.refresh();
+            let n = self.state.borrow().items.len();
+            self.select(if name == "apply" || name == "again" { 0 } else { selected.min(n.saturating_sub(1)) });
+            if !note.is_empty() {
+                self.status.set_text(&note);
+            }
+            return;
+        }
         let mut result = Ok(());
         config::update(|c| match key.strip_prefix("provider:") {
             Some(provider) => c.toggle_provider(provider),

@@ -5,8 +5,8 @@ use crate::config;
 use crate::engine::{Ctx, Provider};
 use crate::item::{Action, Item, Text};
 
-const SETUP: &str = "Opens a terminal and asks.
-Enter takes the default.
+const SETUP: &str = "A page with toggles, then Apply.
+Also in a terminal: zunder setup
 
 Other launchers
   vicinae rofi wofi fuzzel walker…
@@ -17,6 +17,7 @@ Other launchers
 
 Keys
   ALT+TAB     window switcher
+  SUPER+TAB   every window
   ALT+SPACE   launcher
   SUPER+V     clipboard
   warns when a key is taken
@@ -35,6 +36,7 @@ const KEYS: &str = "In zunder
 
   ↑ ↓  Tab        move
   Enter           run
+  Ctrl+K          actions
   Ctrl+F          favorite
   Ctrl+B          global shortcut
   Ctrl+,          settings
@@ -79,7 +81,7 @@ impl Provider for Welcome {
         let themes = crate::theme::names().join("\n");
         let pages = "General      terminal, search, money\nSwitcher     Alt release, previews\nStart screen windows, apps\nAppearance   font, theme, size\nProviders    sections on / off\nFavorites    what you pinned\nShortcuts    global keys\nPlugins      installed scripts\nAbout        version, files";
         let mut items = vec![
-            explained(item("Run setup", "keybinds, autostart and theme, a few questions", "\u{f0ad}", Action::Term("zunder setup".into()), 4), SETUP),
+            explained(item("Set up zunder", "keys, autostart, switching over: Enter opens the page", "\u{f0ad}", Action::Fill("setup".into()), 4), SETUP),
             explained(item("Pick a theme", "Enter applies live, keep trying", "\u{f1fc}", Action::Fill("theme ".into()), 3), &format!("Built in\n\n{themes}\n\nOr your own: ~/.config/zunder/themes/<name>.css")),
             explained(item("Settings", "Ctrl+, from anywhere in zunder", "\u{f013}", Action::Run("zunder settings".into()), 2), &format!("The settings window\n\n{pages}")),
             explained(
