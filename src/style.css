@@ -122,3 +122,20 @@ flowbox.tiles > flowboxchild.tile.selected { background: @sel; border-color: @ac
 .caption .icon { margin-right: 6px; }
 .tile-title    { color: @muted; font-size: 0.9em; }
 flowboxchild.tile.selected .tile-title { color: @fg; font-weight: bold; }
+
+/* × on a tile, shown on hover and on the selected one */
+button.tile-close {
+  min-width: 22px; min-height: 22px; padding: 0; margin: 6px;
+  border-radius: 99px; border: none; box-shadow: none;
+  background: alpha(@bg, 0.85); color: @muted; font-size: 0.8em;
+  opacity: 0;
+}
+flowboxchild.tile:hover button.tile-close,
+flowboxchild.tile.selected button.tile-close { opacity: 1; }
+button.tile-close:hover { background: @accent; color: @bg; }
+
+/* ── overview (SUPER+TAB): one grid per workspace ── */
+flowbox.workspaces > flowboxchild { padding: 0; background: none; }
+.workspace { background: alpha(@hover, 0.6); border-radius: 12px; padding: 8px; }
+.group-title { color: @faint; font-size: 0.9em; margin: 2px 8px 8px; }
+.switch-hint { color: @faint; font-size: 0.85em; margin-top: 12px; }

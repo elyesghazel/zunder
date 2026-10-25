@@ -25,6 +25,8 @@ pub struct Client {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct Workspace {
+    #[serde(default)]
+    pub id: i64,
     pub name: String,
 }
 

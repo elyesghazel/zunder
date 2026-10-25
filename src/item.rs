@@ -37,6 +37,9 @@ pub struct Item {
     #[serde(skip)]
     pub group: String,
     pub action: Action,
+    /// Extra entries for the Ctrl+K menu, e.g. from a plugin's `"actions": [...]`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub actions: Vec<MenuAction>,
     #[serde(skip)]
     pub score: i64,
 }
@@ -46,6 +49,37 @@ pub struct Item {
 pub enum Text {
     Literal(String),
     Command(String),
+}
+
+/// One extra entry in an item's Ctrl+K menu. Plugins write `{"title": "Copy id", "copy": "…"}`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MenuAction {
+    pub title: String,
+    #[serde(default)]
+    pub glyph: String,
+    #[serde(flatten)]
+    pub action: Action,
+}
+
+/// Something done to a window without focusing it first.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WindowOp {
+    Close,
+    Fullscreen,
+    /// To the `special:minimized` workspace.
+    Minimize,
+    /// To the workspace you're on, focused.
+    Pull,
+    /// To this workspace, without following it.
+    Move(String),
+}
+
+impl WindowOp {
+    /// Whether zunder stays open afterwards (to keep working on the other windows).
+    pub fn keeps_open(&self) -> bool {
+        !matches!(self, WindowOp::Pull | WindowOp::Fullscreen)
+    }
 }
 
 /// What Enter does. Plugins emit the same shape as JSON, e.g. `{"open": "https://…"}`.
@@ -58,6 +92,8 @@ pub enum Action {
     Term(String),
     /// Focus a Hyprland window by address.
     Focus(String),
+    /// Close, move, fullscreen… a window by address.
+    Window { address: String, op: WindowOp },
     /// Put text on the clipboard.
     Copy(String),
     /// Open a URL or file with xdg-open.
@@ -80,6 +116,7 @@ impl Action {
             Action::Run(cmd) => platform::run_shell(cmd),
             Action::Term(cmd) => platform::run_in_terminal(cmd),
             Action::Focus(id) => platform::focus_window(id),
+            Action::Window { address, op } => platform::window_op(address, op),
             Action::Copy(text) => platform::copy(text),
             Action::Open(target) => platform::open(target),
             Action::Fill(_) | Action::Set { .. } | Action::None => {}

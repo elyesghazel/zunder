@@ -9,6 +9,7 @@ use std::time::Duration;
 use gtk::{gdk, glib, graphene, prelude::*};
 use gtk4 as gtk;
 
+use crate::actions;
 use crate::config;
 use crate::settings_window;
 use crate::store;
@@ -18,6 +19,8 @@ use crate::item::Item;
 use crate::providers::windows::{self, Client};
 use crate::ipc;
 
+const SWITCH_HINT: &str = "↵ focus   ^↵ bring here   ^W close   ^M minimize   ^1-9 move   ^K more   type to search";
+const PLACEHOLDER: &str = "search apps, windows, commands…";
 const PREVIEW_WIDTH: i32 = 420;
 /// The switcher's window screenshots get a wider column than launcher image previews.
 const SWITCH_PREVIEW_WIDTH: i32 = 760;
@@ -26,6 +29,9 @@ const ICON_SIZE: i32 = 20;
 const TILE_WIDTH: i32 = 280;
 const TILE_HEIGHT: i32 = 175;
 const TILE_COLUMNS: usize = 5;
+/// The overview's thumbnails are smaller: every workspace has to fit next to each other.
+const OVERVIEW_TILE: (i32, i32) = (220, 138);
+const OVERVIEW_GROUPS_PER_LINE: u32 = 6;
 
 struct State {
     engine: Engine,
@@ -51,6 +57,15 @@ struct State {
     strip: bool,
     /// One per item while `strip` is on.
     tiles: Vec<Tile>,
+    /// Ctrl+K: the action menu of an item is showing instead of the results.
+    menu: Option<Menu>,
+}
+
+/// What Ctrl+K opened, and what to go back to.
+struct Menu {
+    item: Item,
+    query: String,
+    from_strip: bool,
 }
 
 /// One window in the ALT+TAB grid: its screenshot, or the app icon until there is one.
@@ -59,6 +74,14 @@ struct Tile {
     picture: gtk::Picture,
     placeholder: gtk::Widget,
     preview: Option<String>,
+    /// Thumbnail size: the ALT+TAB grid's or the overview's.
+    size: (i32, i32),
+}
+
+/// Turns the ALT+TAB grid into the overview's workspace groups.
+struct Group {
+    title: String,
+    items: Vec<Item>,
 }
 
 struct Ui {
@@ -70,7 +93,11 @@ struct Ui {
     status: gtk::Label,
     preview: Preview,
     switcher: gtk::Box,
-    grid: gtk::FlowBox,
+    /// The grid, or one titled grid per workspace in the overview.
+    groups: gtk::Box,
+    groups_scroll: gtk::ScrolledWindow,
+    /// Window keys under the overview.
+    switch_hint: gtk::Label,
     state: RefCell<State>,
     plugin_tx: async_channel::Sender<(u64, String, Vec<Item>)>,
     capture_tx: async_channel::Sender<String>,
@@ -218,7 +245,7 @@ impl Ui {
         let entry = gtk::Entry::new();
         entry.add_css_class("query");
         entry.set_hexpand(true);
-        entry.set_placeholder_text(Some("search apps, windows, commands…"));
+        entry.set_placeholder_text(Some(PLACEHOLDER));
         let status = label("", "status");
         prompt.append(&label("❯", "caret"));
         prompt.append(&entry);
@@ -234,7 +261,7 @@ impl Ui {
 
         let footer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         footer.add_css_class("footer");
-        for (key, desc) in [("↵", "open"), ("⇥", "next"), ("^F", "favorite"), ("^B", "keybind"), ("^,", "settings"), ("esc", "close")] {
+        for (key, desc) in [("↵", "open"), ("^K", "actions"), ("^F", "favorite"), ("^B", "keybind"), ("^,", "settings"), ("esc", "close")] {
             footer.append(&label(key, "key"));
             footer.append(&label(desc, "desc"));
         }
@@ -250,19 +277,23 @@ impl Ui {
         panel.append(&body);
         panel.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
         panel.append(&footer);
-        let grid = gtk::FlowBox::new();
-        grid.add_css_class("tiles");
-        grid.set_selection_mode(gtk::SelectionMode::None);
-        grid.set_homogeneous(true);
-        grid.set_activate_on_single_click(true);
-        grid.set_column_spacing(10);
-        grid.set_row_spacing(10);
+        let groups = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        groups.add_css_class("groups");
+        let groups_scroll = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .propagate_natural_height(true)
+            .propagate_natural_width(true)
+            .child(&groups)
+            .build();
+        let switch_hint = label(SWITCH_HINT, "switch-hint");
+        switch_hint.set_xalign(0.5);
         let switcher = gtk::Box::new(gtk::Orientation::Vertical, 0);
         switcher.add_css_class("switcher");
         switcher.set_halign(gtk::Align::Center);
         switcher.set_valign(gtk::Align::Center);
         switcher.set_visible(false);
-        switcher.append(&grid);
+        switcher.append(&groups_scroll);
+        switcher.append(&switch_hint);
 
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         for w in [&panel, &switcher] {
@@ -283,7 +314,9 @@ impl Ui {
             status,
             preview,
             switcher,
-            grid,
+            groups,
+            groups_scroll,
+            switch_hint,
             state: RefCell::new(State {
                 engine: Engine::new(),
                 windows: Vec::new(),
@@ -299,6 +332,7 @@ impl Ui {
                 had_focus: false,
                 strip: false,
                 tiles: Vec::new(),
+                menu: None,
             }),
             plugin_tx,
             capture_tx,
@@ -360,14 +394,6 @@ impl Ui {
             }
         });
 
-        let ui = self.clone();
-        self.grid.connect_child_activated(move |_, child| {
-            let i = ui.state.borrow().tiles.iter().position(|t| &t.child == child);
-            if let Some(i) = i {
-                ui.activate(i);
-            }
-        });
-
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
         let ui = self.clone();
@@ -377,12 +403,27 @@ impl Ui {
                 return glib::Propagation::Stop;
             }
             let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
+            if ui.state.borrow().menu.is_some() && (key == gdk::Key::Escape || (ctrl && key == gdk::Key::k)) {
+                ui.close_menu();
+                return glib::Propagation::Stop;
+            }
+            if ctrl && key == gdk::Key::k {
+                ui.open_menu();
+                return glib::Propagation::Stop;
+            }
+            if ctrl && ui.window_key(key) {
+                return glib::Propagation::Stop;
+            }
             if ui.state.borrow().strip {
+                let hold = ui.state.borrow().hold;
                 match key {
-                    gdk::Key::Right => return ui.step_stop(1),
-                    gdk::Key::Left => return ui.step_stop(-1),
-                    gdk::Key::Down => return ui.step_stop(TILE_COLUMNS as isize),
-                    gdk::Key::Up => return ui.step_stop(-(TILE_COLUMNS as isize)),
+                    // ALT+TAB walks the grid in order; the overview moves by position
+                    gdk::Key::Right if !hold => return ui.step_stop(1),
+                    gdk::Key::Left if !hold => return ui.step_stop(-1),
+                    gdk::Key::Right => return ui.step_toward(1.0, 0.0),
+                    gdk::Key::Left => return ui.step_toward(-1.0, 0.0),
+                    gdk::Key::Down => return ui.step_toward(0.0, 1.0),
+                    gdk::Key::Up => return ui.step_toward(0.0, -1.0),
                     _ => {}
                 }
                 // typing turns the grid into the searchable list
@@ -399,7 +440,7 @@ impl Ui {
                 gdk::Key::Down | gdk::Key::Tab => ui.step(1),
                 gdk::Key::Up | gdk::Key::ISO_Left_Tab => ui.step(-1),
                 gdk::Key::j | gdk::Key::n if ctrl => ui.step(1),
-                gdk::Key::k | gdk::Key::p if ctrl => ui.step(-1),
+                gdk::Key::p if ctrl => ui.step(-1),
                 gdk::Key::Return | gdk::Key::KP_Enter => {
                     let i = ui.state.borrow().selected;
                     ui.activate(i);
@@ -462,7 +503,7 @@ impl Ui {
 
     fn alt_release_switches(&self) -> bool {
         let s = self.state.borrow();
-        config::get().alt_release && s.switch && !s.hold && self.entry.text().is_empty()
+        config::get().alt_release && s.switch && !s.hold && s.menu.is_none() && self.entry.text().is_empty()
     }
 
     fn command(self: &Rc<Self>, cmd: &str) {
@@ -520,6 +561,7 @@ impl Ui {
             s.switch = switch;
             s.strip = switch;
             s.had_focus = false;
+            s.menu = None;
             s.windows = windows::list();
             timing("windows", started);
             if !switch {
@@ -538,6 +580,8 @@ impl Ui {
         let _ = width;
         self.panel.set_visible(!switch);
         self.switcher.set_visible(switch);
+        self.switch_hint.set_visible(self.state.borrow().hold);
+        self.entry.set_placeholder_text(Some(PLACEHOLDER));
         self.fit_panel(switch && previews);
         self.scroll.set_min_content_height(height);
         self.scroll.set_max_content_height(height);
@@ -561,7 +605,7 @@ impl Ui {
             s.strip = false;
             s.tiles.clear();
         }
-        self.grid.remove_all();
+        clear(&self.groups);
         self.switcher.set_visible(false);
         self.panel.set_visible(true);
         self.entry.set_text(text);
@@ -570,12 +614,20 @@ impl Ui {
     }
 
     fn hide(&self) {
-        self.state.borrow_mut().hold = false;
+        {
+            let mut s = self.state.borrow_mut();
+            s.hold = false;
+            s.menu = None;
+        }
         self.window.set_visible(false);
     }
 
     fn refresh(self: &Rc<Self>) {
         let query = self.entry.text().to_string();
+        if self.state.borrow().menu.is_some() {
+            self.render_menu(&query);
+            return;
+        }
         let (sections, jobs, seq) = {
             let mut s = self.state.borrow_mut();
             s.seq += 1;
@@ -607,7 +659,7 @@ impl Ui {
         if !keep && !sections.is_empty() && self.state.borrow().sections == sections {
             let first = {
                 let s = self.state.borrow();
-                usize::from(s.switch && s.items.len() > 1 && self.entry.text().is_empty())
+                usize::from(s.switch && s.menu.is_none() && s.items.len() > 1 && self.entry.text().is_empty())
             };
             let column = {
                 let s = self.state.borrow();
@@ -648,7 +700,7 @@ impl Ui {
             s.items = items;
             s.rows = rows;
             // ALT+TAB lands on the previous window, like every other switcher
-            usize::from(s.switch && count > 1 && self.entry.text().is_empty())
+            usize::from(s.switch && s.menu.is_none() && count > 1 && self.entry.text().is_empty())
         };
         if keep {
             self.select(previous.min(count.saturating_sub(1)));
@@ -659,30 +711,94 @@ impl Ui {
         }
     }
 
-    /// The ALT+TAB grid: one thumbnail per window, the previous one selected.
-    fn render_strip(&self, sections: Vec<Section>) {
+    /// The ALT+TAB grid: one thumbnail per window, the previous one selected. The overview
+    /// (`hold`) splits it into one titled grid per workspace.
+    fn render_strip(self: &Rc<Self>, sections: Vec<Section>) {
         let items: Vec<Item> = sections
             .into_iter()
             .flat_map(|s| s.items)
             .filter(|i| matches!(i.action, crate::item::Action::Focus(_)))
             .collect();
-        self.grid.remove_all();
-        let columns = items.len().clamp(1, TILE_COLUMNS) as u32;
-        self.grid.set_min_children_per_line(columns);
-        self.grid.set_max_children_per_line(columns);
+        let (overview, windows) = {
+            let s = self.state.borrow();
+            (s.hold, s.windows.clone())
+        };
+        let groups = if overview { by_workspace(items, &windows) } else { vec![Group { title: String::new(), items }] };
+        clear(&self.groups);
         let previews = config::get().previews;
-        let tiles: Vec<Tile> = items
-            .iter()
-            .map(|item| {
-                let t = tile(item);
-                self.grid.append(&t.child);
+        let size = if overview { OVERVIEW_TILE } else { (TILE_WIDTH, TILE_HEIGHT) };
+        let (mut items, mut tiles) = (Vec::new(), Vec::new());
+        // the overview: one column per workspace, side by side, wrapping after a few
+        let columns = gtk::FlowBox::new();
+        columns.add_css_class("workspaces");
+        columns.set_selection_mode(gtk::SelectionMode::None);
+        columns.set_homogeneous(false);
+        columns.set_halign(gtk::Align::Center);
+        columns.set_valign(gtk::Align::Start);
+        columns.set_column_spacing(18);
+        columns.set_row_spacing(18);
+        columns.set_max_children_per_line(OVERVIEW_GROUPS_PER_LINE.min(groups.len().max(1) as u32));
+        columns.set_min_children_per_line(OVERVIEW_GROUPS_PER_LINE.min(groups.len().max(1) as u32));
+        for group in groups {
+            let grid = gtk::FlowBox::new();
+            grid.add_css_class("tiles");
+            grid.set_selection_mode(gtk::SelectionMode::None);
+            grid.set_homogeneous(true);
+            grid.set_activate_on_single_click(true);
+            grid.set_column_spacing(10);
+            grid.set_row_spacing(10);
+            grid.set_halign(gtk::Align::Center);
+            grid.set_valign(gtk::Align::Start);
+            let per_line = if overview { if group.items.len() > 3 { 2 } else { 1 } } else { TILE_COLUMNS };
+            let n = group.items.len().clamp(1, per_line) as u32;
+            grid.set_min_children_per_line(n);
+            grid.set_max_children_per_line(n);
+            let ui = self.clone();
+            grid.connect_child_activated(move |_, child| {
+                let i = ui.state.borrow().tiles.iter().position(|t| &t.child == child);
+                if let Some(i) = i {
+                    ui.activate(i);
+                }
+            });
+            for item in group.items {
+                let t = tile(self, &item, size);
+                grid.append(&t.child);
                 if previews && let Some(id) = &t.preview {
                     t.load(&preview_path(id));
                 }
-                t
-            })
-            .collect();
+                tiles.push(t);
+                items.push(item);
+            }
+            if overview {
+                let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
+                column.add_css_class("workspace");
+                column.set_valign(gtk::Align::Start);
+                column.append(&label(&group.title, "group-title"));
+                column.append(&grid);
+                let child = gtk::FlowBoxChild::new();
+                child.set_focusable(false);
+                child.set_valign(gtk::Align::Start);
+                child.set_child(Some(&column));
+                columns.append(&child);
+            } else {
+                self.groups.append(&grid);
+            }
+        }
+        if overview {
+            self.groups.append(&columns);
+        }
+        // as tall as the screen allows, then it scrolls
+        let max = self.window.surface().and_then(|surface| WidgetExt::display(&self.window).monitor_at_surface(&surface));
+        let max = max.map_or(860, |m| m.geometry().height() * 85 / 100);
+        self.groups_scroll.set_max_content_height(max);
         let count = items.len();
+        // the previous window, like every other switcher
+        let first = match windows.iter().find(|c| c.focus == 1) {
+            Some(prev) if overview => {
+                items.iter().position(|i| i.action == crate::item::Action::Focus(prev.address.clone())).unwrap_or(0)
+            }
+            _ => usize::from(count > 1),
+        };
         {
             let mut s = self.state.borrow_mut();
             s.items = items;
@@ -692,10 +808,10 @@ impl Ui {
             s.sections.clear();
         }
         if count == 0 {
-            self.grid.append(&label("no open windows", "empty"));
+            self.groups.append(&label("no open windows", "empty"));
             return;
         }
-        self.select(usize::from(count > 1));
+        self.select(first);
     }
 
     /// A fresh screenshot of `id` landed.
@@ -730,6 +846,15 @@ impl Ui {
             s.selected = i;
             if let Some(t) = s.tiles.get(i) {
                 t.child.add_css_class("selected");
+                let adj = self.groups_scroll.vadjustment();
+                if let Some(b) = t.child.compute_bounds(&self.groups) {
+                    let (y, h) = (f64::from(b.y()), f64::from(b.height()));
+                    if y < adj.value() {
+                        adj.set_value(y - 40.0);
+                    } else if y + h > adj.value() + adj.page_size() {
+                        adj.set_value(y + h - adj.page_size());
+                    }
+                }
             }
             return;
         }
@@ -835,6 +960,31 @@ impl Ui {
 
     fn activate(self: &Rc<Self>, i: usize) {
         let Some(item) = self.state.borrow().items.get(i).cloned() else { return };
+        if let crate::item::Action::Set { key, .. } = &item.action
+            && let Some(target) = self.state.borrow().menu.as_ref().map(|m| m.item.clone())
+            && (key == actions::FAVORITE || key == actions::KEYBIND)
+        {
+            self.close_menu();
+            if key == actions::FAVORITE {
+                self.toggle_favorite_item(Some(target));
+            } else {
+                self.start_recording_item(Some(target));
+            }
+            return;
+        }
+        if let crate::item::Action::Window { address, op } = &item.action {
+            self.window_action(address, op);
+            return;
+        }
+        let item = match self.state.borrow().menu.as_ref() {
+            // history and the launch log keep the menu's item, not "Copy path"
+            Some(menu) => Item { action: item.action, ..menu.item.clone() },
+            None => item,
+        };
+        if matches!(item.action, crate::item::Action::Fill(_)) {
+            self.state.borrow_mut().menu = None;
+            self.entry.set_placeholder_text(Some(PLACEHOLDER));
+        }
         if let crate::item::Action::Fill(text) = &item.action {
             self.entry.set_text(text);
             self.entry.set_position(-1);
@@ -947,17 +1097,17 @@ impl Tile {
     /// Show the screenshot at `path`, decoded at the tile's size so a big window stays cheap.
     /// Not times the scale factor: a texture's pixel size is also the picture's natural size.
     fn load(&self, path: &Path) {
-        let Some(texture) = scaled_texture(path, TILE_WIDTH, TILE_HEIGHT, 1) else { return };
+        let Some(texture) = scaled_texture(path, self.size.0, self.size.1, 1) else { return };
         self.picture.set_paintable(Some(&texture));
         self.placeholder.set_visible(false);
     }
 }
 
-fn tile(item: &Item) -> Tile {
+fn tile(ui: &Rc<Ui>, item: &Item, size: (i32, i32)) -> Tile {
     let picture = gtk::Picture::new();
     picture.set_content_fit(gtk::ContentFit::Contain);
     picture.set_can_shrink(true);
-    picture.set_size_request(TILE_WIDTH, TILE_HEIGHT);
+    picture.set_size_request(size.0, size.1);
     let placeholder: gtk::Widget = match icon(item) {
         Some(image) => {
             image.set_pixel_size(64);
@@ -971,6 +1121,18 @@ fn tile(item: &Item) -> Tile {
     thumb.add_css_class("thumb");
     thumb.set_child(Some(&picture));
     thumb.add_overlay(&placeholder);
+    // × on hover closes the window, like Mission Control
+    if let crate::item::Action::Focus(address) = &item.action {
+        let close = gtk::Button::with_label("✕");
+        close.add_css_class("tile-close");
+        close.set_halign(gtk::Align::End);
+        close.set_valign(gtk::Align::Start);
+        close.set_focusable(false);
+        close.set_tooltip_text(Some("close  ^W"));
+        let (ui, address) = (ui.clone(), address.clone());
+        close.connect_clicked(move |_| ui.window_action(&address, &crate::item::WindowOp::Close));
+        thumb.add_overlay(&close);
+    }
 
     let caption = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     caption.add_css_class("caption");
@@ -981,7 +1143,7 @@ fn tile(item: &Item) -> Tile {
     }
     let title = label(&item.title, "tile-title");
     title.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    title.set_max_width_chars(24);
+    title.set_max_width_chars(if size.0 < TILE_WIDTH { 18 } else { 24 });
     caption.append(&title);
 
     let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -990,7 +1152,40 @@ fn tile(item: &Item) -> Tile {
     let child = gtk::FlowBoxChild::new();
     child.add_css_class("tile");
     child.set_child(Some(&b));
-    Tile { child, picture, placeholder, preview: item.preview.clone() }
+    Tile { child, picture, placeholder, preview: item.preview.clone(), size }
+}
+
+/// Windows per workspace in workspace order, special ones (minimized, scratchpads) last.
+fn by_workspace(items: Vec<Item>, windows: &[Client]) -> Vec<Group> {
+    let current = windows.iter().find(|c| c.focus == 0).map(|c| c.workspace.id);
+    let mut groups: Vec<(i64, Group)> = Vec::new();
+    for item in items {
+        let client = match &item.action {
+            crate::item::Action::Focus(address) => windows.iter().find(|c| &c.address == address),
+            _ => None,
+        };
+        let (id, name) = client.map_or((i64::MAX, String::new()), |c| (c.workspace.id, c.workspace.name.clone()));
+        let order = if id < 0 { i64::MAX / 2 - id } else { id };
+        match groups.iter_mut().find(|(o, _)| *o == order) {
+            Some((_, g)) => g.items.push(item),
+            None => {
+                let title = match name.strip_prefix("special:") {
+                    Some(special) => special.to_owned(),
+                    None if Some(id) == current => format!("workspace {name}  ·  here"),
+                    None => format!("workspace {name}"),
+                };
+                groups.push((order, Group { title, items: vec![item] }));
+            }
+        }
+    }
+    groups.sort_by_key(|(order, _)| *order);
+    groups.into_iter().map(|(_, g)| g).collect()
+}
+
+fn clear(container: &gtk::Box) {
+    while let Some(child) = container.first_child() {
+        container.remove(&child);
+    }
 }
 
 fn icon(item: &Item) -> Option<gtk::Image> {
@@ -1034,8 +1229,12 @@ impl Ui {
     }
 
     fn toggle_favorite(self: &Rc<Self>) {
+        self.toggle_favorite_item(self.selected_item());
+    }
+
+    fn toggle_favorite_item(self: &Rc<Self>, item: Option<Item>) {
         // a clipboard entry is pinned by its content, decoded now
-        let item = self.selected_item().and_then(|i| match &i.pin {
+        let item = item.and_then(|i| match &i.pin {
             Some(line) => crate::providers::clipboard::pinned(line, &i),
             None => Some(i),
         });
@@ -1051,7 +1250,11 @@ impl Ui {
     }
 
     fn start_recording(&self) {
-        let Some(item) = self.selected_item().filter(|i| !i.id.is_empty()) else {
+        self.start_recording_item(self.selected_item());
+    }
+
+    fn start_recording_item(&self, item: Option<Item>) {
+        let Some(item) = item.filter(|i| !i.id.is_empty()) else {
             self.status.set_text("can't bind this one");
             return;
         };
@@ -1107,6 +1310,174 @@ impl Ui {
                 action.execute();
             }
         }
+    }
+
+    /// Ctrl+K: the selected item's actions replace the results; typing filters them.
+    fn open_menu(self: &Rc<Self>) {
+        let Some(item) = self.selected_item() else { return };
+        let from_strip = self.state.borrow().strip;
+        if from_strip {
+            {
+                let mut s = self.state.borrow_mut();
+                s.strip = false;
+                s.tiles.clear();
+            }
+            clear(&self.groups);
+            self.switcher.set_visible(false);
+            self.panel.set_visible(true);
+        }
+        let query = self.entry.text().to_string();
+        self.entry.set_placeholder_text(Some(&format!("actions for {}", item.title.replace('\n', " "))));
+        self.state.borrow_mut().menu = Some(Menu { item, query, from_strip });
+        // set_text("") doesn't fire `changed` when it's already empty
+        self.entry.set_text("");
+        self.refresh();
+        self.entry.grab_focus();
+    }
+
+    /// Back from the menu to the results (or the grid) it was opened on.
+    fn close_menu(self: &Rc<Self>) {
+        let Some(menu) = self.state.borrow_mut().menu.take() else { return };
+        self.entry.set_placeholder_text(Some(PLACEHOLDER));
+        if menu.from_strip {
+            self.state.borrow_mut().strip = true;
+            self.panel.set_visible(false);
+            self.switcher.set_visible(true);
+        }
+        self.entry.set_text(&menu.query);
+        self.entry.set_position(-1);
+        self.refresh();
+        let address = match &menu.item.action {
+            crate::item::Action::Focus(a) => Some(a.clone()),
+            _ => None,
+        };
+        let back = self.state.borrow().items.iter().position(|i| i == &menu.item || address.as_ref().is_some_and(|a| i.action == crate::item::Action::Focus(a.clone())));
+        if let Some(i) = back {
+            self.select(i);
+        }
+    }
+
+    fn render_menu(&self, query: &str) {
+        let (item, windows) = {
+            let s = self.state.borrow();
+            let Some(menu) = &s.menu else { return };
+            (menu.item.clone(), s.windows.clone())
+        };
+        let favorite = self.state.borrow().engine.favorites.contains(&item.id);
+        let entries = actions::menu(&item, &windows, favorite, query);
+        let title = item.title.lines().next().unwrap_or_default().chars().take(60).collect::<String>();
+        self.render(vec![Section { title, items: entries }], false);
+        self.status.set_text("esc back");
+    }
+
+    /// Ctrl+W / Ctrl+M / Ctrl+1…9 / Ctrl+Enter on a selected window. False if it isn't one.
+    fn window_key(self: &Rc<Self>, key: gdk::Key) -> bool {
+        use crate::item::WindowOp;
+        if self.state.borrow().menu.is_some() {
+            return false;
+        }
+        let Some(crate::item::Action::Focus(address)) = self.selected_item().map(|i| i.action) else { return false };
+        let op = match key {
+            gdk::Key::w => WindowOp::Close,
+            gdk::Key::m => WindowOp::Minimize,
+            gdk::Key::Return | gdk::Key::KP_Enter => WindowOp::Pull,
+            k => match k.to_unicode().and_then(|c| c.to_digit(10)).filter(|d| *d > 0) {
+                Some(n) => WindowOp::Move(n.to_string()),
+                None => return false,
+            },
+        };
+        self.window_action(&address, &op);
+        true
+    }
+
+    /// Close, move or minimize stay in zunder so you can tidy up more windows; the rest
+    /// leave it like Enter does.
+    fn window_action(self: &Rc<Self>, address: &str, op: &crate::item::WindowOp) {
+        use crate::item::WindowOp;
+        let action = crate::item::Action::Window { address: address.to_owned(), op: op.clone() };
+        if !op.keeps_open() {
+            self.hide();
+            glib::idle_add_local_once(move || action.execute());
+            return;
+        }
+        let title = {
+            let s = self.state.borrow();
+            s.windows.iter().find(|c| c.address == address).map(|c| if c.title.is_empty() { c.class.clone() } else { c.title.clone() })
+        };
+        action.execute();
+        let selected = self.state.borrow().selected;
+        self.close_menu();
+        let what = match op {
+            WindowOp::Close => "closed".to_owned(),
+            WindowOp::Minimize => "minimized".to_owned(),
+            WindowOp::Move(ws) => format!("moved to workspace {ws}"),
+            WindowOp::Pull | WindowOp::Fullscreen => String::new(),
+        };
+        let note = format!("{} {what}", title.unwrap_or_default().chars().take(40).collect::<String>());
+        // Hyprland's event reaches the window list cache a moment later
+        let ui = self.clone();
+        let address = address.to_owned();
+        glib::timeout_add_local_once(Duration::from_millis(200), move || {
+            if !ui.window.is_visible() {
+                return;
+            }
+            ui.state.borrow_mut().windows = windows::list();
+            ui.refresh();
+            // a moved window is still there: stay on it; a closed one hands over to its neighbour
+            let (n, same) = {
+                let s = ui.state.borrow();
+                let focus = crate::item::Action::Focus(address.clone());
+                (s.items.len(), s.items.iter().position(|i| i.action == focus))
+            };
+            if n > 0 {
+                ui.select(same.unwrap_or(selected.min(n - 1)));
+            }
+            ui.status.set_text(&note);
+            if ui.state.borrow().strip {
+                ui.flash_hint(&note);
+            }
+        });
+    }
+
+    /// A short note under the grid (there's no status line there), then the key hints again.
+    fn flash_hint(self: &Rc<Self>, note: &str) {
+        self.switch_hint.set_text(note);
+        self.switch_hint.set_visible(true);
+        let ui = self.clone();
+        glib::timeout_add_local_once(Duration::from_millis(2500), move || {
+            ui.switch_hint.set_text(SWITCH_HINT);
+            ui.switch_hint.set_visible(ui.state.borrow().hold);
+        });
+    }
+
+    /// Arrow keys in the overview: the nearest tile in that direction, by where tiles are on
+    /// screen (workspaces have different numbers of windows, so there are no rows to count).
+    fn step_toward(&self, dx: f32, dy: f32) -> glib::Propagation {
+        let center = |t: &Tile| {
+            t.child.compute_bounds(&self.groups).map(|b| (b.x() + b.width() / 2.0, b.y() + b.height() / 2.0))
+        };
+        let best = {
+            let s = self.state.borrow();
+            let Some(from) = s.tiles.get(s.selected).and_then(center) else { return glib::Propagation::Stop };
+            s.tiles
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != s.selected)
+                .filter_map(|(i, t)| {
+                    let (x, y) = center(t)?;
+                    let (ox, oy) = (x - from.0, y - from.1);
+                    // along the arrow, and the sideways drift counts double
+                    let ahead = ox * dx + oy * dy;
+                    let side = (ox * dy).abs() + (oy * dx).abs();
+                    (ahead > 1.0).then_some((ahead + 2.0 * side, i))
+                })
+                .min_by(|a, b| a.0.total_cmp(&b.0))
+                .map(|(_, i)| i)
+        };
+        if let Some(i) = best {
+            self.select(i);
+        }
+        glib::Propagation::Stop
     }
 
     fn set_setting(self: &Rc<Self>, key: &str, value: Option<&str>) {

@@ -99,10 +99,88 @@ fn watch_windows() {
     WATCHING.store(false, Ordering::SeqCst);
 }
 
+/// A Lua config (`hyprland.lua`) makes `hyprctl dispatch` take an hl.dsp.* expression;
+/// a classic one takes `<dispatcher> <args>`.
+fn lua_config() -> bool {
+    static LUA: std::sync::LazyLock<bool> =
+        std::sync::LazyLock::new(|| dirs::config_dir().is_some_and(|d| d.join("hypr/hyprland.lua").exists()));
+    *LUA
+}
+
+/// One `hyprctl dispatch`, in whichever syntax the config uses.
+struct Dispatch {
+    lua: String,
+    classic: Vec<String>,
+}
+
+impl Dispatch {
+    fn new(lua: String, classic: &[&str]) -> Self {
+        Dispatch { lua, classic: classic.iter().map(|s| s.to_string()).collect() }
+    }
+
+    fn argv(&self) -> Vec<&str> {
+        let mut argv = vec!["dispatch"];
+        if lua_config() {
+            argv.push(&self.lua);
+        } else {
+            argv.extend(self.classic.iter().map(String::as_str));
+        }
+        argv
+    }
+}
+
+/// Run dispatches one after the other on a thread: a focus has to land before a fullscreen.
+fn dispatch(steps: Vec<Dispatch>) {
+    std::thread::spawn(move || {
+        for step in steps {
+            let _ = Command::new("hyprctl").args(step.argv()).stdout(std::process::Stdio::null()).status();
+        }
+    });
+}
+
+fn focus(target: &str) -> Dispatch {
+    Dispatch::new(format!("hl.dsp.focus({{ window = \"{target}\" }})"), &["focuswindow", target])
+}
+
+/// Move without following; a number stays a number in Lua, "special:x" or "name:web" are strings.
+fn move_to(target: &str, ws: &str) -> Dispatch {
+    let lua_ws = if ws.parse::<i64>().is_ok() { ws.to_owned() } else { format!("\"{ws}\"") };
+    Dispatch::new(
+        format!("hl.dsp.window.move({{ workspace = {lua_ws}, window = \"{target}\", follow = false }})"),
+        &["movetoworkspacesilent", &format!("{ws},{target}")],
+    )
+}
+
 pub fn focus_window(address: &str) {
-    // Hyprland's Lua config: `hyprctl dispatch` takes an hl.dsp.* expression
-    let lua = format!("hl.dsp.focus({{ window = \"address:{address}\" }})");
-    spawn(&["hyprctl", "dispatch", &lua]);
+    dispatch(vec![focus(&format!("address:{address}"))]);
+}
+
+pub fn window_op(address: &str, op: &crate::item::WindowOp) {
+    use crate::item::WindowOp;
+    let target = format!("address:{address}");
+    let steps = match op {
+        WindowOp::Close => {
+            vec![Dispatch::new(format!("hl.dsp.window.close({{ window = \"{target}\" }})"), &["closewindow", &target])]
+        }
+        WindowOp::Fullscreen => vec![
+            focus(&target),
+            Dispatch::new(format!("hl.dsp.window.fullscreen({{ window = \"{target}\" }})"), &["fullscreen", "0"]),
+        ],
+        WindowOp::Minimize => vec![move_to(&target, "special:minimized")],
+        WindowOp::Move(ws) => vec![move_to(&target, ws)],
+        WindowOp::Pull => {
+            let current = Command::new("hyprctl")
+                .args(["activeworkspace", "-j"])
+                .output()
+                .ok()
+                .and_then(|o| serde_json::from_slice::<serde_json::Value>(&o.stdout).ok())
+                .and_then(|v| v.get("id")?.as_i64());
+            let mut steps: Vec<Dispatch> = current.map(|ws| move_to(&target, &ws.to_string())).into_iter().collect();
+            steps.push(focus(&target));
+            steps
+        }
+    };
+    dispatch(steps);
 }
 
 /// `grim -T` captures any window, even on another workspace.

@@ -1,6 +1,7 @@
 // release builds on Windows are a GUI app: no console window next to the launcher
 #![cfg_attr(all(windows, not(debug_assertions), not(feature = "console")), windows_subsystem = "windows")]
 
+mod actions;
 mod config;
 mod engine;
 mod history;
@@ -21,14 +22,15 @@ const USAGE: &str = "zunder — a terminal-styled launcher for Hyprland
 
 usage:
   zunder                 toggle the launcher (starts the server if needed)
-  zunder setup           set up keybinds, autostart and theme for Hyprland (--dry-run, --yes)
+  zunder setup           set up keybinds, autostart and theme for Hyprland (--dry-run, --yes);
+                         `zunder show setup` is the same as a page
   zunder server          run the server (put this in autostart)
   zunder toggle          show or hide the launcher
   zunder show [query]   show, optionally prefilled (e.g. `zunder show 'kill '`)
   zunder hide
   zunder switch          window switcher: opens on the previous window, next on repeat
   zunder switch-prev     same, backwards
-  zunder overview        toggle the switcher without Alt: stays open until you pick a window
+  zunder overview        every window by workspace, stays open until you pick one
   zunder settings [page] open the settings window, e.g. `zunder settings appearance`
   zunder run <key>       run a saved keybind (what the generated Hyprland binds call)
   zunder reload          rescan apps and plugins

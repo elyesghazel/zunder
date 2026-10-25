@@ -83,6 +83,8 @@ pub fn list_windows() -> Vec<Client> {
 
 pub fn focus_window(_id: &str) {}
 
+pub fn window_op(_id: &str, _op: &crate::item::WindowOp) {}
+
 pub fn capture_window(_id: &str, _path: &Path) -> bool {
     false
 }

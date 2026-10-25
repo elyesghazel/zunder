@@ -9,7 +9,8 @@
 //!
 //! search:  called as `script <query>`; each stdout line is a result, either plain text
 //!          (Enter copies it) or JSON: {"title", "subtitle", "hint", "glyph", "action": {"open": "…"}}
-//!          where action is one of run, term, open, copy, focus, fill.
+//!          where action is one of run, term, open, copy, focus, fill, and an optional
+//!          "actions": [{"title": "Copy id", "copy": "42"}] adds entries to the Ctrl+K menu.
 //! command: shows up in the main search by name; Enter runs it once.
 
 use std::fs;
@@ -128,6 +129,9 @@ struct Line {
     preview: Option<String>,
     #[serde(default)]
     action: Action,
+    /// Extra Ctrl+K entries: `[{"title": "Copy id", "copy": "42"}]`.
+    #[serde(default)]
+    actions: Vec<crate::item::MenuAction>,
 }
 
 impl Call {
@@ -158,6 +162,7 @@ impl Call {
                         image: l.image,
                         text: l.preview.map(crate::item::Text::Literal),
                         action: l.action,
+                        actions: l.actions,
                         score,
                         ..Default::default()
                     },
