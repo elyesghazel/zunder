@@ -107,7 +107,8 @@ pub fn menu(item: &Item, windows: &[Client], favorite: bool, query: &str) -> Vec
 }
 
 fn is_local(target: &str) -> bool {
-    !target.contains("://") && Path::new(target).is_absolute()
+    // `/x` isn't absolute on Windows (no drive), but it's still no link
+    !target.contains("://") && (Path::new(target).is_absolute() || target.starts_with('/'))
 }
 
 /// A shell line that opens the configured terminal in `dir`.
