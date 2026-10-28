@@ -1301,11 +1301,12 @@ impl Ui {
         self.select(selected);
         match result {
             Ok(msg) => self.status.set_text(&msg),
-            Err(e) => self.status.set_text(&format!("hyprland: {e}")),
+            Err(e) if cfg!(target_os = "linux") => self.status.set_text(&format!("hyprland: {e}")),
+            Err(e) => self.status.set_text(&e),
         }
     }
 
-    /// `zunder run <key>`, called by the generated Hyprland binds.
+    /// `zunder run <key>`, called by the generated Hyprland binds (on Windows, by the hotkey thread).
     fn run_bind(self: &Rc<Self>, key: &str) {
         let Some(item) = self.state.borrow().engine.binds.find(key).cloned() else {
             eprintln!("zunder: no keybind {key}");

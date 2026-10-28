@@ -54,7 +54,9 @@ Enter) faster; zunder isn't trying to be a Raycast clone.
 - [ ] log in with GitHub; favorites, themes, plugins and settings in a private gist
 
 **0.6: macOS and Windows parity**
-- [ ] global shortcuts and clipboard history on both (ALT+TAB stays Linux-only: both systems have their own)
+- [x] global shortcuts on Windows
+- [ ] global shortcuts on macOS
+- [ ] clipboard history on both (ALT+TAB stays Linux-only: both systems have their own)
 
 **Later**
 - [ ] Raycast extension bridge (optional)
@@ -278,7 +280,8 @@ and window previews stay Linux-only.
   first launch stays right-click → Open.
 
 **Windows:**
-- Hotkeys: `RegisterHotKey`.
+- [x] Hotkeys: `RegisterHotKey` on the thread that already owns ALT+SPACE; `install_binds` hands it
+  the list and waits for which combos Windows refused.
 - Clipboard history: `AddClipboardFormatListener`.
 
 ---

@@ -171,6 +171,9 @@ keys Hyprland already binds never reach zunder.
 
 A shortcut on a plugin or `settings` entry opens zunder with that prefix typed.
 
+On Windows there is no config file: zunder registers the shortcuts with Windows itself while it
+runs. A key another program already has can't be taken; zunder says so at the bottom.
+
 ## Launch history
 
 Every launch is appended to `~/.local/share/zunder/launches.jsonl`. Nothing trims it. `history`

@@ -47,7 +47,7 @@ three on every push), with these parts working there so far:
 | full-screen overlay with backdrop | ✓ | borderless window | borderless window, centered |
 | ALT+TAB switcher and previews | ✓ | — (⌘Tab is built in) | — (Alt+Tab is built in) |
 | tray icon | ✓ | ✓ menu bar | ✓ notification area |
-| global shortcuts (Ctrl+B) | ✓ | planned | planned |
+| global shortcuts (Ctrl+B) | ✓ | planned | ✓ |
 | clipboard history | ✓ cliphist | planned | planned |
 | install | one-line installer, Arch package | `.dmg` | `zunder-windows-setup.exe` |
 | updates from the start screen | ✓ | opens the download | ✓ installs silently |
@@ -121,7 +121,7 @@ Download [zunder-windows-setup.exe](https://github.com/elyesghazel/zunder/releas
 - Uninstall from Settings → Apps.
 - Updates: when a new version is out, the start screen says so and Enter installs it silently.
 
-Without the window switcher, previews and Ctrl+B shortcuts so far. A portable zip
+Without the window switcher and previews: Windows has its own Alt+Tab. A portable zip
 (`zunder-<version>-windows-x86_64.zip`) is on the release page too: unzip it anywhere and run
 `zunder.cmd`; `zunder-debug.cmd` shows errors in a console.
 

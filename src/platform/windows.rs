@@ -1,5 +1,5 @@
-//! Windows. Apps (Start menu shortcuts), actions, system commands and the tray work; global
-//! shortcuts are still to come. No ALT+TAB switcher: Windows has its own.
+//! Windows. Apps (Start menu shortcuts), actions, system commands, global shortcuts and the tray
+//! work. No ALT+TAB switcher: Windows has its own.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -42,24 +42,136 @@ pub fn init() {
     std::thread::spawn(hotkey_loop);
 }
 
-/// ALT+SPACE opens zunder from anywhere, like Raycast or PowerToys Run. The key is registered
-/// with Windows on a thread with its own message loop; a press toggles zunder through its socket.
+/// The hotkey thread's id, so `install_binds` can wake it up.
+static HOTKEY_THREAD: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+/// New binds for the hotkey thread, with where to send back what happened.
+type Request = (Vec<Bind>, std::sync::mpsc::Sender<Result<String, String>>);
+static REQUEST: std::sync::Mutex<Option<Request>> = std::sync::Mutex::new(None);
+/// Sent to the hotkey thread: register the binds in `REQUEST`.
+const WM_RELOAD_BINDS: u32 = windows_sys::Win32::UI::WindowsAndMessaging::WM_APP + 1;
+/// Hotkey id of ALT+SPACE; the binds from Ctrl+B come after it.
+const TOGGLE: i32 = 1;
+
+/// The global shortcuts: ALT+SPACE opens zunder from anywhere, like Raycast or PowerToys Run,
+/// and every Ctrl+B bind runs its item. Hotkeys belong to the thread that registers them, so
+/// they all live on this one with its own message loop; a press goes to zunder through its socket.
 fn hotkey_loop() {
+    use windows_sys::Win32::System::Threading::GetCurrentThreadId;
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{MOD_ALT, MOD_NOREPEAT, RegisterHotKey, VK_SPACE};
     use windows_sys::Win32::UI::WindowsAndMessaging::{GetMessageW, MSG, WM_HOTKEY};
     // SAFETY: registering for this thread (null window) and pumping its own message queue.
     unsafe {
-        if RegisterHotKey(std::ptr::null_mut(), 1, MOD_ALT | MOD_NOREPEAT, u32::from(VK_SPACE)) == 0 {
+        if RegisterHotKey(std::ptr::null_mut(), TOGGLE, MOD_ALT | MOD_NOREPEAT, u32::from(VK_SPACE)) == 0 {
             eprintln!("zunder: ALT+SPACE is taken by another program; use Ctrl+Alt+Space");
-            return;
+        }
+        // the queue exists now (RegisterHotKey made it), so posted messages can't get lost
+        let _ = HOTKEY_THREAD.set(GetCurrentThreadId());
+        let mut keys = Vec::new();
+        if let Err(e) = register_binds(&crate::store::Binds::load().list, &mut keys) {
+            eprintln!("zunder: {e}");
         }
         let mut msg: MSG = std::mem::zeroed();
         while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
-            if msg.message == WM_HOTKEY {
-                let _ = crate::ipc::send("toggle");
+            match msg.message {
+                WM_HOTKEY if msg.wParam == TOGGLE as usize => {
+                    let _ = crate::ipc::send("toggle");
+                }
+                WM_HOTKEY => {
+                    if let Some(key) = (msg.wParam).checked_sub(TOGGLE as usize + 1).and_then(|i| keys.get(i)) {
+                        let _ = crate::ipc::send(&format!("run {key}"));
+                    }
+                }
+                WM_RELOAD_BINDS => {
+                    if let Some((binds, reply)) = REQUEST.lock().ok().and_then(|mut r| r.take()) {
+                        let _ = reply.send(register_binds(&binds, &mut keys));
+                    }
+                }
+                _ => {}
             }
         }
     }
+}
+
+/// Swap the registered binds for `binds`. `keys[i]` is the bind key behind hotkey id `TOGGLE + 1 + i`.
+/// Runs on the hotkey thread only.
+fn register_binds(binds: &[Bind], keys: &mut Vec<String>) -> Result<String, String> {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{MOD_NOREPEAT, RegisterHotKey, UnregisterHotKey};
+    // SAFETY: thread hotkeys (null window) registered and released on this same thread.
+    unsafe {
+        for i in 0..keys.len() {
+            UnregisterHotKey(std::ptr::null_mut(), TOGGLE + 1 + i as i32);
+        }
+    }
+    keys.clear();
+    let mut failed = Vec::new();
+    for b in binds {
+        let id = TOGGLE + 1 + keys.len() as i32;
+        let ok = hotkey(&b.combo)
+            // SAFETY: as above
+            .is_some_and(|(mods, vk)| unsafe { RegisterHotKey(std::ptr::null_mut(), id, mods | MOD_NOREPEAT, vk) } != 0);
+        if ok {
+            keys.push(crate::store::bind_key(&b.item.id));
+        } else {
+            failed.push(b.combo.as_str());
+        }
+    }
+    match failed.as_slice() {
+        [] => Ok(String::new()),
+        [one] => Err(format!("{one} is taken by another program")),
+        many => Err(format!("{} are taken by other programs", many.join(", "))),
+    }
+}
+
+/// `CTRL + SHIFT + F` (the combo zunder records) → `RegisterHotKey`'s modifiers and virtual key.
+fn hotkey(combo: &str) -> Option<(u32, u32)> {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::*;
+    let mut parts: Vec<&str> = combo.split(" + ").collect();
+    let key = parts.pop()?;
+    let mut mods = 0;
+    for m in parts {
+        mods |= match m {
+            "SUPER" => MOD_WIN,
+            "CTRL" => MOD_CONTROL,
+            "ALT" => MOD_ALT,
+            "SHIFT" => MOD_SHIFT,
+            _ => return None,
+        };
+    }
+    let mut chars = key.chars();
+    let vk = match (chars.next(), chars.next()) {
+        // letters are recorded upper case, which is also their virtual key
+        (Some(c @ ('A'..='Z' | '0'..='9')), None) => c as u16,
+        _ => match key {
+            "Return" => VK_RETURN,
+            "space" => VK_SPACE,
+            "Tab" => VK_TAB,
+            "Escape" => VK_ESCAPE,
+            "BackSpace" => VK_BACK,
+            "Delete" => VK_DELETE,
+            "Insert" => VK_INSERT,
+            "Home" => VK_HOME,
+            "End" => VK_END,
+            "Page_Up" | "Prior" => VK_PRIOR,
+            "Page_Down" | "Next" => VK_NEXT,
+            "Left" => VK_LEFT,
+            "Right" => VK_RIGHT,
+            "Up" => VK_UP,
+            "Down" => VK_DOWN,
+            "comma" => VK_OEM_COMMA,
+            "period" => VK_OEM_PERIOD,
+            "minus" => VK_OEM_MINUS,
+            "equal" | "plus" => VK_OEM_PLUS,
+            "semicolon" => VK_OEM_1,
+            "slash" => VK_OEM_2,
+            "grave" => VK_OEM_3,
+            "bracketleft" => VK_OEM_4,
+            "backslash" => VK_OEM_5,
+            "bracketright" => VK_OEM_6,
+            "apostrophe" => VK_OEM_7,
+            f => VK_F1 + f.strip_prefix('F')?.parse::<u16>().ok().filter(|n| (1..=24).contains(n))? - 1,
+        },
+    };
+    Some((mods, u32::from(vk)))
 }
 
 /// The unpacked folder: `<prefix>\bin\zunder.exe`.
@@ -225,8 +337,17 @@ pub fn is_executable(meta: &fs::Metadata, path: &Path) -> bool {
             .is_some_and(|e| ["exe", "bat", "cmd", "ps1", "py"].contains(&e.to_ascii_lowercase().as_str()))
 }
 
-pub fn install_binds(_binds: &[Bind]) -> Result<String, String> {
-    Err("global shortcuts aren't supported on Windows yet".into())
+/// Hands the binds to the hotkey thread (only it can register them) and waits for the result.
+pub fn install_binds(binds: &[Bind]) -> Result<String, String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::PostThreadMessageW;
+    let thread = *HOTKEY_THREAD.get().ok_or("the shortcut thread isn't running")?;
+    let (reply, result) = std::sync::mpsc::channel();
+    *REQUEST.lock().map_err(|e| e.to_string())? = Some((binds.to_vec(), reply));
+    // SAFETY: posting a plain message without pointers to a thread of this process.
+    if unsafe { PostThreadMessageW(thread, WM_RELOAD_BINDS, 0, 0) } == 0 {
+        return Err("the shortcut thread isn't running".into());
+    }
+    result.recv_timeout(std::time::Duration::from_secs(2)).map_err(|_| "the shortcut thread didn't answer".to_owned())?
 }
 
 /// Folders whose change means the app list needs a rescan.
@@ -412,5 +533,22 @@ fn walk(dir: &Path, apps: &mut Vec<App>) {
                 ..Default::default()
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::hotkey;
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::*;
+
+    #[test]
+    fn turns_combos_into_hotkeys() {
+        assert_eq!(hotkey("CTRL + SHIFT + F"), Some((MOD_CONTROL | MOD_SHIFT, u32::from(b'F'))));
+        assert_eq!(hotkey("SUPER + 1"), Some((MOD_WIN, u32::from(b'1'))));
+        assert_eq!(hotkey("ALT + Return"), Some((MOD_ALT, u32::from(VK_RETURN))));
+        assert_eq!(hotkey("F5"), Some((0, u32::from(VK_F5))));
+        assert_eq!(hotkey("CTRL + F24"), Some((MOD_CONTROL, u32::from(VK_F24))));
+        assert_eq!(hotkey("CTRL + F25"), None);
+        assert_eq!(hotkey("CTRL + dead_acute"), None);
     }
 }
