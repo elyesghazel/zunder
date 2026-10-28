@@ -67,6 +67,7 @@ fn find(term: &str, limit: usize) -> Vec<Item> {
     // the Windows bundle ships fd.exe next to zunder.exe
     let bundled = std::env::current_exe().ok().and_then(|e| Some(e.parent()?.join("fd.exe"))).filter(|p| p.exists());
     let mut fd = Command::new(bundled.unwrap_or_else(|| "fd".into()));
+    crate::platform::no_window(&mut fd);
     fd.args(["--ignore-case", "--absolute-path", "--max-results", "300"]);
     for dir in SKIP {
         fd.args(["--exclude", dir]);

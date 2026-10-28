@@ -137,7 +137,7 @@ struct Line {
 impl Call {
     /// Run the script (blocking; call from a worker thread).
     pub fn run(&self) -> Vec<Item> {
-        let out = match Command::new(&self.plugin.path).arg(&self.arg).output() {
+        let out = match crate::platform::no_window(Command::new(&self.plugin.path).arg(&self.arg)).output() {
             Ok(out) => out,
             Err(e) => return vec![error_item(&format!("failed to run: {e}"))],
         };

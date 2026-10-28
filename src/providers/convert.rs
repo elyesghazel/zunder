@@ -230,9 +230,10 @@ fn cached_rates() -> Option<(Rates, bool)> {
 }
 
 fn fetch_rates() -> Option<Rates> {
-    let out = std::process::Command::new("curl")
-        .args(["-fsSL", "-m", "8", "https://open.er-api.com/v6/latest/USD"])
-        .output()
+    let out = crate::platform::no_window(
+        std::process::Command::new("curl").args(["-fsSL", "-m", "8", "https://open.er-api.com/v6/latest/USD"]),
+    )
+    .output()
         .ok()?;
     let rates: Rates = serde_json::from_slice(&out.stdout).ok()?;
     let path = rates_path();

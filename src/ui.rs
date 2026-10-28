@@ -488,6 +488,14 @@ impl Ui {
             });
         }
 
+        // Alt+F4 or "Close" in the taskbar (Windows, macOS) would destroy the one window zunder
+        // has, and showing it again afterwards crashes GTK: closing only hides it
+        let ui = self.clone();
+        self.window.connect_close_request(move |_| {
+            ui.hide();
+            glib::Propagation::Stop
+        });
+
         // click on the dimmed backdrop closes
         let click = gtk::GestureClick::new();
         let ui = self.clone();

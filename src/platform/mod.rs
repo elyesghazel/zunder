@@ -95,6 +95,18 @@ fn detach(cmd: &mut Command) {
     cmd.process_group(0);
 }
 
+/// Windows gives a console program started from a GUI app its own console window: keep the
+/// background ones (fd, plugins, curl, previews) invisible.
+pub fn no_window(cmd: &mut Command) -> &mut Command {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 #[cfg(windows)]
 fn detach(cmd: &mut Command) {
     use std::os::windows::process::CommandExt;
@@ -120,6 +132,7 @@ pub fn shell(cmd: &str) -> Command {
         c
     };
     c.stdin(Stdio::null());
+    no_window(&mut c);
     c
 }
 
@@ -140,7 +153,7 @@ pub fn run_shell(cmd: &str) {
 #[allow(dead_code)]
 fn pipe_to(program: &str, args: &[&str], text: &str) {
     use std::io::Write;
-    let child = Command::new(program).args(args).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+    let child = no_window(Command::new(program).args(args)).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
     if let Ok(mut child) = child {
         if let Some(mut stdin) = child.stdin.take() {
             let _ = stdin.write_all(text.as_bytes());

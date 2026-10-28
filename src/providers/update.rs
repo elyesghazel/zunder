@@ -48,7 +48,7 @@ fn refresh() -> Option<String> {
     } else if let Ok(f) = fs::File::options().append(true).open(&path) {
         let _ = f.set_modified(std::time::SystemTime::now());
     }
-    let out = std::process::Command::new("curl").args(["-fsSL", "-m", "8", API]).output();
+    let out = crate::platform::no_window(std::process::Command::new("curl").args(["-fsSL", "-m", "8", API])).output();
     if let Ok(out) = out
         && let Ok(latest) = serde_json::from_slice::<Latest>(&out.stdout)
         && !latest.tag_name.is_empty()
