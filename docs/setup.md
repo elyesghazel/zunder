@@ -41,6 +41,7 @@ end)
 -- conf/binds.lua
 hl.bind("ALT + TAB",         hl.dsp.exec_cmd("zunder switch"))
 hl.bind("ALT + SHIFT + TAB", hl.dsp.exec_cmd("zunder switch-prev"))
+hl.bind("Alt_L", hl.dsp.exec_cmd("zunder alt-up"), { release = true, non_consuming = true })
 hl.bind("SUPER + TAB",       hl.dsp.exec_cmd("zunder overview"))
 hl.bind("ALT + SPACE",       hl.dsp.exec_cmd("zunder toggle"))
 hl.bind("SUPER + V",         hl.dsp.exec_cmd("zunder show 'clip '"))
@@ -78,6 +79,7 @@ exec-once = wl-paste --type text --watch cliphist store
 
 bind = ALT, TAB, exec, zunder switch
 bind = ALT SHIFT, TAB, exec, zunder switch-prev
+bindrn = ALT, ALT_L, exec, zunder alt-up
 bind = SUPER, TAB, exec, zunder overview
 bind = ALT, SPACE, exec, zunder toggle
 bind = SUPER, V, exec, zunder show 'clip '

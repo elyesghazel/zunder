@@ -321,6 +321,10 @@ fn generated(lua: bool, c: &Choice) -> String {
         for (key, cmd) in &binds {
             s += &format!("hl.bind(\"{key}\", hl.dsp.exec_cmd(\"{cmd}\"))\n");
         }
+        if c.switcher {
+            // Hyprland says when Alt goes up, even before zunder has the keyboard (a quick tap)
+            s += "hl.bind(\"Alt_L\", hl.dsp.exec_cmd(\"zunder alt-up\"), { release = true, non_consuming = true })\n";
+        }
         if c.window_rule {
             s += "\nhl.window_rule({\n    name   = \"zunder-settings\",\n    match  = { title = \"^zunder settings$\" },\n    float  = true,\n    size   = \"980 660\",\n    center = true,\n})\n";
         }
@@ -336,6 +340,9 @@ fn generated(lua: bool, c: &Choice) -> String {
         for (key, cmd) in &binds {
             let (mods, k) = key.rsplit_once(" + ").unwrap_or(("", key));
             s += &format!("bind = {}, {k}, exec, {cmd}\n", mods.replace(" + ", " "));
+        }
+        if c.switcher {
+            s += "bindrn = ALT, ALT_L, exec, zunder alt-up\n";
         }
         if c.window_rule {
             s += "\nwindowrule = float, title:^zunder settings$\nwindowrule = size 980 660, title:^zunder settings$\nwindowrule = center, title:^zunder settings$\n";
@@ -642,6 +649,8 @@ mod tests {
         assert!(lua.contains("hl.bind(\"SUPER + TAB\", hl.dsp.exec_cmd(\"zunder overview\"))"));
         let conf = generated(false, &c);
         assert!(conf.contains("bind = ALT SHIFT, TAB, exec, zunder switch-prev"));
+        assert!(conf.contains("bindrn = ALT, ALT_L, exec, zunder alt-up"));
+        assert!(lua.contains("zunder alt-up\"), { release = true"));
         assert!(conf.contains("exec-once = zunder server"));
     }
 }

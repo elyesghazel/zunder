@@ -30,6 +30,7 @@ usage:
   zunder hide
   zunder switch          window switcher: opens on the previous window, next on repeat
   zunder switch-prev     same, backwards
+  zunder alt-up          Alt was let go: the switcher focuses its window (a Hyprland release bind)
   zunder overview        every window by workspace, stays open until you pick one
   zunder settings [page] open the settings window, e.g. `zunder settings appearance`
   zunder run <key>       run a saved keybind (what the generated Hyprland binds call)
@@ -78,7 +79,7 @@ fn main() -> ExitCode {
             println!("{USAGE}");
             ExitCode::SUCCESS
         }
-        Some(cmd @ ("toggle" | "show" | "hide" | "switch" | "switch-prev" | "overview" | "reload" | "quit" | "settings" | "run")) => {
+        Some(cmd @ ("toggle" | "show" | "hide" | "switch" | "switch-prev" | "alt-up" | "overview" | "reload" | "quit" | "settings" | "run")) => {
             let line = match (cmd, args.get(1)) {
                 ("settings", Some(page)) => format!("open-settings {page}"),
                 ("settings", None) => "open-settings".to_owned(),

@@ -53,6 +53,9 @@ struct State {
     preview_column: bool,
     /// Ctrl+B was pressed: the next key combo becomes a global keybind for this item.
     recording: Option<Item>,
+    /// When Hyprland last said Alt went up while the switcher wasn't open yet: on a quick tap
+    /// the release can arrive before `switch` does.
+    alt_up: Option<std::time::Instant>,
     /// ALT+TAB shows the thumbnail grid instead of the panel (until you type).
     strip: bool,
     /// One per item while `strip` is on.
@@ -328,6 +331,7 @@ impl Ui {
                 seq: 0,
                 sections: Vec::new(),
                 recording: None,
+                alt_up: None,
                 preview_column: false,
                 had_focus: false,
                 strip: false,
@@ -509,6 +513,16 @@ impl Ui {
         self.window.add_controller(click);
     }
 
+    /// A quick tap: Alt was already up (by Hyprland's release bind) when `switch` arrived, so
+    /// nothing is left to release. Switch right away.
+    fn released_early(self: &Rc<Self>) {
+        let at = self.state.borrow_mut().alt_up.take();
+        if at.is_some_and(|t| t.elapsed() < Duration::from_millis(250)) && self.alt_release_switches() {
+            let i = self.state.borrow().selected;
+            self.activate(i);
+        }
+    }
+
     fn alt_release_switches(&self) -> bool {
         let s = self.state.borrow();
         config::get().alt_release && s.switch && !s.hold && s.menu.is_none() && self.entry.text().is_empty()
@@ -531,7 +545,17 @@ impl Ui {
             "toggle" | "show" => self.show(false),
             "hide" => self.hide(),
             "switch" | "switch-prev" if visible => self.step(if cmd == "switch" { 1 } else { -1 }),
-            "switch" => self.show(true),
+            "switch" => {
+                self.show(true);
+                self.released_early();
+            }
+            "alt-up" if visible => {
+                if self.alt_release_switches() {
+                    let i = self.state.borrow().selected;
+                    self.activate(i);
+                }
+            }
+            "alt-up" => self.state.borrow_mut().alt_up = Some(std::time::Instant::now()),
             "overview" if visible => self.hide(),
             "overview" => {
                 self.state.borrow_mut().hold = true;
@@ -541,6 +565,7 @@ impl Ui {
                 self.show(true);
                 let n = self.state.borrow().items.len();
                 self.select(n.saturating_sub(1));
+                self.released_early();
             }
             "open-settings" => self.open_settings(None),
             cmd if cmd.starts_with("open-settings ") => self.open_settings(cmd.strip_prefix("open-settings ")),
