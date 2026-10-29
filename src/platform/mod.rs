@@ -67,6 +67,12 @@ mod windows;
 #[cfg(windows)]
 pub use windows::*;
 
+#[cfg(windows)]
+#[path = "clipboard_windows.rs"]
+mod clipboard;
+#[cfg(windows)]
+pub use clipboard::copy;
+
 /// An entry for the System section.
 pub struct SystemCommand {
     pub title: &'static str,

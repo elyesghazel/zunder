@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use gtk4 as gtk;
 use gtk4::prelude::*;
 
-use super::{SystemCommand, pipe_to, spawn};
+use super::{SystemCommand, spawn};
 use crate::providers::apps::App;
 use crate::providers::windows::Client;
 use crate::store::Bind;
@@ -327,10 +327,6 @@ fn shell_execute(target: &str, params: Option<&str>) -> bool {
     let code = unsafe { ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), file.as_ptr(), params, std::ptr::null(), SW_SHOWNORMAL) };
     // anything up to 32 is an error code
     code as isize > 32
-}
-
-pub fn copy(text: &str) {
-    pipe_to("clip", &[], text);
 }
 
 pub fn run_in_terminal(cmd: &str) {
