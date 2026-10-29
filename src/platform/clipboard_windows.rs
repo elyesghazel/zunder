@@ -61,11 +61,27 @@ pub fn watch() {
     }
 }
 
+/// Timer that reads the clipboard a moment after it changed.
+const SETTLE: usize = 1;
+
 unsafe extern "system" fn on_message(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{DefWindowProcW, WM_CLIPBOARDUPDATE};
-    if msg == WM_CLIPBOARDUPDATE {
-        record(hwnd);
-        return 0;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{DefWindowProcW, KillTimer, SetTimer, WM_CLIPBOARDUPDATE, WM_TIMER};
+    match msg {
+        // the program that copied is often still writing (Office and .NET flush in several
+        // steps): opening the clipboard right away makes its next write fail. A new change
+        // restarts the timer, so a burst is read once.
+        WM_CLIPBOARDUPDATE => {
+            // SAFETY: a timer on our own window, without a callback (it posts WM_TIMER).
+            unsafe { SetTimer(hwnd, SETTLE, 150, None) };
+            return 0;
+        }
+        WM_TIMER if wparam == SETTLE => {
+            // SAFETY: the timer set above, on the same window.
+            unsafe { KillTimer(hwnd, SETTLE) };
+            record(hwnd);
+            return 0;
+        }
+        _ => {}
     }
     // SAFETY: the default handling, with the arguments Windows passed in.
     unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
