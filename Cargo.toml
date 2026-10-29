@@ -1,6 +1,6 @@
 [package]
 name = "zunder"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2024"
 description = "Terminal-styled launcher and ALT+TAB window switcher for Hyprland"
 license = "MIT"
