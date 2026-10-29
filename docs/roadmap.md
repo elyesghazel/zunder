@@ -55,7 +55,7 @@ Enter) faster; zunder isn't trying to be a Raycast clone.
 
 **0.6: macOS and Windows parity**
 - [x] global shortcuts on Windows
-- [ ] global shortcuts on macOS
+- [x] global shortcuts on macOS
 - [x] clipboard history on both (ALT+TAB stays Linux-only: both systems have their own)
 
 **Later**
@@ -272,7 +272,8 @@ No ALT+TAB switcher on either: macOS has ⌘Tab and Windows has Alt+Tab built in
 and window previews stay Linux-only.
 
 **macOS:**
-- Hotkeys: the `global-hotkey` crate.
+- [x] Hotkeys: Carbon's `RegisterEventHotKey` on the main thread (no accessibility permission);
+  GDK passes the presses on through `[NSApp sendEvent:]`.
 - [x] Clipboard history: zunder's own store (`src/clips.rs`), filled by polling
   `NSPasteboard`'s change count twice a second; concealed and transient entries are skipped.
 - A centered `NSPanel`, through the `objc2` crates.

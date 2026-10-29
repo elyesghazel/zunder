@@ -1,5 +1,5 @@
-//! macOS. Apps, actions, system commands and the menu bar icon work; global shortcuts are still
-//! to come. No ALT+TAB switcher: macOS has ⌘Tab.
+//! macOS. Apps, actions, system commands, global shortcuts and the menu bar icon work. No ALT+TAB
+//! switcher: macOS has ⌘Tab.
 
 use std::fs;
 use std::path::Path;
@@ -11,6 +11,9 @@ use super::{SystemCommand, spawn};
 use crate::providers::apps::App;
 use crate::providers::windows::Client;
 use crate::store::Bind;
+
+#[path = "hotkeys_macos.rs"]
+mod hotkeys;
 
 /// No layer shell on macOS: a borderless window that the window manager centers.
 pub fn init_overlay(window: &gtk::ApplicationWindow) {
@@ -30,6 +33,8 @@ pub fn update_hint() -> &'static str {
 /// Called once at startup, before GTK: starts the clipboard watcher.
 pub fn init() {
     std::thread::spawn(super::clipboard::watch);
+    // the shortcuts want the NSApplication GTK sets up, so they come with the first loop iteration
+    gtk::glib::idle_add_once(hotkeys::start);
 }
 
 /// Called right after the launcher is shown: center it on its screen, again on every size change
@@ -138,8 +143,9 @@ pub fn is_executable(meta: &fs::Metadata, _path: &Path) -> bool {
     meta.permissions().mode() & 0o111 != 0
 }
 
-pub fn install_binds(_binds: &[Bind]) -> Result<String, String> {
-    Err("global shortcuts aren't supported on macOS yet".into())
+/// Swaps the registered Ctrl+B shortcuts for `binds`. Called from the UI, on the main thread.
+pub fn install_binds(binds: &[Bind]) -> Result<String, String> {
+    hotkeys::register_binds(binds)
 }
 
 /// Folders whose change means the app list needs a rescan.

@@ -10,7 +10,7 @@
 | **App launcher** | every `.desktop` app (flatpak too), fuzzy matched on name, keywords and binary |
 | **Start screen** | favorites, open windows, your most used apps, suggestions so it's never empty |
 | **Favorites** | `Ctrl+F` pins any result to the start screen |
-| **Global shortcuts** | `Ctrl+B` gives any result a system-wide Hyprland keybind |
+| **Global shortcuts** | `Ctrl+B` gives any result a system-wide shortcut |
 | **Launch history** | `history`: everything you ever ran, searchable, never cleared |
 | **World clock** | `time in ny`, `time in 2h in tokyo`, `3pm ny in zurich` |
 | **Calculator** | `2^10/3`, `sqrt(2)*pi`, Enter copies |
@@ -171,8 +171,9 @@ keys Hyprland already binds never reach zunder.
 
 A shortcut on a plugin or `settings` entry opens zunder with that prefix typed.
 
-On Windows there is no config file: zunder registers the shortcuts with Windows itself while it
-runs. A key another program already has can't be taken; zunder says so at the bottom.
+On Windows and macOS there is no config file: zunder registers the shortcuts with the system
+itself while it runs. A key another program already has can't be taken; zunder says so at the
+bottom. On macOS, SUPER is ⌘ and ALT is Option.
 
 ## Launch history
 

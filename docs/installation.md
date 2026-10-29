@@ -42,12 +42,12 @@ three on every push), with these parts working there so far:
 |---|---|---|---|
 | launcher, search, calculator, conversion, time, emoji, files, plugins, themes, settings | ✓ | ✓ | ✓ |
 | apps | ✓ `.desktop` | ✓ `.app` bundles | ✓ Start menu, with their icons |
-| open with a key | ✓ any Hyprland bind | planned | ✓ ALT+SPACE (and Ctrl+Alt+Space) |
+| open with a key | ✓ any Hyprland bind | ✓ Option+Space | ✓ ALT+SPACE (and Ctrl+Alt+Space) |
 | lock, sleep, restart, shut down | ✓ | ✓ | ✓ |
 | full-screen overlay with backdrop | ✓ | borderless window | borderless window, centered |
 | ALT+TAB switcher and previews | ✓ | — (⌘Tab is built in) | — (Alt+Tab is built in) |
 | tray icon | ✓ | ✓ menu bar | ✓ notification area |
-| global shortcuts (Ctrl+B) | ✓ | planned | ✓ |
+| global shortcuts (Ctrl+B) | ✓ | ✓ | ✓ |
 | clipboard history | ✓ cliphist | ✓ | ✓ |
 | install | one-line installer, Arch package | `.dmg` | `zunder-windows-setup.exe` |
 | updates from the start screen | ✓ | opens the download | ✓ downloads and installs |
@@ -105,8 +105,9 @@ Applications. zunder isn't notarized by Apple (that needs a paid developer accou
 start is blocked: System Settings → Privacy & Security → **Open Anyway**. Or once in a terminal:
 `xattr -dr com.apple.quarantine /Applications/zunder.app`.
 
-The window switcher, previews and global shortcuts don't exist on macOS yet, so open it from
-Spotlight or bind `zunder toggle` to a key (skhd, Raycast…).
+Option+Space opens zunder from anywhere while it runs. If another app already has Option+Space,
+zunder says so on start; bind `zunder toggle` to a key yourself then (skhd, Raycast…). The window
+switcher and previews don't exist on macOS: ⌘Tab is built in.
 
 ## Windows
 
