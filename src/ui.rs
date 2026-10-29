@@ -163,7 +163,8 @@ fn apply_config_css() {
         ".panel, .switcher {{ font-family: \"{}\", \"JetBrainsMono NF\", monospace; font-size: {}pt; }}\nwindow.zunder {{ background: alpha(black, {}); }}\n",
         cfg.font.replace('"', ""),
         cfg.font_size,
-        cfg.dim.clamp(0.0, 1.0)
+        // no full-screen backdrop on Windows: the window only wraps the panel and stays clear
+        if cfg!(windows) { 0.0 } else { cfg.dim.clamp(0.0, 1.0) }
     );
     CONFIG_CSS.with(|p| p.load_from_string(&css));
 

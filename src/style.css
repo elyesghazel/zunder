@@ -9,10 +9,6 @@
 @define-color sel    #262636;
 @define-color hover  #1b1b27;
 
-window.zunder {
-  background: alpha(black, 0.35);
-}
-
 .panel {
   background: @bg;
   color: @fg;

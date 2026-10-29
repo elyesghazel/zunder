@@ -56,7 +56,7 @@ hide_windows = []                            # window classes to leave out, e.g.
 | `font_size` | number | in pt |
 | `width` | number | panel width in px |
 | `height` | number | height of the result list in px |
-| `dim` | number | darkness of the backdrop |
+| `dim` | number | darkness of the backdrop (not on Windows: there is no full-screen backdrop) |
 | `accent` | text | overrides the theme's accent color |
 | `icons` | on/off | app icons from your icon theme instead of glyphs |
 | `previews` | on/off | window screenshots in ALT+TAB |
