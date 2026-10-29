@@ -70,7 +70,10 @@ pub use windows::*;
 #[cfg(windows)]
 #[path = "clipboard_windows.rs"]
 mod clipboard;
-#[cfg(windows)]
+#[cfg(target_os = "macos")]
+#[path = "clipboard_macos.rs"]
+mod clipboard;
+#[cfg(not(target_os = "linux"))]
 pub use clipboard::copy;
 
 /// An entry for the System section.

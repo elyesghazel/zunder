@@ -7,7 +7,7 @@ use std::path::Path;
 use gtk4 as gtk;
 use gtk4::prelude::*;
 
-use super::{SystemCommand, pipe_to, spawn};
+use super::{SystemCommand, spawn};
 use crate::providers::apps::App;
 use crate::providers::windows::Client;
 use crate::store::Bind;
@@ -91,10 +91,6 @@ pub fn capture_window(_id: &str, _path: &Path) -> bool {
 
 pub fn open(target: &str) {
     spawn(&["open", target]);
-}
-
-pub fn copy(text: &str) {
-    pipe_to("pbcopy", &[], text);
 }
 
 pub fn run_in_terminal(cmd: &str) {
