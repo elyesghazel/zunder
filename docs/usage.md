@@ -17,7 +17,7 @@
 | **Conversion** | `5 km in mi`, `30c`, `2 gb in mib`, `100 usd in chf`: units and 160 currencies |
 | **Files** | files from your home folder show up as you type; `f name` for only files, images get a preview |
 | **Emoji** | `fire` already shows 🔥; `:heart` for the whole picker |
-| **Clipboard** | `clip`: cliphist history with fuzzy search; full text or image on the right; `Ctrl+F` pins a clip |
+| **Clipboard** | `clip`: clipboard history with fuzzy search; full text or image on the right; `Ctrl+F` pins a clip |
 | **Shell** | `> cmd` runs in your terminal or in the background |
 | **System** | lock, suspend, reboot, shut down, log out |
 | **Other** | fallback for anything: web search (engine of your choice), or Ask AI when an `ai` plugin is installed |
@@ -253,14 +253,27 @@ or the GitHub shortcode: `:red hea` → ❤️. Enter copies.
 
 ## Clipboard
 
-`clip` shows cliphist's history, newest first, images included. Text after `clip ` fuzzy searches
-it. Enter copies the entry again. The pane on the right shows the selected entry in full: the
-whole text, scrollable and wrapped, or the image. Both are decoded the first time you select the
-entry, so the list itself opens instantly. zunder doesn't keep a history of its own, so
-cliphist's own `-max-items` decides how far back it goes.
+`clip` shows your clipboard history, newest first, images included. Text after `clip ` fuzzy
+searches it. Enter copies the entry again. The pane on the right shows the selected entry in full:
+the whole text, scrollable and wrapped, or the image.
+
+Where the history comes from:
+
+- **Linux:** cliphist. zunder doesn't keep a history of its own there, so cliphist's own
+  `-max-items` decides how far back it goes. Entries are decoded the first time you select them,
+  so the list itself opens instantly.
+- **Windows and macOS:** zunder keeps its own while the server runs: text and images (as PNG),
+  the last 300 entries, in `clipboard` under zunder's data folder (`%APPDATA%\zunder` on Windows,
+  `~/Library/Application Support/zunder` on macOS). Copying something again moves it to the top.
+  Turn it off with `clipboard_history = false` or in Settings → General.
+
+What password managers mark as private is never recorded: on Windows content flagged for
+clipboard history tools (`ExcludeClipboardContentFromMonitorProcessing`,
+`CanIncludeInClipboardHistory` = 0, `Clipboard Viewer Ignore`), on macOS the
+`org.nspasteboard.ConcealedType` and `TransientType` markers. On Linux that's up to cliphist.
 
 Ctrl+F pins an entry. zunder saves its content (text in `favorites.json`, images in
-`~/.local/share/zunder/clips`), so it stays even after cliphist drops it. Pinned clips sit at the
+`~/.local/share/zunder/clips`), so it stays even after the history drops it. Pinned clips sit at the
 top of `clip` and on the start screen with your other favorites; Enter copies them again, Ctrl+F
 unpins.
 

@@ -56,7 +56,7 @@ Enter) faster; zunder isn't trying to be a Raycast clone.
 **0.6: macOS and Windows parity**
 - [x] global shortcuts on Windows
 - [ ] global shortcuts on macOS
-- [ ] clipboard history on both (ALT+TAB stays Linux-only: both systems have their own)
+- [x] clipboard history on both (ALT+TAB stays Linux-only: both systems have their own)
 
 **Later**
 - [ ] Raycast extension bridge (optional)
@@ -273,7 +273,8 @@ and window previews stay Linux-only.
 
 **macOS:**
 - Hotkeys: the `global-hotkey` crate.
-- Clipboard history: our own watcher with `arboard` polling.
+- [x] Clipboard history: zunder's own store (`src/clips.rs`), filled by polling
+  `NSPasteboard`'s change count twice a second; concealed and transient entries are skipped.
 - A centered `NSPanel`, through the `objc2` crates.
 - Login item.
 - Signed and notarized dmg, once there is an Apple Developer account. Without it the
@@ -282,7 +283,9 @@ and window previews stay Linux-only.
 **Windows:**
 - [x] Hotkeys: `RegisterHotKey` on the thread that already owns ALT+SPACE; `install_binds` hands it
   the list and waits for which combos Windows refused.
-- Clipboard history: `AddClipboardFormatListener`.
+- [x] Clipboard history: `AddClipboardFormatListener` on a message-only window, text and images
+  into the same store; entries password managers mark as private are skipped. Copying goes
+  through the clipboard API instead of `clip.exe`, which mangled non-ASCII text.
 
 ---
 

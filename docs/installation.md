@@ -48,7 +48,7 @@ three on every push), with these parts working there so far:
 | ALT+TAB switcher and previews | ✓ | — (⌘Tab is built in) | — (Alt+Tab is built in) |
 | tray icon | ✓ | ✓ menu bar | ✓ notification area |
 | global shortcuts (Ctrl+B) | ✓ | planned | ✓ |
-| clipboard history | ✓ cliphist | planned | planned |
+| clipboard history | ✓ cliphist | ✓ | ✓ |
 | install | one-line installer, Arch package | `.dmg` | `zunder-windows-setup.exe` |
 | updates from the start screen | ✓ | opens the download | ✓ downloads and installs |
 
