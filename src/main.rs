@@ -2,6 +2,10 @@
 #![cfg_attr(all(windows, not(debug_assertions), not(feature = "console")), windows_subsystem = "windows")]
 
 mod actions;
+// Linux keeps its history in cliphist; the tests run everywhere
+#[cfg(any(not(target_os = "linux"), test))]
+#[cfg_attr(target_os = "linux", allow(dead_code))]
+mod clips;
 mod config;
 mod engine;
 mod history;

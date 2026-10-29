@@ -1,5 +1,5 @@
-//! Windows. Apps (Start menu shortcuts), actions, system commands, global shortcuts and the tray
-//! work. No ALT+TAB switcher: Windows has its own.
+//! Windows. Apps (Start menu shortcuts), actions, system commands, global shortcuts, clipboard
+//! history (`clipboard_windows.rs`) and the tray work. No ALT+TAB switcher: Windows has its own.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -53,10 +53,12 @@ pub fn update_hint() -> &'static str {
 }
 
 /// Startup: make the bundled Nerd Font available. On Windows the font is called
-/// "JetBrainsMono NF", which the CSS lists next to its Linux name.
+/// "JetBrainsMono NF", which the CSS lists next to its Linux name. Then the global shortcuts
+/// and the clipboard watcher, each on its own thread with its own message loop.
 pub fn init() {
     install_fonts();
     std::thread::spawn(hotkey_loop);
+    std::thread::spawn(super::clipboard::watch);
 }
 
 /// The hotkey thread's id, so `install_binds` can wake it up.

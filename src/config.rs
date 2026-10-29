@@ -44,6 +44,8 @@ pub struct Config {
     pub update_check: bool,
     /// A tray icon while the server runs (menu bar on macOS).
     pub tray: bool,
+    /// Windows and macOS: keep a history of what you copy for `clip` (Linux uses cliphist).
+    pub clipboard_history: bool,
 }
 
 impl Default for Config {
@@ -68,6 +70,7 @@ impl Default for Config {
             hide_windows: Vec::new(),
             update_check: true,
             tray: true,
+            clipboard_history: true,
         }
     }
 }
@@ -153,6 +156,8 @@ pub const SETTINGS: &[Setting] = &[
     Setting { key: "search_url", group: "General", title: "Search engine", help: "URL with {q} for the query" },
     Setting { key: "update_check", group: "General", title: "Check for updates", help: "once a day, shows a note on the start screen" },
     Setting { key: "tray", group: "General", title: "Tray icon", help: "shows zunder runs; menu with open, settings, reload, quit" },
+    #[cfg(not(target_os = "linux"))]
+    Setting { key: "clipboard_history", group: "General", title: "Clipboard history", help: "remembers what you copy for `clip`, skips passwords" },
     Setting { key: "currency", group: "General", title: "Currency", help: "for `100 usd`, e.g. CHF; empty = from your time zone" },
 ];
 

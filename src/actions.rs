@@ -78,6 +78,10 @@ pub fn menu(item: &Item, windows: &[Client], favorite: bool, query: &str) -> Vec
                 add("Open link", "\u{f0c1}", "", Action::Open(text.trim().to_owned()));
             }
         }
+        Action::CopyImage(path) => {
+            add("Copy", "\u{f0c5}", "↵", Action::CopyImage(path.clone()));
+            add("Open image", "\u{f03e}", "", Action::Open(path.clone()));
+        }
         Action::Fill(text) => add("Open", "\u{f061}", "↵", Action::Fill(text.clone())),
         Action::Window { .. } | Action::Set { .. } | Action::None => {}
     }

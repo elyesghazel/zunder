@@ -47,8 +47,8 @@ ksni = { version = "0.3.7", default-features = false, features = ["blocking", "a
 [target.'cfg(target_os = "macos")'.dependencies]
 gdk4-macos = "0.11.5"
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSScreen", "NSResponder", "NSGraphics", "NSStatusBar", "NSStatusItem", "NSStatusBarButton", "NSButton", "NSControl", "NSView", "NSMenu", "NSMenuItem", "NSImage", "NSPasteboard", "objc2-core-foundation"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSData", "NSString"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSScreen", "NSResponder", "NSGraphics", "NSStatusBar", "NSStatusItem", "NSStatusBarButton", "NSButton", "NSControl", "NSView", "NSMenu", "NSMenuItem", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSPasteboard", "objc2-core-foundation"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSData", "NSString", "NSArray", "NSDictionary"] }
 
 [target."cfg(windows)".dependencies]
 gdk4-win32 = "0.11.5"

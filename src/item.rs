@@ -29,8 +29,8 @@ pub struct Item {
     /// Full text for the preview pane, e.g. a clipboard entry longer than its one-line title.
     #[serde(skip)]
     pub text: Option<Text>,
-    /// A cliphist list line: Ctrl+F pins the decoded content instead of this entry, which
-    /// cliphist may drop later.
+    /// A clipboard history entry (cliphist list line, or a `clips` id on Windows and macOS):
+    /// Ctrl+F pins its content instead of this entry, which the history may drop later.
     #[serde(skip)]
     pub pin: Option<String>,
     /// Splits a provider's results into several sections (the settings page uses it).
@@ -48,6 +48,8 @@ pub struct Item {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Text {
     Literal(String),
+    /// Only cliphist entries need one so far.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Command(String),
 }
 
@@ -96,6 +98,9 @@ pub enum Action {
     Window { address: String, op: WindowOp },
     /// Put text on the clipboard.
     Copy(String),
+    /// Put a PNG file on the clipboard as an image.
+    #[serde(rename = "copy_image")]
+    CopyImage(String),
     /// Open a URL or file with xdg-open.
     Open(String),
     /// Replace the query and keep the launcher open.
@@ -118,6 +123,7 @@ impl Action {
             Action::Focus(id) => platform::focus_window(id),
             Action::Window { address, op } => platform::window_op(address, op),
             Action::Copy(text) => platform::copy(text),
+            Action::CopyImage(path) => platform::copy_image(path),
             Action::Open(target) => platform::open(target),
             Action::Fill(_) | Action::Set { .. } | Action::None => {}
         }

@@ -9,6 +9,7 @@
 //! | `capture_window`     | screenshot of one window into a file                       |
 //! | `scan_apps`          | installed applications                                     |
 //! | `open` / `copy`      | open a file or URL / put text on the clipboard             |
+//! | `copy_image`         | put a PNG file on the clipboard                            |
 //! | `run_in_terminal`    | run a command in a terminal that stays open                |
 //! | `terminal_command`   | wrap an app's command so it runs in a terminal             |
 //! | `system_commands`    | lock, sleep, restart…                                      |
@@ -67,6 +68,7 @@ mod windows;
 #[cfg(windows)]
 pub use windows::*;
 
+/// Clipboard writes and the history watcher; Linux pipes into wl-copy and leaves history to cliphist.
 #[cfg(windows)]
 #[path = "clipboard_windows.rs"]
 mod clipboard;
@@ -74,7 +76,9 @@ mod clipboard;
 #[path = "clipboard_macos.rs"]
 mod clipboard;
 #[cfg(not(target_os = "linux"))]
-pub use clipboard::copy;
+pub use clipboard::{copy, copy_image};
+#[cfg(any(windows, test))]
+mod dib;
 
 /// An entry for the System section.
 pub struct SystemCommand {

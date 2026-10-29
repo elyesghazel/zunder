@@ -27,8 +27,10 @@ pub fn update_hint() -> &'static str {
     "Enter opens the download"
 }
 
-/// Called once at startup, before GTK.
-pub fn init() {}
+/// Called once at startup, before GTK: starts the clipboard watcher.
+pub fn init() {
+    std::thread::spawn(super::clipboard::watch);
+}
 
 /// Called right after the launcher is shown: center it on its screen, again on every size change
 /// (the window grows with the results and the preview column). GTK can't place windows on macOS,

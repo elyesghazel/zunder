@@ -203,6 +203,10 @@ pub fn copy(text: &str) {
     pipe_to("wl-copy", &[], text);
 }
 
+pub fn copy_image(path: &str) {
+    super::run_shell(&format!("wl-copy < {}", crate::item::shell_quote(path)));
+}
+
 pub fn run_in_terminal(cmd: &str) {
     let held = format!("{cmd}; printf '\\n\\033[2m[exit %s] enter to close\\033[0m' $?; read _");
     spawn(&[&crate::config::terminal(), "-e", "sh", "-c", &held]);
