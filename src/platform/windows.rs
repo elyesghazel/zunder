@@ -68,6 +68,8 @@ type Request = (Vec<Bind>, std::sync::mpsc::Sender<Result<String, String>>);
 static REQUEST: std::sync::Mutex<Option<Request>> = std::sync::Mutex::new(None);
 /// Sent to the hotkey thread: register the binds in `REQUEST`.
 const WM_RELOAD_BINDS: u32 = windows_sys::Win32::UI::WindowsAndMessaging::WM_APP + 1;
+/// Sent to the hotkey thread by the keyboard hook: Win+V was pressed.
+const WM_WIN_V: u32 = windows_sys::Win32::UI::WindowsAndMessaging::WM_APP + 2;
 /// Hotkey id of ALT+SPACE; the binds from Ctrl+B come after it.
 const TOGGLE: i32 = 1;
 
@@ -85,6 +87,7 @@ fn hotkey_loop() {
         }
         // the queue exists now (RegisterHotKey made it), so posted messages can't get lost
         let _ = HOTKEY_THREAD.set(GetCurrentThreadId());
+        hook_win_v();
         let mut keys = Vec::new();
         if let Err(e) = register_binds(&crate::store::Binds::load().list, &mut keys) {
             eprintln!("zunder: {e}");
@@ -100,6 +103,9 @@ fn hotkey_loop() {
                         let _ = crate::ipc::send(&format!("run {key}"));
                     }
                 }
+                WM_WIN_V => {
+                    let _ = crate::ipc::send("show clip ");
+                }
                 WM_RELOAD_BINDS => {
                     if let Some((binds, reply)) = REQUEST.lock().ok().and_then(|mut r| r.take()) {
                         let _ = reply.send(register_binds(&binds, &mut keys));
@@ -109,6 +115,74 @@ fn hotkey_loop() {
             }
         }
     }
+}
+
+/// Win+V belongs to Windows' own clipboard panel, so `RegisterHotKey` can't have it. A low-level
+/// keyboard hook sees it first instead (PowerToys does the same) and opens `clip` when the
+/// `win_v` setting is on. Must run on a thread with a message loop, which this one is.
+fn hook_win_v() {
+    use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SetWindowsHookExW, WH_KEYBOARD_LL};
+    // SAFETY: a process-wide hook procedure that lives as long as the program; it's only ever
+    // called on this thread, while it pumps messages.
+    let hook = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(on_key), GetModuleHandleW(std::ptr::null()), 0) };
+    if hook.is_null() {
+        eprintln!("zunder: can't watch for Win+V; Windows keeps its own clipboard panel");
+    }
+}
+
+/// The V of a Win+V that went to zunder, so its key-up is swallowed too.
+static V_TAKEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+unsafe extern "system" fn on_key(code: i32, wparam: usize, lparam: isize) -> isize {
+    use std::sync::atomic::Ordering;
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CallNextHookEx, HC_ACTION, KBDLLHOOKSTRUCT, LLKHF_INJECTED, PostThreadMessageW, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN,
+        WM_SYSKEYUP,
+    };
+    // SAFETY: for HC_ACTION, lparam points at the KBDLLHOOKSTRUCT Windows passes in.
+    let key = (code == HC_ACTION as i32).then(|| unsafe { &*(lparam as *const KBDLLHOOKSTRUCT) });
+    if key.is_some_and(|k| k.vkCode == u32::from(b'V') && k.flags & LLKHF_INJECTED == 0) {
+        // SAFETY: GetAsyncKeyState only reads the key state.
+        let down = |vk: u16| unsafe { GetAsyncKeyState(i32::from(vk)) } < 0;
+        match wparam as u32 {
+            WM_KEYDOWN | WM_SYSKEYDOWN
+                if (down(VK_LWIN) || down(VK_RWIN))
+                    && !down(VK_CONTROL)
+                    && !down(VK_MENU)
+                    && !down(VK_SHIFT)
+                    && crate::config::get().win_v =>
+            {
+                // auto-repeat sends more key-downs: open once
+                if !V_TAKEN.swap(true, Ordering::SeqCst) {
+                    mask_start_menu();
+                    if let Some(&thread) = HOTKEY_THREAD.get() {
+                        // SAFETY: a plain message to our own thread; the work happens outside the hook
+                        unsafe { PostThreadMessageW(thread, WM_WIN_V, 0, 0) };
+                    }
+                }
+                return 1;
+            }
+            WM_KEYUP | WM_SYSKEYUP if V_TAKEN.swap(false, Ordering::SeqCst) => return 1,
+            _ => {}
+        }
+    }
+    // SAFETY: passes the event on unchanged, as every hook must.
+    unsafe { CallNextHookEx(std::ptr::null_mut(), code, wparam, lparam) }
+}
+
+/// The shell opens the Start menu when Win goes up without another key in between, and it never
+/// saw the V. A tap of an unassigned key (0xE8) counts as one.
+fn mask_start_menu() {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, SendInput};
+    let tap = |flags| INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: 0xE8, wScan: 0, dwFlags: flags, time: 0, dwExtraInfo: 0 } },
+    };
+    let inputs = [tap(0), tap(KEYEVENTF_KEYUP)];
+    // SAFETY: two well-formed keyboard inputs, with their exact size.
+    unsafe { SendInput(inputs.len() as u32, inputs.as_ptr(), std::mem::size_of::<INPUT>() as i32) };
 }
 
 /// Swap the registered binds for `binds`. `keys[i]` is the bind key behind hotkey id `TOGGLE + 1 + i`.
@@ -376,7 +450,7 @@ pub fn install_binds(binds: &[Bind]) -> Result<String, String> {
 pub fn app_dirs() -> Vec<PathBuf> {
     ["APPDATA", "PROGRAMDATA"]
         .iter()
-        .filter_map(|v| std::env::var_os(v))
+        .filter_map(std::env::var_os)
         .map(|base| PathBuf::from(base).join("Microsoft\\Windows\\Start Menu\\Programs"))
         .collect()
 }

@@ -46,6 +46,8 @@ pub struct Config {
     pub tray: bool,
     /// Windows and macOS: keep a history of what you copy for `clip` (Linux uses cliphist).
     pub clipboard_history: bool,
+    /// Windows: Win+V opens zunder's clipboard history instead of the Windows one.
+    pub win_v: bool,
 }
 
 impl Default for Config {
@@ -71,6 +73,7 @@ impl Default for Config {
             update_check: true,
             tray: true,
             clipboard_history: true,
+            win_v: true,
         }
     }
 }
@@ -158,6 +161,8 @@ pub const SETTINGS: &[Setting] = &[
     Setting { key: "tray", group: "General", title: "Tray icon", help: "shows zunder runs; menu with open, settings, reload, quit" },
     #[cfg(not(target_os = "linux"))]
     Setting { key: "clipboard_history", group: "General", title: "Clipboard history", help: "remembers what you copy for `clip`, skips passwords" },
+    #[cfg(windows)]
+    Setting { key: "win_v", group: "General", title: "Win+V opens zunder", help: "clipboard history in zunder instead of the Windows panel" },
     Setting { key: "currency", group: "General", title: "Currency", help: "for `100 usd`, e.g. CHF; empty = from your time zone" },
 ];
 

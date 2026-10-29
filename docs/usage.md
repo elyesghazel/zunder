@@ -268,6 +268,9 @@ Where the history comes from:
   `~/Library/Application Support/zunder` on macOS). Copying something again moves it to the top.
   Turn it off with `clipboard_history = false` or in Settings → General.
 
+On Windows, **Win+V** opens it in place of the Windows clipboard panel. To get the Windows one
+back, turn off "Win+V opens zunder" in Settings → General (`win_v = false`).
+
 What password managers mark as private is never recorded: on Windows content flagged for
 clipboard history tools (`ExcludeClipboardContentFromMonitorProcessing`,
 `CanIncludeInClipboardHistory` = 0, `Clipboard Viewer Ignore`), on macOS the

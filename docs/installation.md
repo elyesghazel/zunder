@@ -118,6 +118,8 @@ Download [zunder-windows-setup.exe](https://github.com/elyesghazel/zunder/releas
 - Options: start with Windows, Ctrl+Alt+Space on the Start menu entry, desktop shortcut.
 - **ALT+SPACE** opens zunder (zunder registers it itself; if another program has it, use
   Ctrl+Alt+Space).
+- **Win+V** opens zunder's clipboard history instead of the Windows panel (Settings → General
+  turns that off).
 - File search works out of the box: `fd` comes with the installer.
 - Uninstall from Settings → Apps.
 - Updates: when a new version is out, the start screen says so. Enter downloads the installer
