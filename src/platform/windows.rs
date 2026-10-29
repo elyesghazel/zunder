@@ -18,17 +18,34 @@ pub fn init_overlay(window: &gtk::ApplicationWindow) {
     window.set_resizable(false);
 }
 
-/// Enter on the "new version" notice: download the newest installer and run it silently. It
-/// stops this zunder, updates it in place and starts the daemon again.
+/// Enter on the "new version" notice: fill in `update install`, whose pending row stands for
+/// the download until `install_update` is done.
 pub fn update_action() -> crate::item::Action {
-    let script = "$f = Join-Path $env:TEMP 'zunder-windows-setup.exe'; \
-        Invoke-WebRequest -UseBasicParsing -OutFile $f \
-        'https://github.com/elyesghazel/zunder/releases/latest/download/zunder-windows-setup.exe'; \
-        Start-Process $f -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'";
-    // -EncodedCommand takes UTF-16LE base64, so nothing in the script needs quoting for cmd
-    let utf16: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
-    let encoded = gtk4::glib::base64_encode(&utf16);
-    crate::item::Action::Run(format!("powershell -NoProfile -WindowStyle Hidden -EncodedCommand {encoded}"))
+    crate::item::Action::Fill(crate::providers::update::INSTALL.into())
+}
+
+/// Download the newest installer and start it. No PowerShell: a hidden download-and-run script
+/// is what Defender's attack surface reduction rules block on company laptops. curl.exe ships
+/// with Windows 10 and later; the installer starts like a double-clicked program, shows its
+/// progress, stops this zunder, updates it in place and starts the daemon again.
+pub fn install_update() -> Result<(), String> {
+    const URL: &str = "https://github.com/elyesghazel/zunder/releases/latest/download/zunder-windows-setup.exe";
+    let root = std::env::var_os("SystemRoot").map_or_else(|| PathBuf::from(r"C:\Windows"), PathBuf::from);
+    let setup = std::env::temp_dir().join("zunder-windows-setup.exe");
+    let out = super::no_window(&mut std::process::Command::new(root.join(r"System32\curl.exe")))
+        .args(["-fsSL", "--connect-timeout", "15", "-m", "600", "-A", concat!("zunder/", env!("CARGO_PKG_VERSION")), "-o"])
+        .arg(&setup)
+        .arg(URL)
+        .output()
+        .map_err(|e| format!("couldn't run curl: {e}"))?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr);
+        return Err(err.trim().trim_start_matches("curl: ").to_owned());
+    }
+    if !shell_execute(&setup.to_string_lossy(), Some("/SILENT /SUPPRESSMSGBOXES /NORESTART")) {
+        return Err("couldn't start the installer".into());
+    }
+    Ok(())
 }
 
 pub fn update_hint() -> &'static str {
@@ -295,14 +312,21 @@ pub fn capture_window(_id: &str, _path: &Path) -> bool {
 
 /// Files, folders, URLs and Start-menu shortcuts, the way Explorer opens them.
 pub fn open(target: &str) {
+    shell_execute(target, None);
+}
+
+/// `ShellExecuteW` with the "open" verb and optional command line parameters. False when
+/// Windows couldn't start it.
+fn shell_execute(target: &str, params: Option<&str>) -> bool {
     use windows_sys::Win32::UI::Shell::ShellExecuteW;
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
     let wide = |s: &str| s.encode_utf16().chain([0]).collect::<Vec<u16>>();
-    let (verb, file) = (wide("open"), wide(target));
+    let (verb, file, params) = (wide("open"), wide(target), params.map(wide));
+    let params = params.as_ref().map_or(std::ptr::null(), |p| p.as_ptr());
     // SAFETY: null-terminated UTF-16 strings that outlive the call; no parent window.
-    unsafe {
-        ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), file.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL);
-    }
+    let code = unsafe { ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), file.as_ptr(), params, std::ptr::null(), SW_SHOWNORMAL) };
+    // anything up to 32 is an error code
+    code as isize > 32
 }
 
 pub fn copy(text: &str) {

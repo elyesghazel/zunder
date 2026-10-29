@@ -1,6 +1,6 @@
 //! Start screen notice when a newer zunder is out. Checks GitHub at most once a day, in the
-//! background; turn it off with `update_check = false`. Enter updates in a terminal.
-//! `update` checks right now, whatever the setting says.
+//! background; turn it off with `update_check = false`. Enter updates (in a terminal on Linux,
+//! through `update install` on Windows). `update` checks right now, whatever the setting says.
 
 use std::fs;
 use std::path::PathBuf;
@@ -14,7 +14,11 @@ use crate::item::{Action, Item};
 pub struct Update;
 
 const PREFIX: &str = "update";
+/// Windows only: download the installer and start it (the notice fills this in).
+pub const INSTALL: &str = "update install";
 const API: &str = "https://api.github.com/repos/elyesghazel/zunder/releases/latest";
+#[cfg(windows)]
+const RELEASES: &str = "https://github.com/elyesghazel/zunder/releases/latest";
 
 #[derive(Serialize, Deserialize, Default)]
 struct Latest {
@@ -94,6 +98,39 @@ fn check_now() -> Vec<Item> {
     vec![item]
 }
 
+/// The answer to `update install`: the installer is running, or why it isn't. A failed download
+/// opens the release page, so the update is one click away anyway.
+#[cfg(windows)]
+fn install() -> Vec<Item> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    // the query re-runs this job on every refresh; one download is enough
+    static RUNNING: AtomicBool = AtomicBool::new(false);
+    if RUNNING.swap(true, Ordering::SeqCst) {
+        return Vec::new();
+    }
+    let result = crate::platform::install_update();
+    RUNNING.store(false, Ordering::SeqCst);
+    let item = match result {
+        Ok(()) => Item {
+            title: "Installing the new zunder…".into(),
+            subtitle: "the installer closes zunder and starts it again".into(),
+            glyph: "\u{f01b}".into(),
+            ..Default::default()
+        },
+        Err(e) => {
+            crate::platform::open(RELEASES);
+            Item {
+                title: "Couldn't download the update".into(),
+                subtitle: format!("{e} · opened the release page instead"),
+                glyph: "\u{f071}".into(),
+                action: Action::Open(RELEASES.into()),
+                ..Default::default()
+            }
+        }
+    };
+    vec![item]
+}
+
 /// "0.10.1" → [0, 10, 1], for comparing versions as numbers.
 fn version(v: &str) -> Vec<u64> {
     v.trim_start_matches('v').split('.').map(|p| p.parse().unwrap_or(0)).collect()
@@ -109,12 +146,23 @@ impl Provider for Update {
     }
 
     fn exclusive(&self, query: &str) -> bool {
-        query.trim_end() == PREFIX
+        let query = query.trim_end();
+        query == PREFIX || (cfg!(windows) && query == INSTALL)
     }
 
     fn search(&self, cx: &Ctx) -> Vec<Item> {
         if cx.switch {
             return Vec::new();
+        }
+        if cfg!(windows) && cx.query.trim_end() == INSTALL {
+            // replaced by `install`'s answer once the download is done
+            return vec![Item {
+                id: "pending:update".into(),
+                title: "Downloading the new zunder…".into(),
+                subtitle: "the installer starts when it's done".into(),
+                glyph: "\u{f019}".into(),
+                ..Default::default()
+            }];
         }
         if self.exclusive(cx.query) {
             // replaced by `check_now`'s answer as soon as GitHub replies
@@ -153,6 +201,10 @@ impl Provider for Update {
     }
 
     fn deferred(&self, cx: &Ctx) -> Option<(String, Job)> {
+        #[cfg(windows)]
+        if cx.query.trim_end() == INSTALL {
+            return Some(("Update".to_owned(), Box::new(install)));
+        }
         self.exclusive(cx.query).then(|| ("Update".to_owned(), Box::new(check_now) as Job))
     }
 }

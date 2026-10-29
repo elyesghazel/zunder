@@ -50,7 +50,7 @@ three on every push), with these parts working there so far:
 | global shortcuts (Ctrl+B) | ✓ | planned | ✓ |
 | clipboard history | ✓ cliphist | planned | planned |
 | install | one-line installer, Arch package | `.dmg` | `zunder-windows-setup.exe` |
-| updates from the start screen | ✓ | opens the download | ✓ installs silently |
+| updates from the start screen | ✓ | opens the download | ✓ downloads and installs |
 
 ## Arch Linux: release package
 
@@ -119,7 +119,9 @@ Download [zunder-windows-setup.exe](https://github.com/elyesghazel/zunder/releas
   Ctrl+Alt+Space).
 - File search works out of the box: `fd` comes with the installer.
 - Uninstall from Settings → Apps.
-- Updates: when a new version is out, the start screen says so and Enter installs it silently.
+- Updates: when a new version is out, the start screen says so. Enter downloads the installer
+  and starts it: it shows its progress, closes zunder and starts it again. If the download
+  fails, the release page opens instead.
 
 Without the window switcher and previews: Windows has its own Alt+Tab. A portable zip
 (`zunder-<version>-windows-x86_64.zip`) is on the release page too: unzip it anywhere and run
