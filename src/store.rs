@@ -16,11 +16,11 @@ pub fn data_dir() -> PathBuf {
     dirs::data_dir().unwrap_or_default().join("zunder")
 }
 
-fn read_json<T: for<'de> Deserialize<'de> + Default>(path: &PathBuf) -> T {
+pub(crate) fn read_json<T: for<'de> Deserialize<'de> + Default>(path: &PathBuf) -> T {
     fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
 }
 
-fn write_json<T: Serialize>(path: &PathBuf, value: &T) {
+pub(crate) fn write_json<T: Serialize>(path: &PathBuf, value: &T) {
     if let Some(dir) = path.parent() {
         let _ = fs::create_dir_all(dir);
     }
@@ -86,10 +86,14 @@ pub struct Binds {
     pub list: Vec<Bind>,
 }
 
-/// Stable short key for an item id (FNV-1a), safe to put on a command line.
+/// Stable short key for an item id, safe to put on a command line.
 pub fn bind_key(id: &str) -> String {
-    let hash = id.bytes().fold(0xcbf29ce484222325u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100000001b3));
-    format!("{hash:016x}")
+    format!("{:016x}", fnv1a(id.as_bytes()))
+}
+
+/// FNV-1a: stable across builds, unlike `DefaultHasher`, so saved keys stay valid.
+pub fn fnv1a(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3))
 }
 
 impl Binds {

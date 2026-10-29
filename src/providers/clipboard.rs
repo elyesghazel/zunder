@@ -98,7 +98,7 @@ pub fn pinned(line: &str, entry: &Item) -> Option<Item> {
         .output()
         .ok()
         .filter(|o| o.status.success() && !o.stdout.is_empty())?;
-    let id = format!("{PINNED}{:016x}", fnv1a(&out.stdout));
+    let id = format!("{PINNED}{:016x}", crate::store::fnv1a(&out.stdout));
     let item = Item { id, glyph: entry.glyph.clone(), hint: "pinned".into(), ..Default::default() };
     if entry.image.is_some() {
         let ext = entry.image.as_deref().and_then(|p| p.rsplit_once('.')).map_or("png", |(_, e)| e);
@@ -121,11 +121,6 @@ pub fn pinned(line: &str, entry: &Item) -> Option<Item> {
         title.push('…');
     }
     Some(Item { title, action: Action::Copy(text), ..item })
-}
-
-/// Stable across builds, unlike `DefaultHasher`, so a clip keeps its id.
-fn fnv1a(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3))
 }
 
 static BINARY: LazyLock<Regex> =
