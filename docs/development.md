@@ -153,8 +153,8 @@ a release with:
 | `zunder-<v>-macos-arm64.dmg` | macOS (Apple Silicon) | `zunder.app` with the GTK libraries bundled by dylibbundler |
 
 Release notes come from the `feat`, `fix` and `perf` commit subjects since the last tag
-(`packaging/notes.sh v0.2.0` prints them). zunder shows them in its update notice and under
-`changelog`, so write subjects for the people using it. Run the workflow by hand
+(`packaging/notes.sh v0.2.0` prints them). zunder shows them in its changelog window, so write
+subjects for the people using it. Run the workflow by hand
 from the Actions tab to build the files without publishing anything.
 
 After the release workflow has published the files, `packaging/aur/update.sh <version>` pins

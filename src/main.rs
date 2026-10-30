@@ -2,6 +2,7 @@
 #![cfg_attr(all(windows, not(debug_assertions), not(feature = "console")), windows_subsystem = "windows")]
 
 mod actions;
+mod changelog_window;
 // Linux keeps its history in cliphist; the tests run everywhere
 #[cfg(any(not(target_os = "linux"), test))]
 #[cfg_attr(target_os = "linux", allow(dead_code))]
@@ -37,6 +38,7 @@ usage:
   zunder alt-up          Alt was let go: the switcher focuses its window (a Hyprland release bind)
   zunder overview        every window by workspace, stays open until you pick one
   zunder settings [page] open the settings window, e.g. `zunder settings appearance`
+  zunder changelog       what changed in each release, and the update when one is out
   zunder run <key>       run a saved keybind (what the generated Hyprland binds call)
   zunder reload          rescan apps and plugins
   zunder import vicinae  take over favorites and launch counts from vicinae
@@ -83,10 +85,11 @@ fn main() -> ExitCode {
             println!("{USAGE}");
             ExitCode::SUCCESS
         }
-        Some(cmd @ ("toggle" | "show" | "hide" | "switch" | "switch-prev" | "alt-up" | "overview" | "reload" | "quit" | "settings" | "run")) => {
+        Some(cmd @ ("toggle" | "show" | "hide" | "switch" | "switch-prev" | "alt-up" | "overview" | "reload" | "quit" | "settings" | "changelog" | "run")) => {
             let line = match (cmd, args.get(1)) {
                 ("settings", Some(page)) => format!("open-settings {page}"),
                 ("settings", None) => "open-settings".to_owned(),
+                ("changelog", _) => "open-changelog".to_owned(),
                 ("run", Some(key)) => format!("run {key}"),
                 ("show", Some(query)) => format!("show {query}"),
                 _ => cmd.to_owned(),

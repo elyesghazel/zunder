@@ -119,3 +119,36 @@ window.zunder-settings dropdown label,
 window.zunder-settings popover label { color: @fg; }
 window.zunder-settings entry > text > placeholder { color: @faint; }
 window.zunder-settings dropdown arrow { color: @muted; }
+
+/* ── changelog window ─────────────────── */
+.badge-installed, .badge-new {
+  font-size: 9pt;
+  padding: 0 6px;
+  border-radius: 4px;
+}
+.badge-installed { color: @muted; border: 1px solid @ghost; }
+.badge-new       { color: @bg; background: @green; font-weight: bold; }
+
+.changelog-buttons { margin: 4px 0 10px; }
+button.flat-button.primary { background: @accent; color: @bg; border-color: @accent; font-weight: bold; }
+button.flat-button.primary:hover { background: alpha(@accent, 0.85); }
+
+.changelog-heading {
+  color: @muted;
+  font-weight: bold;
+  margin: 18px 0 4px;
+}
+.changelog-entry {
+  padding: 8px 0;
+  border-bottom: 1px solid alpha(@ghost, 0.5);
+}
+.changelog-bullet { color: @accent; margin-right: 12px; }
+.changelog-text   { color: @fg; }
+.changelog-scope {
+  color: @faint;
+  font-size: 9pt;
+  margin-left: 16px;
+  padding: 0 6px;
+  border: 1px solid @ghost;
+  border-radius: 4px;
+}

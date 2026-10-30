@@ -41,8 +41,8 @@ It installs for your user, no admin needed. ALT+SPACE opens zunder.
 **macOS (Apple Silicon):** the `.dmg` from the [latest release](https://github.com/elyesghazel/zunder/releases/latest).
 Drag it to Applications, then right-click → Open the first time.
 
-New versions show up on zunder's start screen with what changed, and Enter installs them. Type
-`update` to check right away, `changelog` for what's new in the version you have. More ways to
+New versions show up on zunder's start screen, and Enter installs them (Ctrl+K shows what's new).
+Type `update` to check right away, `changelog` for every release and what changed. More ways to
 install, and what works on which system:
 [docs/installation.md](docs/installation.md).
 

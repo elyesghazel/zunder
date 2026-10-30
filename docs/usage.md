@@ -86,7 +86,7 @@ zunder --version
 | `settings` | quick settings in the launcher |
 | `setup` | keys, autostart and switching over from another launcher, then Apply |
 | `update` | check for a new zunder now (the start screen also says so once a day) |
-| `changelog` | what's new in the version you have (the start screen shows it for a day after an update) |
+| `changelog` | the changelog window: every release, what changed, Update when one is out (`zunder changelog` too; the start screen points to it for a day after an update) |
 | `<plugin prefix> query` | a plugin, e.g. `kill zen` |
 | anything | web search as the last result |
 

@@ -37,14 +37,7 @@ const PAGES: &[(&str, &str)] = &[
 
 /// Open (or rebuild and raise) the settings window. `changed` runs after anything is saved.
 pub fn open(app: &gtk::Application, info: Info, changed: Rc<dyn Fn()>, page: Option<&str>) {
-    CSS.with(|css| {
-        if css.to_str().is_empty() {
-            css.load_from_string(include_str!("settings.css"));
-            if let Some(display) = gdk::Display::default() {
-                gtk::style_context_add_provider_for_display(&display, css, gtk::STYLE_PROVIDER_PRIORITY_USER);
-            }
-        }
-    });
+    load_css();
     if let Some(old) = WINDOW.with(|w| w.borrow_mut().take()) {
         old.destroy();
     }
@@ -139,18 +132,30 @@ pub fn open(app: &gtk::Application, info: Info, changed: Rc<dyn Fn()>, page: Opt
     WINDOW.with(|w| *w.borrow_mut() = Some(window));
 }
 
+/// The window styles, shared with the changelog window. Loaded once.
+pub fn load_css() {
+    CSS.with(|css| {
+        if css.to_str().is_empty() {
+            css.load_from_string(include_str!("settings.css"));
+            if let Some(display) = gdk::Display::default() {
+                gtk::style_context_add_provider_for_display(&display, css, gtk::STYLE_PROVIDER_PRIORITY_USER);
+            }
+        }
+    });
+}
+
 fn home() -> String {
     dirs::home_dir().unwrap_or_default().display().to_string()
 }
 
-fn label(text: &str, class: &str) -> gtk::Label {
+pub fn label(text: &str, class: &str) -> gtk::Label {
     let l = gtk::Label::new(Some(text));
     l.add_css_class(class);
     l.set_xalign(0.0);
     l
 }
 
-fn page_box(title: &str, intro: &str) -> gtk::Box {
+pub fn page_box(title: &str, intro: &str) -> gtk::Box {
     let page = gtk::Box::new(gtk::Orientation::Vertical, 0);
     page.add_css_class("page");
     let head = gtk::Box::new(gtk::Orientation::Horizontal, 0);

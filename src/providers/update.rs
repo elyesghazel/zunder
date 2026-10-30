@@ -1,8 +1,8 @@
 //! Start screen notice when a newer zunder is out. Checks GitHub at most once a day, in the
 //! background; turn it off with `update_check = false`. Enter updates (in a terminal on Linux,
 //! through `update install` on Windows). `update` checks right now, whatever the setting says.
-//! The release notes come along with the check and show in the preview pane, and after an
-//! update the start screen shows what's new for a day (`changelog` shows it any time).
+//! What changed lives in the changelog window (`zunder changelog`, or `changelog` here); after
+//! an update the start screen points to it for a day.
 
 use std::fs;
 use std::path::PathBuf;
@@ -11,7 +11,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use crate::engine::{Ctx, Job, Provider};
-use crate::item::{Action, Item, Text};
+use crate::item::{Action, Item, MenuAction};
 
 pub struct Update;
 
@@ -22,159 +22,160 @@ const CHANGELOG: &str = "changelog";
 const API: &str = "https://api.github.com/repos/elyesghazel/zunder/releases";
 #[cfg(windows)]
 const RELEASES: &str = "https://github.com/elyesghazel/zunder/releases/latest";
-/// How long the start screen shows what's new after an update.
+/// How long the start screen points to what's new after an update.
 const WHATS_NEW_FOR: Duration = Duration::from_secs(24 * 3600);
 
-#[derive(Serialize, Deserialize, Default, Clone)]
-#[serde(default)]
+#[derive(Serialize, Deserialize, Default)]
 struct Latest {
     tag_name: String,
+}
+
+/// One GitHub release, for the changelog window.
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+#[serde(default)]
+pub struct Release {
+    pub tag_name: String,
     /// The release notes, markdown.
-    body: String,
+    pub body: String,
+    /// `2026-10-30T21:12:44Z`
+    pub published_at: String,
+}
+
+/// One "## New" block of a release's notes: entries with their scope (`[windows]`), if any.
+#[derive(Debug, PartialEq)]
+pub struct Section {
+    pub heading: String,
+    pub entries: Vec<(String, Option<String>)>,
+}
+
+fn cache_dir() -> PathBuf {
+    dirs::cache_dir().unwrap_or_default().join("zunder")
 }
 
 fn cache() -> PathBuf {
-    dirs::cache_dir().unwrap_or_default().join("zunder/latest.json")
+    cache_dir().join("latest.json")
 }
 
-/// The notes of the version that's running, kept after an update: latest.json moves on.
-fn notes_cache() -> PathBuf {
-    dirs::cache_dir().unwrap_or_default().join("zunder/notes.json")
+fn releases_cache() -> PathBuf {
+    cache_dir().join("releases.json")
 }
 
 /// The last version the start screen announced, and since when (unix seconds).
 fn seen_file() -> PathBuf {
-    dirs::cache_dir().unwrap_or_default().join("zunder/seen-version")
+    cache_dir().join("seen-version")
 }
 
-fn read(path: &PathBuf) -> Option<Latest> {
-    fs::read_to_string(path).ok().and_then(|s| serde_json::from_str::<Latest>(&s).ok()).filter(|l| !l.tag_name.is_empty())
+fn curl(url: &str) -> Option<Vec<u8>> {
+    let out = crate::platform::no_window(std::process::Command::new("curl").args(["-fsSL", "-m", "8", url])).output().ok()?;
+    out.status.success().then_some(out.stdout)
 }
 
-/// One release from GitHub: `latest`, or `tags/v0.3.4`.
-fn fetch(which: &str) -> Option<Latest> {
-    let url = format!("{API}/{which}");
-    let out = crate::platform::no_window(std::process::Command::new("curl").args(["-fsSL", "-m", "8", &url])).output().ok()?;
-    serde_json::from_slice::<Latest>(&out.stdout).ok().filter(|l| !l.tag_name.is_empty())
-}
-
-/// The cached latest release, and whether it's time to ask GitHub again.
-fn cached() -> (Option<Latest>, bool) {
+/// The cached latest tag, and whether it's time to ask GitHub again.
+fn cached() -> (Option<String>, bool) {
     let path = cache();
-    let latest = read(&path);
+    let tag = fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str::<Latest>(&s).ok()).map(|l| l.tag_name);
     let stale = fs::metadata(&path)
         .and_then(|m| m.modified())
         .map(|t| t.elapsed().unwrap_or(Duration::MAX) > Duration::from_secs(24 * 3600))
         .unwrap_or(true);
-    (latest, stale)
+    (tag.filter(|t| !t.is_empty()), stale)
 }
 
-/// Ask GitHub for the latest release and cache it. `None` when GitHub can't be reached.
-fn refresh() -> Option<Latest> {
+/// Ask GitHub for the latest tag and cache it. `None` when GitHub can't be reached.
+fn refresh() -> Option<String> {
     let path = cache();
     // touch first, so a failing check (offline) isn't retried on every open
-    if let Some(dir) = path.parent() {
-        let _ = fs::create_dir_all(dir);
-    }
+    let _ = fs::create_dir_all(cache_dir());
     if !path.exists() {
         let _ = fs::write(&path, "{}");
     } else if let Ok(f) = fs::File::options().append(true).open(&path) {
         let _ = f.set_modified(std::time::SystemTime::now());
     }
-    let latest = fetch("latest")?;
+    let latest = serde_json::from_slice::<Latest>(&curl(&format!("{API}/latest"))?).ok().filter(|l| !l.tag_name.is_empty())?;
     let _ = fs::write(&path, serde_json::to_string(&latest).unwrap_or_default());
-    Some(latest)
+    Some(latest.tag_name)
 }
 
-/// The release notes of the running version: from the update check that found it, or asked for.
-/// `None` while that's still unknown (a background fetch is then on its way).
-fn current_notes() -> Option<Latest> {
-    let current = env!("CARGO_PKG_VERSION");
-    let is_current = |l: &Latest| !newer(&l.tag_name, current) && !newer(current, &l.tag_name);
-    if let Some(notes) = read(&notes_cache()).filter(is_current) {
-        return Some(notes);
-    }
-    if let Some(latest) = read(&cache()).filter(is_current) {
-        let _ = fs::write(notes_cache(), serde_json::to_string(&latest).unwrap_or_default());
-        return Some(latest);
-    }
-    use std::sync::atomic::{AtomicBool, Ordering};
-    static FETCHING: AtomicBool = AtomicBool::new(false);
-    if !FETCHING.swap(true, Ordering::SeqCst) {
-        std::thread::spawn(move || {
-            if let Some(notes) = fetch(&format!("tags/v{current}")) {
-                let _ = fs::write(notes_cache(), serde_json::to_string(&notes).unwrap_or_default());
+/// The releases from the last time the changelog window asked, newest first.
+pub fn cached_releases() -> Vec<Release> {
+    fs::read_to_string(releases_cache()).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+}
+
+/// Every release from GitHub, newest first, cached for next time. `None` when offline.
+pub fn fetch_releases() -> Option<Vec<Release>> {
+    let releases: Vec<Release> = serde_json::from_slice(&curl(&format!("{API}?per_page=100"))?).ok()?;
+    let _ = fs::create_dir_all(cache_dir());
+    let _ = fs::write(releases_cache(), serde_json::to_string(&releases).unwrap_or_default());
+    Some(releases)
+}
+
+/// A release body as sections: the install instructions and GitHub's own links dropped, and
+/// GitHub's generated "* fix x by @someone in https://…" lines cut to "fix x".
+pub fn sections(body: &str) -> Vec<Section> {
+    let mut out: Vec<Section> = Vec::new();
+    for line in body.lines().map(str::trim) {
+        if let Some(heading) = line.strip_prefix("## ").or_else(|| line.strip_prefix("### ")) {
+            if heading != "What's Changed" && heading != "New Contributors" {
+                out.push(Section { heading: heading.to_owned(), entries: Vec::new() });
             }
-        });
-    }
-    None
-}
-
-/// Release notes for the preview pane: markdown down to plain lines, without the install
-/// instructions and the GitHub links every release ends with.
-fn changelog(body: &str) -> String {
-    let mut out = Vec::new();
-    for line in body.lines() {
-        let line = line.trim_end();
-        if line.starts_with("Arch: ") || line.starts_with("**Full Changelog**") || line.starts_with("## What's Changed") {
             continue;
         }
-        let line = line.replace("**", "").replace('`', "");
-        let line = if let Some(heading) = line.trim_start_matches('#').strip_prefix(' ').filter(|_| line.starts_with('#')) {
-            heading.to_owned()
-        } else if let Some(entry) = line.strip_prefix("- ").or_else(|| line.strip_prefix("* ")) {
-            format!("  · {entry}")
-        } else {
-            line
+        let Some(entry) = line.strip_prefix("- ").or_else(|| line.strip_prefix("* ")) else { continue };
+        let entry = entry.split(" by @").next().unwrap_or(entry).replace("**", "").replace('`', "");
+        let (text, scope) = match entry.strip_suffix(']').and_then(|e| e.rsplit_once(" [")) {
+            Some((text, scope)) => (text.to_owned(), Some(scope.to_owned())),
+            None => (entry, None),
         };
-        if line.is_empty() && out.last().is_none_or(|l: &String| l.is_empty()) {
-            continue;
+        if out.is_empty() {
+            out.push(Section { heading: "Changes".into(), entries: Vec::new() });
         }
-        out.push(line);
+        if let Some(last) = out.last_mut() {
+            last.entries.push((text, scope));
+        }
     }
-    while out.last().is_some_and(|l| l.is_empty()) {
-        out.pop();
-    }
-    if out.is_empty() { "No notes for this release.\nEnter shows it on GitHub.".into() } else { out.join("\n") }
+    out.retain(|s| !s.entries.is_empty());
+    out
 }
 
-fn release_page(tag: &str) -> String {
+pub fn release_page(tag: &str) -> String {
     format!("https://github.com/elyesghazel/zunder/releases/tag/{tag}")
 }
 
-/// "zunder 0.3.0 is out", Enter installs it; what changed in the preview pane.
-fn notice(latest: &Latest) -> Item {
+/// Ctrl+K on the update items: what changed.
+fn changelog_action() -> MenuAction {
+    MenuAction { title: "What's new".into(), glyph: "\u{f15c}".into(), action: Action::Run("zunder changelog".into()) }
+}
+
+/// "zunder 0.3.0 is out", Enter installs it.
+fn notice(tag: &str) -> Item {
     Item {
-        title: format!("zunder {} is out", latest.tag_name.trim_start_matches('v')),
-        subtitle: format!("you have {} · {}", env!("CARGO_PKG_VERSION"), crate::platform::update_hint()),
+        title: format!("zunder {} is out", tag.trim_start_matches('v')),
+        subtitle: format!("you have {} · {} · Ctrl+K what's new", env!("CARGO_PKG_VERSION"), crate::platform::update_hint()),
         hint: "update".into(),
         glyph: "\u{f01b}".into(),
         id: "cmd:update".into(),
-        text: Some(Text::Literal(changelog(&latest.body))),
         action: crate::platform::update_action(),
+        actions: vec![changelog_action()],
         score: 1_000_000,
         ..Default::default()
     }
 }
 
-/// "What's new in zunder 0.3.5", the running version's notes in the preview pane.
+/// Opens the changelog window.
 fn whats_new(score: i64) -> Item {
-    let current = env!("CARGO_PKG_VERSION");
-    let notes = current_notes();
     Item {
         id: "cmd:whats-new".into(),
-        title: format!("What's new in zunder {current}"),
-        subtitle: "Enter opens the release on GitHub".into(),
+        title: format!("What's new in zunder {}", env!("CARGO_PKG_VERSION")),
+        subtitle: "Enter opens the changelog".into(),
         hint: "changelog".into(),
         glyph: "\u{f15c}".into(),
-        text: Some(Text::Literal(notes.as_ref().map_or_else(|| "Getting the notes from GitHub…".into(), |n| changelog(&n.body)))),
-        action: Action::Open(release_page(&format!("v{current}"))),
+        action: Action::Run("zunder changelog".into()),
         score,
         ..Default::default()
     }
 }
 
-/// Just updated? Then the start screen shows what's new, for a day. A fresh install doesn't
+/// Just updated? Then the start screen points to what's new, for a day. A fresh install doesn't
 /// count: that's the welcome screen's turn.
 fn just_updated() -> bool {
     let current = env!("CARGO_PKG_VERSION");
@@ -187,9 +188,7 @@ fn just_updated() -> bool {
     }
     // another version, or no file: the first start, or a zunder from before this file existed
     let fresh = !crate::config::path().exists();
-    if let Some(dir) = seen_file().parent() {
-        let _ = fs::create_dir_all(dir);
-    }
+    let _ = fs::create_dir_all(cache_dir());
     let _ = fs::write(seen_file(), format!("{current} {}", if fresh { 0 } else { now }));
     !fresh
 }
@@ -198,13 +197,12 @@ fn just_updated() -> bool {
 fn check_now() -> Vec<Item> {
     let current = env!("CARGO_PKG_VERSION");
     let item = match refresh() {
-        Some(latest) if newer(&latest.tag_name, current) => notice(&latest),
+        Some(tag) if newer(&tag, current) => notice(&tag),
         Some(_) => Item {
             title: format!("zunder {current} is the latest version"),
-            subtitle: "checked GitHub just now · what's new in it on the right".into(),
+            subtitle: "checked GitHub just now · Enter shows what's new".into(),
             glyph: "\u{f00c}".into(),
-            text: whats_new(0).text,
-            action: Action::Open(release_page(&format!("v{current}"))),
+            action: Action::Run("zunder changelog".into()),
             ..Default::default()
         },
         None => Item {
@@ -312,11 +310,11 @@ impl Provider for Update {
         }
         let mut items = Vec::new();
         if crate::config::get().update_check {
-            let (latest, stale) = cached();
+            let (tag, stale) = cached();
             if stale {
                 std::thread::spawn(refresh);
             }
-            items.extend(latest.filter(|l| newer(&l.tag_name, env!("CARGO_PKG_VERSION"))).map(|l| notice(&l)));
+            items.extend(tag.filter(|t| newer(t, env!("CARGO_PKG_VERSION"))).map(|t| notice(&t)));
         }
         if just_updated() {
             items.push(whats_new(999_999));
@@ -335,13 +333,19 @@ impl Provider for Update {
 
 #[cfg(test)]
 mod tests {
-    use super::{changelog, newer};
+    use super::{newer, sections};
 
     #[test]
-    fn notes_to_plain_text() {
-        let body = "## New\n\n- open clipboard history with `win+v` [windows]\n\n## Fixed\n\n- drop the dim [windows]\n\nArch: `sudo pacman -U` the .pkg.tar.zst\n\n**Full Changelog**: https://github.com/x/y/compare/a...b";
-        assert_eq!(changelog(body), "New\n\n  · open clipboard history with win+v [windows]\n\nFixed\n\n  · drop the dim [windows]");
-        assert!(changelog("Arch: install it\n\n**Full Changelog**: x").starts_with("No notes"));
+    fn notes_to_sections() {
+        let body = "## New\n\n- open clipboard history with `win+v` [windows]\n- a theme picker\n\n## Fixed\n\n- drop the dim [windows]\n\nArch: `sudo pacman -U` the .pkg.tar.zst\n\n**Full Changelog**: https://github.com/x/y/compare/a...b";
+        let s = sections(body);
+        assert_eq!(s.len(), 2);
+        assert_eq!(s[0].heading, "New");
+        assert_eq!(s[0].entries, vec![("open clipboard history with win+v".into(), Some("windows".into())), ("a theme picker".into(), None)]);
+        assert_eq!(s[1].entries.len(), 1);
+        assert!(sections("Arch: install it\n\n**Full Changelog**: x").is_empty());
+        let generated = "## What's Changed\n* fix the thing by @someone in https://github.com/x/y/pull/1";
+        assert_eq!(sections(generated)[0].entries[0].0, "fix the thing");
     }
 
     #[test]

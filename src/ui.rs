@@ -569,6 +569,7 @@ impl Ui {
                 self.released_early();
             }
             "open-settings" => self.open_settings(None),
+            "open-changelog" => self.open_changelog(),
             cmd if cmd.starts_with("open-settings ") => self.open_settings(cmd.strip_prefix("open-settings ")),
             "reload" => {
                 config::reload();
@@ -1256,6 +1257,13 @@ impl Ui {
         });
         self.hide();
         settings_window::open(&app, info, changed, page);
+    }
+
+    fn open_changelog(self: &Rc<Self>) {
+        let Some(app) = self.window.application() else { return };
+        let ui = self.clone();
+        self.hide();
+        crate::changelog_window::open(&app, Rc::new(move |query: &str| ui.command(&format!("show {query}"))));
     }
 
     fn selected_item(&self) -> Option<Item> {
