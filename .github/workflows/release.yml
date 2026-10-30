@@ -224,6 +224,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # every tag, so notes.sh finds the previous one
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: files
@@ -234,5 +237,7 @@ jobs:
         run: |
           # checked by get.sh before installing
           (cd files && sha256sum * > SHA256SUMS)
-          gh release create "$TAG" files/* --title "zunder ${TAG#v}" --generate-notes \
-            --notes "Arch: \`sudo pacman -U\` the .pkg.tar.zst · Linux: the tarball and install.sh · Windows: run zunder-windows-setup.exe (no admin; More info → Run anyway), then ALT+SPACE · macOS (Apple Silicon): open the .dmg, drag zunder to Applications, right-click → Open the first time (it isn't signed). macOS and Windows don't have the window switcher yet."
+          # the changelog first: zunder shows the release body in its update notice
+          packaging/notes.sh "$TAG" > notes.md
+          echo "Arch: \`sudo pacman -U\` the .pkg.tar.zst · Linux: the tarball and install.sh · Windows: run zunder-windows-setup.exe (no admin; More info → Run anyway), then ALT+SPACE · macOS (Apple Silicon): open the .dmg, drag zunder to Applications, right-click → Open the first time (it isn't signed). macOS and Windows don't have the window switcher yet." >> notes.md
+          gh release create "$TAG" files/* --title "zunder ${TAG#v}" --generate-notes --notes-file notes.md
