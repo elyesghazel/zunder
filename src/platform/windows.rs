@@ -295,6 +295,12 @@ pub fn after_show(window: &gtk::ApplicationWindow) {
 }
 
 fn place(window: &gtk::ApplicationWindow) {
+    let t = std::time::Instant::now();
+    place_now(window);
+    crate::ui::timing("place", t);
+}
+
+fn place_now(window: &gtk::ApplicationWindow) {
     use windows_sys::Win32::Foundation::{POINT, RECT};
     use windows_sys::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
