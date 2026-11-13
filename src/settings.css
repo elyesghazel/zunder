@@ -48,6 +48,7 @@ row:selected .side-title { color: @fg; font-weight: bold; }
   padding: 12px 0;
   border-bottom: 1px solid alpha(@ghost, 0.5);
 }
+.plugin-setting { padding-left: 24px; }
 .setting-title { color: @fg; }
 .setting-help  { color: @faint; font-size: 10pt; }
 .empty  { color: @muted; padding: 14px 0; }

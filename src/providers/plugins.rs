@@ -6,6 +6,8 @@
 //!     # @zunder.prefix kill            typing `kill <query>` runs the script
 //!     # @zunder.glyph  \uf120          a Nerd Font glyph, literal or \uXXXX
 //!     # @zunder.mode   search          `search` (default) or `command`
+//!     # @zunder.setting token "GitHub token"   a value set in Settings → Plugins, passed
+//!                                              to the script as $ZUNDER_TOKEN
 //!
 //! search:  called as `script <query>`; each stdout line is a result, either plain text
 //!          (Enter copies it) or JSON: {"title", "subtitle", "hint", "glyph", "action": {"open": "…"}}
@@ -15,7 +17,7 @@
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::{Duration, Instant};
@@ -32,6 +34,65 @@ pub struct Plugin {
     pub glyph: String,
     pub command: bool,
     pub path: PathBuf,
+    /// `@zunder.setting` lines, in header order.
+    pub settings: Vec<PluginSetting>,
+}
+
+/// A value the user fills in for a plugin, stored in `[plugins.<file stem>]` in config.toml.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PluginSetting {
+    pub key: String,
+    pub help: String,
+}
+
+impl PluginSetting {
+    /// Keys that hold secrets get a password entry.
+    pub fn secret(&self) -> bool {
+        matches!(self.key.as_str(), "token" | "password") || self.key.ends_with("_key")
+    }
+}
+
+impl Plugin {
+    /// Where its values live in config.toml: the file name without extension.
+    pub fn stem(&self) -> String {
+        stem(&self.path)
+    }
+}
+
+fn stem(path: &Path) -> String {
+    path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+/// `greeting` → `ZUNDER_GREETING`, `api-url` → `ZUNDER_API_URL`.
+pub fn env_name(key: &str) -> String {
+    format!("ZUNDER_{}", key.to_uppercase().replace('-', "_"))
+}
+
+/// The env vars a plugin gets: every value stored for it in config.toml.
+pub fn env(path: &Path) -> Vec<(String, String)> {
+    crate::config::get().plugin_values(&stem(path)).iter().map(|(k, v)| (env_name(k), v.clone())).collect()
+}
+
+/// For a command-mode run (`'/…/plugins/x'`, also from favorites and shortcuts): the plugin's
+/// env vars. Resolved when it runs, so values never end up in favorites.json or binds.
+pub fn command_env(cmd: &str) -> Vec<(String, String)> {
+    let Some(path) = cmd.strip_prefix('\'').and_then(|c| c.strip_suffix('\'')) else { return Vec::new() };
+    let path = PathBuf::from(path.replace(r"'\''", "'"));
+    if path.parent() != Some(dir().as_path()) {
+        return Vec::new();
+    }
+    env(&path)
+}
+
+/// `token "GitHub token"` → key and help; quotes around the help are optional.
+fn parse_setting(value: &str) -> Option<PluginSetting> {
+    let (key, help) = value.split_once(char::is_whitespace).unwrap_or((value, ""));
+    if key.is_empty() {
+        return None;
+    }
+    let help = help.trim();
+    let help = help.strip_prefix('"').and_then(|h| h.strip_suffix('"')).unwrap_or(help);
+    Some(PluginSetting { key: key.to_owned(), help: help.to_owned() })
 }
 
 pub struct Plugins {
@@ -145,8 +206,12 @@ impl Call {
     /// Run the script (blocking; call from a worker thread). Lines go to `sink` in batches as
     /// they're printed; the script is killed as soon as the query changes.
     pub fn run(&self, sink: &Sink) -> Vec<Item> {
+        self.run_with(sink, env(&self.plugin.path))
+    }
+
+    fn run_with(&self, sink: &Sink, env: Vec<(String, String)>) -> Vec<Item> {
         let mut cmd = Command::new(&self.plugin.path);
-        cmd.arg(&self.arg).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.arg(&self.arg).envs(env).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         #[cfg(unix)]
         std::os::unix::process::CommandExt::process_group(&mut cmd, 0); // kill takes its children too
         let mut child = match crate::platform::no_window(&mut cmd).spawn() {
@@ -268,7 +333,7 @@ fn scan() -> Vec<Plugin> {
                 return None;
             }
             let stem = path.file_stem()?.to_string_lossy().into_owned();
-            let mut p = Plugin { name: stem.clone(), prefix: stem, glyph: "\u{f12e}".into(), command: false, path: path.clone() };
+            let mut p = Plugin { name: stem.clone(), prefix: stem, glyph: "\u{f12e}".into(), command: false, path: path.clone(), settings: Vec::new() };
             let head = fs::read(&path).ok()?;
             for line in String::from_utf8_lossy(&head[..head.len().min(4096)]).lines().take(30) {
                 let Some((_, rest)) = line.split_once("@zunder.") else { continue };
@@ -279,6 +344,7 @@ fn scan() -> Vec<Plugin> {
                     "prefix" => p.prefix = value,
                     "glyph" => p.glyph = unescape(&value),
                     "mode" => p.command = value == "command",
+                    "setting" => p.settings.extend(parse_setting(&value)),
                     _ => {}
                 }
             }
@@ -301,7 +367,7 @@ mod tests {
         let path = dir.join(name);
         fs::write(&path, script).unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
-        let plugin = Plugin { name: "t".into(), prefix: "t".into(), glyph: String::new(), command: false, path };
+        let plugin = Plugin { name: "t".into(), prefix: "t".into(), glyph: String::new(), command: false, path, settings: Vec::new() };
         Call { plugin, arg: "q".into() }
     }
 
@@ -335,6 +401,61 @@ mod tests {
         let call = call("fail", "#!/bin/sh\necho nope >&2\nexit 1\n");
         let items = call.run(&Sink::new(|_| {}, || false));
         assert_eq!(items[0].title, "nope");
+    }
+
+    #[test]
+    fn parses_settings() {
+        let s = parse_setting(r#"token "GitHub token with repo scope""#).unwrap();
+        assert_eq!(s, PluginSetting { key: "token".into(), help: "GitHub token with repo scope".into() });
+        assert!(s.secret());
+        let s = parse_setting("limit   How many (default 100)").unwrap();
+        assert_eq!((s.key.as_str(), s.help.as_str()), ("limit", "How many (default 100)"));
+        assert!(!s.secret());
+        assert_eq!(parse_setting("greeting").unwrap().help, "");
+        assert!(parse_setting("api_key \"x\"").unwrap().secret());
+        assert!(parse_setting("").is_none());
+    }
+
+    #[test]
+    fn env_names() {
+        assert_eq!(env_name("greeting"), "ZUNDER_GREETING");
+        assert_eq!(env_name("api-url"), "ZUNDER_API_URL");
+        assert_eq!(env_name("Api_Key"), "ZUNDER_API_KEY");
+    }
+
+    /// The done-when of #1: a plugin with `@zunder.setting greeting` prints the stored value.
+    #[cfg(unix)]
+    #[test]
+    fn script_gets_settings_as_env() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("zunder-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("hello");
+        std::fs::write(&path, "#!/bin/sh\n# @zunder.setting greeting \"What to say\"\necho \"$ZUNDER_GREETING $1\"\n").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let plugin = super::Plugin {
+            name: "hello".into(),
+            prefix: "hello".into(),
+            glyph: String::new(),
+            command: false,
+            path: path.clone(),
+            settings: Vec::new(),
+        };
+        let mut values = std::collections::BTreeMap::new();
+        values.insert("greeting".to_owned(), "hoi".to_owned());
+        let env = values.iter().map(|(k, v)| (env_name(k), v.clone())).collect();
+        let (tx, rx) = mpsc::channel();
+        let sink = Sink::new(move |items: Vec<Item>| tx.send(items).unwrap(), || false);
+        let rest = super::Call { plugin, arg: "world".into() }.run_with(&sink, env);
+        let items: Vec<Item> = rx.try_iter().flatten().chain(rest).collect();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(items[0].title, "hoi world");
+    }
+
+    #[test]
+    fn command_env_only_for_plugins() {
+        assert!(super::command_env("'/usr/bin/true'").is_empty());
+        assert!(super::command_env("echo hi").is_empty());
     }
 
     #[test]
