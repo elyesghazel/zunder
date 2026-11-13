@@ -4,7 +4,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use crate::engine::{Ctx, Job, Provider};
+use crate::engine::{Ctx, Job, Provider, Sink};
 use crate::item::{Action, Item};
 
 pub struct Files;
@@ -54,7 +54,7 @@ impl Provider for Files {
             }
             None => return None,
         };
-        Some(("Files".into(), Box::new(move || find(&term, limit))))
+        Some(("Files".into(), Box::new(move |_: &Sink| find(&term, limit))))
     }
 }
 

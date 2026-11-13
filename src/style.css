@@ -61,6 +61,7 @@ list.results > row:selected            { background: @sel; }
 
 .heading       { padding: 12px 24px 4px; }
 .heading-title { color: @accent; font-weight: bold; margin-right: 10px; }
+.heading-busy { color: @accent; opacity: 0.6; margin: 0 10px 0 -6px; }
 .heading separator { background: @ghost; }
 
 .item   { padding: 3px 24px 3px 22px; }

@@ -28,7 +28,10 @@ Typing `<prefix> <query>` runs `script "<query>"` on every keystroke, in a backg
 Results from an older keystroke that arrive late are thrown away, so a slow plugin never shows
 stale results.
 
-Every line on stdout is one result, in order.
+Every line on stdout is one result, in order. Lines show up as the script prints them, so a slow
+plugin (network, `find`) fills in bit by bit; printing line by line is all it takes, and the
+section heading shows `…` until the script exits. When the query changes, the running script and
+anything it started are killed.
 
 **Plain text**: Enter copies the line. That makes almost anything a plugin:
 
@@ -92,6 +95,7 @@ In [`examples/plugins`](../examples/plugins):
 
 - `kill`: search your processes by name, sorted by CPU, Enter kills one
 - `ip`: command plugin, copies your local IP
+- `slow`: prints a line every 300 ms, to watch results stream in
 
 ```sh
 mkdir -p ~/.config/zunder/plugins
@@ -149,7 +153,9 @@ Or select the plugin in zunder and press Ctrl+B.
 
 ## Tips
 
-- Keep it fast: it runs on every keystroke. Cache slow lookups in a file under `/tmp`.
+- Keep it fast: it runs on every keystroke and is killed on the next one. Cache slow lookups in
+  a file under `/tmp`. If your language buffers stdout when it isn't a terminal (Python does),
+  flush after each line, e.g. `print(..., flush=True)`, or results only show up at the end.
 - Print at most a few hundred lines; zunder doesn't truncate plugin output.
 - `zunder reload` picks up new plugins and header changes immediately. Script changes don't need
   it, the file runs fresh every time.

@@ -12,6 +12,8 @@ use crate::providers::{self, windows::Client};
 pub struct Section {
     pub title: String,
     pub items: Vec<Item>,
+    /// A background job is still adding to it (shows `…` on the heading).
+    pub busy: bool,
 }
 
 /// Everything a provider may look at while searching.
@@ -55,8 +57,33 @@ pub trait Provider {
     fn reload(&mut self) {}
 }
 
-/// Work a provider hands to a background thread.
-pub type Job = Box<dyn FnOnce() -> Vec<Item> + Send>;
+/// Work a provider hands to a background thread. Items it returns are added when it ends; a
+/// job that finds results bit by bit hands them to the [`Sink`] as it goes.
+pub type Job = Box<dyn FnOnce(&Sink) -> Vec<Item> + Send>;
+
+/// Where a running [`Job`] sends early results, and how it learns the query moved on.
+pub struct Sink {
+    send: Box<dyn Fn(Vec<Item>) + Send>,
+    stale: Box<dyn Fn() -> bool + Send>,
+}
+
+impl Sink {
+    pub fn new(send: impl Fn(Vec<Item>) + Send + 'static, stale: impl Fn() -> bool + Send + 'static) -> Self {
+        Sink { send: Box::new(send), stale: Box::new(stale) }
+    }
+
+    /// Append `items` to the job's section now.
+    pub fn send(&self, items: Vec<Item>) {
+        if !items.is_empty() {
+            (self.send)(items);
+        }
+    }
+
+    /// The query changed: the results will be dropped, so stop working.
+    pub fn stale(&self) -> bool {
+        (self.stale)()
+    }
+}
 
 pub struct Engine {
     providers: Vec<Box<dyn Provider>>,
@@ -160,11 +187,11 @@ impl Engine {
                 })
                 .collect();
             if !pinned.is_empty() {
-                sections.insert(0, Section { title: "Pinned".into(), items: pinned });
+                sections.insert(0, Section { title: "Pinned".into(), items: pinned, busy: false });
             }
         }
         if query.is_empty() && !switch && !self.favorites.items.is_empty() {
-            sections.insert(0, Section { title: "Favorites".into(), items: self.favorites.items.clone() });
+            sections.insert(0, Section { title: "Favorites".into(), items: self.favorites.items.clone(), busy: false });
         }
         for item in sections.iter_mut().flat_map(|s| s.items.iter_mut()) {
             if let Some(combo) = self.binds.combo_for(&item.id) {
@@ -185,7 +212,7 @@ fn split_groups(title: &str, items: Vec<Item>) -> Vec<Section> {
         let name = if item.group.is_empty() { title } else { item.group.as_str() };
         match sections.iter_mut().find(|s| s.title == name) {
             Some(s) => s.items.push(item),
-            None => sections.push(Section { title: name.to_owned(), items: vec![item] }),
+            None => sections.push(Section { title: name.to_owned(), items: vec![item], busy: false }),
         }
     }
     sections

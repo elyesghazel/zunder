@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use regex::Regex;
 
-use crate::engine::{Ctx, Job, Provider};
+use crate::engine::{Ctx, Job, Provider, Sink};
 use crate::item::{Action, Item};
 
 pub struct Convert;
@@ -366,7 +366,7 @@ impl Provider for Convert {
         let code = code.clone();
         Some((
             "Convert".into(),
-            Box::new(move || match fetch_rates() {
+            Box::new(move |_: &Sink| match fetch_rates() {
                 Some(rates) => money_items(&ask, &code, &rates),
                 None => vec![Item {
                     title: "couldn't load exchange rates".into(),
