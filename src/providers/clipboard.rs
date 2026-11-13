@@ -183,6 +183,10 @@ mod own {
     use crate::engine::Ctx;
     use crate::item::{Action, Item, Text};
 
+    /// Rows on screen. GTK lays out every row of the list when it opens, which for all 300 took
+    /// most of a second on a Windows laptop; older entries are still found by typing.
+    const ROWS: usize = 50;
+
     pub fn history(cx: &Ctx, rest: &str) -> Vec<Item> {
         if !crate::config::get().clipboard_history {
             return vec![Item {
@@ -194,21 +198,24 @@ mod own {
             }];
         }
         let now = chrono::Utc::now().timestamp();
-        clips::list()
+        let found = clips::list().into_iter().filter_map(|clip| {
+            let path = clips::image_path(&clip.id);
+            let title = match &clip.content {
+                Content::Text(text) => clips::summary(text, 100),
+                Content::Image { width, height } => {
+                    let bytes = std::fs::metadata(&path).ok()?.len();
+                    format!("png {width}×{height} · {}", size(bytes))
+                }
+            };
+            let score = if rest.is_empty() { 0 } else { cx.matcher_score(rest, &title)? };
+            Some((score, clip, path, title))
+        });
+        let mut found: Vec<_> = found.take(if rest.is_empty() { ROWS } else { SHOWN }).collect();
+        // a search looks through the whole history and shows the best matches, newest first on ties
+        found.sort_by_key(|f| std::cmp::Reverse(f.0));
+        found
             .into_iter()
-            .filter_map(|clip| {
-                let path = clips::image_path(&clip.id);
-                let title = match &clip.content {
-                    Content::Text(text) => clips::summary(text, 100),
-                    Content::Image { width, height } => {
-                        let bytes = std::fs::metadata(&path).ok()?.len();
-                        format!("png {width}×{height} · {}", size(bytes))
-                    }
-                };
-                let score = if rest.is_empty() { 0 } else { cx.matcher_score(rest, &title)? };
-                Some((score, clip, path, title))
-            })
-            .take(SHOWN)
+            .take(ROWS)
             .enumerate()
             .map(|(i, (score, clip, path, title))| {
                 let common = Item {
