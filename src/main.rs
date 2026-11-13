@@ -15,6 +15,7 @@ mod ipc;
 mod item;
 mod platform;
 mod providers;
+mod registry;
 mod settings_window;
 mod setup;
 mod store;
@@ -42,6 +43,7 @@ usage:
   zunder run <key>       run a saved keybind (what the generated Hyprland binds call)
   zunder reload          rescan apps and plugins
   zunder import vicinae  take over favorites and launch counts from vicinae
+  zunder plugin <cmd>    search, install, update, remove or list plugins from the registry
   zunder quit            stop the server";
 
 fn main() -> ExitCode {
@@ -74,6 +76,14 @@ fn main() -> ExitCode {
             },
             _ => {
                 eprintln!("zunder: usage: zunder import vicinae");
+                ExitCode::FAILURE
+            }
+        },
+        Some("plugin" | "plugins") => match registry::run(&args[1..]) {
+            Ok(true) => ExitCode::SUCCESS,
+            Ok(false) => ExitCode::FAILURE,
+            Err(e) => {
+                eprintln!("zunder: {e}");
                 ExitCode::FAILURE
             }
         },
