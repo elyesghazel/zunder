@@ -151,7 +151,13 @@ pub fn shell(cmd: &str) -> Command {
 
 /// Run a command line in the background.
 pub fn run_shell(cmd: &str) {
+    run_shell_env(cmd, Vec::new());
+}
+
+/// `run_shell` with extra environment variables.
+pub fn run_shell_env(cmd: &str, env: Vec<(String, String)>) {
     let mut c = shell(cmd);
+    c.envs(env);
     c.stdout(Stdio::null()).stderr(Stdio::null());
     detach(&mut c);
     match c.spawn() {

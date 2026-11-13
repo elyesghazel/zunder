@@ -118,7 +118,8 @@ impl Action {
 
     pub fn execute(&self) {
         match self {
-            Action::Run(cmd) => platform::run_shell(cmd),
+            // command-mode plugins get their settings as env vars
+            Action::Run(cmd) => platform::run_shell_env(cmd, crate::providers::plugins::command_env(cmd)),
             Action::Term(cmd) => platform::run_in_terminal(cmd),
             Action::Focus(id) => platform::focus_window(id),
             Action::Window { address, op } => platform::window_op(address, op),

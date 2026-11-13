@@ -14,7 +14,7 @@ straight on a page. Changes are saved right away and most apply immediately.
 | Providers | turn sections like Other, System or Clipboard on and off |
 | Favorites | everything you pinned, with remove buttons |
 | Shortcuts | every global shortcut, with remove buttons |
-| Plugins | installed plugins, how to call them, open the folder |
+| Plugins | installed plugins, how to call them, their settings, open the folder |
 | About | version, open config.toml and style.css |
 
 There is also a quick version inside the launcher: type `settings`. Enter toggles on/off

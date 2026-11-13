@@ -275,7 +275,7 @@ fn build_page(name: &str, info: &Rc<Info>, changed: &Rc<dyn Fn()>) -> gtk::Box {
         "Providers" => providers_page(info, changed, &status),
         "Favorites" => favorites_page(changed),
         "Shortcuts" => shortcuts_page(changed, &status),
-        "Plugins" => plugins_page(info),
+        "Plugins" => plugins_page(info, changed, &status),
         "About" => about_page(),
         group => {
             let intro = match group {
@@ -385,8 +385,52 @@ fn open_button(text: &str, target: std::path::PathBuf) -> gtk::Button {
     button
 }
 
-fn plugins_page(info: &Rc<Info>) -> gtk::Box {
-    let page = page_box("Plugins", "Executables in the plugins folder. Their header comments set name, prefix, glyph and mode.");
+/// A text entry for one `@zunder.setting`, saved on Enter and when focus leaves.
+fn plugin_setting_control(plugin: &Plugin, s: &plugins::PluginSetting, changed: &Rc<dyn Fn()>, status: &gtk::Label) -> gtk::Widget {
+    let stem = plugin.stem();
+    let value = config::get().plugin_values(&stem).get(&s.key).cloned().unwrap_or_default();
+    let (key, changed, status) = (s.key.clone(), changed.clone(), status.clone());
+    let save = move |text: &str| {
+        if config::get().plugin_values(&stem).get(&key).map_or("", String::as_str) == text.trim() {
+            return;
+        }
+        config::update(|c| c.set_plugin(&stem, &key, text));
+        status.set_text("saved");
+        changed();
+    };
+    let widget: gtk::Widget = if s.secret() {
+        let entry = gtk::PasswordEntry::new();
+        entry.set_show_peek_icon(true);
+        entry.set_text(&value);
+        entry.set_width_chars(28);
+        let save2 = save.clone();
+        entry.connect_activate(move |e| save2(&e.text()));
+        let focus = gtk::EventControllerFocus::new();
+        let e2 = entry.clone();
+        focus.connect_leave(move |_| save(&e2.text()));
+        entry.add_controller(focus);
+        entry.upcast()
+    } else {
+        let entry = gtk::Entry::new();
+        entry.set_text(&value);
+        entry.set_width_chars(28);
+        entry.set_placeholder_text(Some("not set"));
+        let save2 = save.clone();
+        entry.connect_activate(move |e| save2(&e.text()));
+        let focus = gtk::EventControllerFocus::new();
+        let e2 = entry.clone();
+        focus.connect_leave(move |_| save(&e2.text()));
+        entry.add_controller(focus);
+        entry.upcast()
+    };
+    widget
+}
+
+fn plugins_page(info: &Rc<Info>, changed: &Rc<dyn Fn()>, status: &gtk::Label) -> gtk::Box {
+    let page = page_box(
+        "Plugins",
+        "Executables in the plugins folder. Their header comments set name, prefix, glyph, mode and settings.",
+    );
     let open = gtk::Button::with_label("open folder");
     open.add_css_class("flat-button");
     let dir = plugins::dir();
@@ -399,6 +443,12 @@ fn plugins_page(info: &Rc<Info>) -> gtk::Box {
         let how = if p.command { "command, runs once".to_owned() } else { format!("type `{} <query>`", p.prefix) };
         let path = label(&p.path.display().to_string().replace(&home(), "~"), "setting-help");
         page.append(&row(&format!("{}  {}", p.glyph, p.name), &how, &path));
+        for s in &p.settings {
+            let help = if s.help.is_empty() { format!("${}", plugins::env_name(&s.key)) } else { format!("{}  ·  ${}", s.help, plugins::env_name(&s.key)) };
+            let r = row(&s.key, &help, &plugin_setting_control(p, s, changed, status));
+            r.add_css_class("plugin-setting");
+            page.append(&r);
+        }
     }
     page
 }

@@ -21,6 +21,39 @@ A few comments near the top (first 30 lines) configure it. All of them are optio
 | `prefix` | file name | typing `<prefix> ` (with the space) hands the query to the plugin |
 | `glyph` | puzzle piece | Nerd Font icon, the character itself or `\uXXXX` ([cheat sheet](https://www.nerdfonts.com/cheat-sheet)) |
 | `mode` | `search` | `search` or `command` |
+| `setting` | none | a value you fill in under Settings → Plugins, see below. Repeat it for more |
+
+## Settings
+
+A plugin that needs a token, a URL or a limit declares it in the header instead of asking you
+to edit the script:
+
+```sh
+# @zunder.setting token "GitHub token with repo scope"
+# @zunder.setting limit "How many repos to list (default 100)"
+```
+
+Each one is `@zunder.setting <key> "<help>"`. Settings → Plugins shows a text row per setting
+under its plugin, with the help text below it. A key named `token` or `password`, or ending in
+`_key`, gets a password entry.
+
+Values are saved in `config.toml` under the plugin's file name (without extension):
+
+```toml
+[plugins.github]
+token = "ghp_…"
+limit = "50"
+```
+
+Every stored value reaches the script as an env var named `ZUNDER_` plus the key in capitals,
+with `-` turned into `_`: `token` is `$ZUNDER_TOKEN`, `api-url` is `$ZUNDER_API_URL`. That works
+in both modes, and for command plugins run from a favorite or a shortcut too. An empty value
+removes it, so check for unset vars and fall back to a default:
+
+```sh
+limit=${ZUNDER_LIMIT:-100}
+[ -n "$ZUNDER_TOKEN" ] || { echo "set a token in Settings → Plugins" >&2; exit 1; }
+```
 
 ## search mode
 
@@ -112,7 +145,8 @@ A few more ideas, each a handful of lines:
 # @zunder.name   GitHub
 # @zunder.prefix gh
 # @zunder.glyph  
-gh repo list --limit 100 --json nameWithOwner,description,url \
+# @zunder.setting limit "How many repos to list (default 100)"
+gh repo list --limit "${ZUNDER_LIMIT:-100}" --json nameWithOwner,description,url \
   --jq ".[] | select(.nameWithOwner | test(\"$1\"; \"i\")) |
         {title: .nameWithOwner, subtitle: (.description // \"\"), action: {open: .url}}" -c
 ```

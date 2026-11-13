@@ -1,5 +1,6 @@
 //! ~/.config/zunder/config.toml, editable by hand or from the settings page (`settings`).
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{LazyLock, RwLock, RwLockReadGuard};
@@ -48,6 +49,9 @@ pub struct Config {
     pub clipboard_history: bool,
     /// Windows: Win+V opens zunder's clipboard history instead of the Windows one.
     pub win_v: bool,
+    /// Values for plugin `@zunder.setting`s, by plugin file stem: `[plugins.github] token = "…"`.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub plugins: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 impl Default for Config {
@@ -74,6 +78,7 @@ impl Default for Config {
             tray: true,
             clipboard_history: true,
             win_v: true,
+            plugins: BTreeMap::new(),
         }
     }
 }
@@ -214,6 +219,26 @@ impl Config {
         Ok(())
     }
 
+    /// The values stored for a plugin (by file stem); empty if none.
+    pub fn plugin_values(&self, plugin: &str) -> BTreeMap<String, String> {
+        self.plugins.get(plugin).cloned().unwrap_or_default()
+    }
+
+    /// Store a plugin setting; an empty value removes it.
+    pub fn set_plugin(&mut self, plugin: &str, key: &str, value: &str) {
+        let value = value.trim();
+        if value.is_empty() {
+            if let Some(table) = self.plugins.get_mut(plugin) {
+                table.remove(key);
+                if table.is_empty() {
+                    self.plugins.remove(plugin);
+                }
+            }
+        } else {
+            self.plugins.entry(plugin.to_owned()).or_default().insert(key.to_owned(), value.to_owned());
+        }
+    }
+
     pub fn enabled(&self, provider: &str) -> bool {
         // "Web" is the old title of the "Other" section; keep existing configs working.
         let legacy = provider.eq_ignore_ascii_case("other").then_some("web");
@@ -251,6 +276,22 @@ mod tests {
         assert!(!c.enabled("Other"));
         c.toggle_provider("Other");
         assert!(c.enabled("Other"));
+    }
+
+    #[test]
+    fn plugin_values() {
+        let mut c: Config = toml::from_str("font_size = 12.0\n[plugins.github]\ntoken = \"abc\"\n").unwrap();
+        assert_eq!(c.plugin_values("github").get("token").map(String::as_str), Some("abc"));
+        c.set_plugin("hello", "greeting", " hi ");
+        let text = toml::to_string_pretty(&c).unwrap();
+        let back: Config = toml::from_str(&text).unwrap();
+        assert_eq!(back.plugin_values("hello").get("greeting").map(String::as_str), Some("hi"));
+        assert_eq!(back.font_size, 12.0);
+        c.set_plugin("github", "token", "");
+        assert!(!c.plugins.contains_key("github"));
+        assert!(c.plugin_values("missing").is_empty());
+        c.set("width", Some("900")).unwrap();
+        assert!(c.plugins.contains_key("hello"));
     }
 
     #[test]
