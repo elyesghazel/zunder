@@ -1018,6 +1018,9 @@ impl Ui {
         self.state.borrow_mut().preview_column = column;
         if !column {
             self.preview.pane.set_visible(false);
+            // a hidden text view still lays out what it holds (a long clip took 450 ms to select
+            // the next row on Windows): let go of it
+            self.preview.text.buffer().set_text("");
         }
     }
 
