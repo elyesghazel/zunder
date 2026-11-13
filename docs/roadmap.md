@@ -45,10 +45,10 @@ Enter) faster; zunder isn't trying to be a Raycast clone.
 - [x] setup as a page inside zunder (`setup`), the terminal version stays
 
 **0.4: installable plugins**
-- [ ] plugin registry and `zunder plugin install <name>`
-- [ ] plugin settings
-- [ ] starter set: wifi, bluetooth, audio, pass, github, color picker, screenshot…
-- [ ] streaming plugin results
+- [x] plugin registry and `zunder plugin install <name>`
+- [x] plugin settings
+- [x] starter set: wifi, bluetooth, audio, pass, github, color picker, screenshot…
+- [x] streaming plugin results
 
 **0.5: sync**
 - [ ] log in with GitHub; favorites, themes, plugins and settings in a private gist
