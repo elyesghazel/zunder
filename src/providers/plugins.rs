@@ -214,7 +214,7 @@ impl Call {
         cmd.arg(&self.arg).envs(env).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         #[cfg(unix)]
         std::os::unix::process::CommandExt::process_group(&mut cmd, 0); // kill takes its children too
-        let mut child = match crate::platform::no_window(&mut cmd).spawn() {
+        let mut child = match spawn(&mut cmd) {
             Ok(child) => child,
             Err(e) => return vec![error_item(&format!("failed to run: {e}"))],
         };
@@ -301,6 +301,23 @@ impl Call {
 
 /// Stop a stale run: the whole process group on unix, so `find` or `curl` started by the
 /// script go too.
+/// Spawn, retrying briefly on "text file busy": a script that was just written (by
+/// `zunder plugin install`, an editor, a test) can't be exec'd while a forked child elsewhere
+/// still holds its write handle.
+fn spawn(cmd: &mut Command) -> std::io::Result<Child> {
+    const ETXTBSY: i32 = 26; // same on Linux and macOS
+    let mut tries = 0;
+    loop {
+        match crate::platform::no_window(cmd).spawn() {
+            Err(e) if cfg!(unix) && e.raw_os_error() == Some(ETXTBSY) && tries < 5 => {
+                tries += 1;
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            r => return r,
+        }
+    }
+}
+
 fn kill(child: &mut Child) {
     #[cfg(unix)]
     {
