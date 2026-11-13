@@ -83,6 +83,14 @@ grep -ri -- "$1" ~/notes | head -50
 Now `note groceries` searches your notes. Print JSON lines instead for titles, icons and actions.
 See [docs/plugins.md](docs/plugins.md).
 
+Ready-made ones (wifi, bluetooth, audio, pass, github, screenshot, systemd and more) are in
+[zunder-plugins](https://github.com/elyesghazel/zunder-plugins):
+
+```sh
+zunder plugin search
+zunder plugin install wifi
+```
+
 ## Docs
 
 - [Installation](docs/installation.md): every way to install, and what works on Linux, macOS and Windows
