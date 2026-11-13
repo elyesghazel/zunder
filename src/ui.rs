@@ -173,6 +173,12 @@ pub fn run(initial: Option<&'static str>) -> ExitCode {
         let rx = rx.clone();
         glib::spawn_future_local(async move {
             while let Ok(cmd) = rx.recv().await {
+                if let Some(t) = ipc::sent_at() {
+                    timing("hotkey → main loop", t);
+                }
+                if let Some(t) = ipc::received_at() {
+                    timing("socket → main loop", t);
+                }
                 ui.command(&cmd);
             }
         });
@@ -668,12 +674,18 @@ impl Ui {
         self.entry.set_text("");
         self.refresh();
         let t = std::time::Instant::now();
+        let realized = self.window.is_realized();
         self.window.present();
+        if timing_on() {
+            time_first_paint(&self.window, started);
+        }
+        timing(if realized { "present" } else { "present (realize)" }, t);
+        let t = std::time::Instant::now();
         crate::platform::after_show(&self.window);
+        timing("after_show", t);
         if !switch {
             self.entry.grab_focus();
         }
-        timing("present", t);
         timing("show", started);
     }
 
@@ -753,14 +765,21 @@ impl Ui {
         }
         let (previous, scroll) = (self.state.borrow().selected, self.scroll.vadjustment().value());
         self.state.borrow_mut().sections = sections.clone();
+        let t = std::time::Instant::now();
         self.list.remove_all();
+        timing("  clear rows", t);
+        let t = std::time::Instant::now();
         let mut items = Vec::new();
         let mut rows = Vec::new();
         for section in sections {
             self.list.append(&heading(&section.title, section.busy));
             for item in section.items {
+                let t = std::time::Instant::now();
                 let (row, marker) = item_row(&item);
                 self.list.append(&row);
+                if timing_on() && t.elapsed() > Duration::from_millis(5) {
+                    timing(&format!("    row {:?}", item.title.chars().take(24).collect::<String>()), t);
+                }
                 rows.push((row, marker));
                 items.push(item);
             }
@@ -770,10 +789,13 @@ impl Ui {
             row.set_child(Some(&label("  nothing here", "empty")));
             self.list.append(&row);
         }
+        timing("  build rows", t);
         let count = items.len();
         let column = items.iter().any(|i| i.image.is_some() || i.text.is_some())
             || (self.state.borrow().switch && config::get().previews && items.iter().any(|i| i.preview.is_some()));
+        let t = std::time::Instant::now();
         self.fit_panel(column);
+        timing("  fit panel", t);
         self.status.set_text(&if count == 1 { "1 result".into() } else { format!("{count} results") });
         let first = {
             let mut s = self.state.borrow_mut();
@@ -782,6 +804,7 @@ impl Ui {
             // ALT+TAB lands on the previous window, like every other switcher
             usize::from(s.switch && s.menu.is_none() && count > 1 && self.entry.text().is_empty())
         };
+        let t = std::time::Instant::now();
         if keep {
             self.select(previous.min(count.saturating_sub(1)));
             self.scroll.vadjustment().set_value(scroll);
@@ -789,6 +812,7 @@ impl Ui {
             self.scroll.vadjustment().set_value(0.0);
             self.select(first);
         }
+        timing("  select", t);
     }
 
     /// The ALT+TAB grid: one thumbnail per window, the previous one selected. The overview
@@ -948,7 +972,9 @@ impl Ui {
             return;
         };
         marker.set_text("▌");
+        let t = std::time::Instant::now();
         self.list.select_row(Some(row));
+        timing("    select_row", t);
         // keep the selection in view (the first item also reveals its heading)
         let adj = self.scroll.vadjustment();
         if i == 0 {
@@ -984,6 +1010,12 @@ impl Ui {
     }
 
     fn show_preview(&self) {
+        let t = std::time::Instant::now();
+        self.show_preview_now();
+        timing("    show_preview", t);
+    }
+
+    fn show_preview_now(&self) {
         let s = self.state.borrow();
         if !s.preview_column {
             self.preview.pane.set_visible(false);
@@ -1645,11 +1677,28 @@ fn combo(key: gdk::Key, mods: gdk::ModifierType) -> Option<String> {
 }
 
 /// `ZUNDER_TIMING=1 zunder server` prints how long each step takes, for keeping zunder fast.
-fn timing(what: &str, since: std::time::Instant) {
-    static ON: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| std::env::var_os("ZUNDER_TIMING").is_some());
-    if *ON {
+pub fn timing(what: &str, since: std::time::Instant) {
+    if timing_on() {
         eprintln!("zunder: {what:<24} {:>7.2} ms", since.elapsed().as_secs_f64() * 1000.0);
     }
+}
+
+pub fn timing_on() -> bool {
+    static ON: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| std::env::var_os("ZUNDER_TIMING").is_some());
+    *ON
+}
+
+/// With timing on: how long from `since` until the window has really been drawn, once.
+fn time_first_paint(window: &gtk::ApplicationWindow, since: std::time::Instant) {
+    let Some(clock) = window.frame_clock() else { return };
+    let id: Rc<RefCell<Option<glib::SignalHandlerId>>> = Rc::default();
+    let handler = id.clone();
+    *id.borrow_mut() = Some(clock.connect_after_paint(move |clock| {
+        timing("painted", since);
+        if let Some(id) = handler.borrow_mut().take() {
+            clock.disconnect(id);
+        }
+    }));
 }
 
 fn alt_held(window: &gtk::ApplicationWindow) -> bool {

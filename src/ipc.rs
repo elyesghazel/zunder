@@ -3,6 +3,8 @@
 
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
+use std::sync::Mutex;
+use std::time::Instant;
 use std::{fs, thread};
 
 #[cfg(unix)]
@@ -45,8 +47,28 @@ fn bind() -> io::Result<Listener> {
     Ok(listener)
 }
 
+/// When this process last sent a command to itself (a global shortcut, the tray) and when the
+/// server last received one, for `ZUNDER_TIMING`.
+static SENT: Mutex<Option<Instant>> = Mutex::new(None);
+static RECEIVED: Mutex<Option<Instant>> = Mutex::new(None);
+
 pub fn send(cmd: &str) -> io::Result<()> {
-    connect()?.write_all(cmd.as_bytes())
+    *SENT.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
+    let sent = connect().and_then(|mut s| s.write_all(cmd.as_bytes()));
+    if sent.is_err() {
+        sent_at();
+    }
+    sent
+}
+
+/// Taken once: when the command being handled was sent from inside this process.
+pub fn sent_at() -> Option<Instant> {
+    SENT.lock().unwrap_or_else(|e| e.into_inner()).take()
+}
+
+/// Taken once: when the command being handled came in through the socket.
+pub fn received_at() -> Option<Instant> {
+    RECEIVED.lock().unwrap_or_else(|e| e.into_inner()).take()
 }
 
 /// Bind and forward every received command into `tx`.
@@ -58,7 +80,9 @@ pub fn listen(tx: async_channel::Sender<String>) -> io::Result<()> {
     thread::spawn(move || {
         for mut stream in listener.incoming().flatten() {
             let mut buf = String::new();
-            if stream.read_to_string(&mut buf).is_ok() && tx.send_blocking(buf.trim_end_matches('\n').to_owned()).is_err() {
+            let read = stream.read_to_string(&mut buf).is_ok();
+            *RECEIVED.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
+            if read && tx.send_blocking(buf.trim_end_matches('\n').to_owned()).is_err() {
                 break;
             }
         }

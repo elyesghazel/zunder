@@ -117,14 +117,24 @@ impl Engine {
     }
 
     pub fn reload(&mut self) {
+        use crate::ui::timing;
+        use std::time::Instant;
         for p in &mut self.providers {
+            let t = Instant::now();
             p.reload();
+            if t.elapsed() > std::time::Duration::from_millis(1) {
+                timing(&format!("  reload {}", p.title()), t);
+            }
         }
+        let t = Instant::now();
         self.plugins.reload();
+        timing("  reload plugins", t);
         // files other processes (settings window, `zunder import`) may have changed
+        let t = Instant::now();
         self.history = History::load();
         self.favorites = Favorites::load();
         self.binds = Binds::load();
+        timing("  reload history", t);
     }
 
     pub fn search(&self, query: &str, windows: &[Client], switch: bool) -> (Vec<Section>, Vec<(String, Job)>) {
