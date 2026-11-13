@@ -272,6 +272,13 @@ fn prefix() -> Option<PathBuf> {
     Some(std::env::current_exe().ok()?.parent()?.parent()?.to_path_buf())
 }
 
+/// Realize the window once at startup: creating its renderer is the slow part of the first open
+/// (GTK tries OpenGL first, which takes seconds to fail where it isn't available, then falls
+/// back), so it happens before anyone presses ALT+SPACE.
+pub fn warm_up(window: &gtk::ApplicationWindow) {
+    WidgetExt::realize(window);
+}
+
 /// Windows lets GTK put the window anywhere: center it on the monitor under the mouse, keep it
 /// above other windows and give it the keyboard. Runs again a moment later, after GTK has
 /// settled the final size (the preview column changes the width).
