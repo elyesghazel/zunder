@@ -3,6 +3,32 @@
 A plugin is any executable file in `~/.config/zunder/plugins/`: a shell script, Python, a
 compiled binary, anything. zunder finds it when it opens, so there's nothing to register.
 
+## Install from the registry
+
+Ready-made plugins live in [elyesghazel/zunder-plugins](https://github.com/elyesghazel/zunder-plugins).
+
+```sh
+zunder plugin search [query]     # name, description, and whether it's installed or has an update
+zunder plugin install <name>...
+zunder plugin update [name]...   # every installed one when no name is given
+zunder plugin remove <name>...
+zunder plugin list               # installed from the registry, with the commit
+```
+
+- `install` downloads the plugin at the commit the registry names, checks its sha256 and writes
+  it to `~/.config/zunder/plugins/<name>`. It warns when a program the plugin needs isn't on your
+  PATH and refuses plugins made for another system.
+- What came from the registry is recorded in `~/.config/zunder/plugins/.installed.json`. Your own
+  files in the folder are never touched by `update` or `remove`.
+- `update` skips a plugin you edited by hand and says so. To get the registry version back,
+  `remove` it and `install` it again.
+- The index is cached in `~/.cache/zunder/plugins-index.json` for an hour.
+- A running zunder reloads its plugins afterwards.
+
+`ZUNDER_PLUGIN_INDEX=<url or path>` uses another index, e.g. a local checkout of the registry
+(`ZUNDER_PLUGIN_INDEX=~/src/zunder-plugins/index.json`); with a path, plugin files are read next
+to it instead of downloaded, and nothing is cached.
+
 ## Header
 
 A few comments near the top (first 30 lines) configure it. All of them are optional.
