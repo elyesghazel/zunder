@@ -1322,7 +1322,11 @@ fn icon(item: &Item) -> Option<gtk::Image> {
         return None;
     }
     let image = if Path::new(icon).is_absolute() {
-        Path::new(icon).exists().then(|| gtk::Image::from_file(icon))?
+        if cfg!(windows) {
+            gtk::Image::from_paintable(Some(&cached_texture(icon)?))
+        } else {
+            Path::new(icon).exists().then(|| gtk::Image::from_file(icon))?
+        }
     } else {
         let theme = gtk::IconTheme::for_display(&gdk::Display::default()?);
         theme.has_icon(icon).then(|| gtk::Image::from_icon_name(icon))?
@@ -1330,6 +1334,21 @@ fn icon(item: &Item) -> Option<gtk::Image> {
     image.set_pixel_size(ICON_SIZE);
     image.add_css_class("icon");
     Some(image)
+}
+
+/// Icon files decoded once. Windows only: its app icons are PNGs whose name changes with the
+/// shortcut, so a path always means the same picture, and decoding a dozen of them on every
+/// render costs 100 ms there.
+fn cached_texture(path: &str) -> Option<gdk::Texture> {
+    thread_local! {
+        static TEXTURES: RefCell<std::collections::HashMap<String, gdk::Texture>> = RefCell::default();
+    }
+    if let Some(t) = TEXTURES.with(|c| c.borrow().get(path).cloned()) {
+        return Some(t);
+    }
+    let texture = gdk::Texture::from_filename(path).ok()?;
+    TEXTURES.with(|c| c.borrow_mut().insert(path.to_owned(), texture.clone()));
+    Some(texture)
 }
 
 impl Ui {
