@@ -339,8 +339,17 @@ fn unescape(s: &str) -> String {
         .map_or_else(|| s.to_owned(), String::from)
 }
 
+/// Every open rescans the folder; a plugin's header is only read again when its file changed.
 fn scan() -> Vec<Plugin> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    type Stamp = (Option<std::time::SystemTime>, u64);
+    static SEEN: Mutex<Option<HashMap<PathBuf, (Stamp, Plugin)>>> = Mutex::new(None);
+
     let Ok(entries) = fs::read_dir(dir()) else { return Vec::new() };
+    let mut seen = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+    let old = seen.take().unwrap_or_default();
+    let mut fresh = HashMap::new();
     let mut list: Vec<Plugin> = entries
         .flatten()
         .filter_map(|e| {
@@ -349,27 +358,41 @@ fn scan() -> Vec<Plugin> {
             if !meta.is_file() || !crate::platform::is_executable(&meta, &path) {
                 return None;
             }
-            let stem = path.file_stem()?.to_string_lossy().into_owned();
-            let mut p = Plugin { name: stem.clone(), prefix: stem, glyph: "\u{f12e}".into(), command: false, path: path.clone(), settings: Vec::new() };
-            let head = fs::read(&path).ok()?;
-            for line in String::from_utf8_lossy(&head[..head.len().min(4096)]).lines().take(30) {
-                let Some((_, rest)) = line.split_once("@zunder.") else { continue };
-                let (key, value) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
-                let value = value.trim().to_owned();
-                match key {
-                    "name" => p.name = value,
-                    "prefix" => p.prefix = value,
-                    "glyph" => p.glyph = unescape(&value),
-                    "mode" => p.command = value == "command",
-                    "setting" => p.settings.extend(parse_setting(&value)),
-                    _ => {}
-                }
-            }
-            Some(p)
+            let stamp = (meta.modified().ok(), meta.len());
+            let plugin = match old.get(&path) {
+                Some((s, p)) if *s == stamp => p.clone(),
+                _ => read_plugin(path.clone())?,
+            };
+            fresh.insert(path, (stamp, plugin.clone()));
+            Some(plugin)
         })
         .collect();
+    *seen = Some(fresh);
     list.sort_by(|a, b| a.name.cmp(&b.name));
     list
+}
+
+/// A plugin with what its header comments (the first 4 KiB) say about it.
+fn read_plugin(path: PathBuf) -> Option<Plugin> {
+    use std::io::Read;
+    let stem = path.file_stem()?.to_string_lossy().into_owned();
+    let mut head = Vec::new();
+    fs::File::open(&path).ok()?.take(4096).read_to_end(&mut head).ok()?;
+    let mut p = Plugin { name: stem.clone(), prefix: stem, glyph: "\u{f12e}".into(), command: false, path, settings: Vec::new() };
+    for line in String::from_utf8_lossy(&head).lines().take(30) {
+        let Some((_, rest)) = line.split_once("@zunder.") else { continue };
+        let (key, value) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
+        let value = value.trim().to_owned();
+        match key {
+            "name" => p.name = value,
+            "prefix" => p.prefix = value,
+            "glyph" => p.glyph = unescape(&value),
+            "mode" => p.command = value == "command",
+            "setting" => p.settings.extend(parse_setting(&value)),
+            _ => {}
+        }
+    }
+    Some(p)
 }
 
 #[cfg(test)]
