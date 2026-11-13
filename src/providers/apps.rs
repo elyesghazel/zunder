@@ -172,8 +172,31 @@ pub fn scan_all() -> Vec<App> {
     {
         return apps.clone();
     }
-    let apps = scan_fresh();
+    // Windows: a rescan resolves every Start menu shortcut (hundreds of ms on a company laptop),
+    // so after the first one it runs in the background and this open keeps the last list
+    if cfg!(windows)
+        && let Some((_, _, apps)) = cache.as_ref()
+    {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static RUNNING: AtomicBool = AtomicBool::new(false);
+        if !RUNNING.swap(true, Ordering::SeqCst) {
+            std::thread::spawn(move || {
+                let apps = timed_scan();
+                *CACHE.lock().unwrap_or_else(|e| e.into_inner()) = Some((stamps, Instant::now(), apps));
+                RUNNING.store(false, Ordering::SeqCst);
+            });
+        }
+        return apps.clone();
+    }
+    let apps = timed_scan();
     *cache = Some((stamps, Instant::now(), apps.clone()));
+    apps
+}
+
+fn timed_scan() -> Vec<App> {
+    let t = std::time::Instant::now();
+    let apps = scan_fresh();
+    crate::ui::timing("apps scan", t);
     apps
 }
 
