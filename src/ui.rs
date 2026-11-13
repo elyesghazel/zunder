@@ -167,6 +167,14 @@ pub fn run(initial: Option<&'static str>) -> ExitCode {
         // after GTK is up: the macOS menu bar item needs the running NSApplication
         crate::platform::init_tray(tx.clone());
         let ui = Ui::build(app);
+        let t = std::time::Instant::now();
+        crate::platform::warm_up(&ui.window);
+        // Windows: build the start screen now too. Its first icons load the image decoder and
+        // fonts (half a second on a company laptop); the first open then reuses the rows.
+        if cfg!(windows) {
+            ui.refresh();
+        }
+        timing("warm up", t);
         if let Some(cmd) = initial {
             ui.command(cmd);
         }

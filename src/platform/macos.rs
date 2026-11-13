@@ -37,6 +37,9 @@ pub fn init() {
     gtk::glib::idle_add_once(hotkeys::start);
 }
 
+/// Called once after the launcher window is built, before it is first shown.
+pub fn warm_up(_window: &gtk::ApplicationWindow) {}
+
 /// Called right after the launcher is shown: center it on its screen, again on every size change
 /// (the window grows with the results and the preview column). GTK can't place windows on macOS,
 /// so this goes through the NSWindow behind it.

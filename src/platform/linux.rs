@@ -40,6 +40,9 @@ pub fn update_hint() -> &'static str {
 /// Called once at startup, before GTK.
 pub fn init() {}
 
+/// Called once after the launcher window is built, before it is first shown.
+pub fn warm_up(_window: &gtk::ApplicationWindow) {}
+
 /// Called right after the launcher is shown.
 pub fn after_show(_window: &gtk::ApplicationWindow) {}
 
