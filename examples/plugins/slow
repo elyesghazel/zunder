@@ -1,0 +1,9 @@
+#!/bin/sh
+# Prints a line every 300 ms, to see results stream in. Try `slow x`, then type another key.
+# @zunder.name   Slow
+# @zunder.prefix slow
+# @zunder.glyph  
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    echo "$1 line $i"
+    sleep 0.3
+done
