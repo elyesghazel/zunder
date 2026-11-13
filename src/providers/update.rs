@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::engine::{Ctx, Job, Provider};
+use crate::engine::{Ctx, Job, Provider, Sink};
 use crate::item::{Action, Item, MenuAction};
 
 pub struct Update;
@@ -325,9 +325,9 @@ impl Provider for Update {
     fn deferred(&self, cx: &Ctx) -> Option<(String, Job)> {
         #[cfg(windows)]
         if cx.query.trim_end() == INSTALL {
-            return Some(("Update".to_owned(), Box::new(install)));
+            return Some(("Update".to_owned(), Box::new(|_: &Sink| install())));
         }
-        (cx.query.trim_end() == PREFIX).then(|| ("Update".to_owned(), Box::new(check_now) as Job))
+        (cx.query.trim_end() == PREFIX).then(|| ("Update".to_owned(), Box::new(|_: &Sink| check_now()) as Job))
     }
 }
 

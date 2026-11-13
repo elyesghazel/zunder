@@ -83,8 +83,10 @@ src/
 7. Enter runs the item's `Action` after the surface is gone, bumps its launch count and appends
    it to the launch log.
 
-Search-mode plugins run in a thread; their results come back over a channel tagged with a
-sequence number, and anything older than the current query is dropped.
+Search-mode plugins run in a thread; their lines come back in batches (every 50 ms or 20 lines)
+over a channel tagged with a sequence number, and anything older than the current query is
+dropped. A provider's `deferred` job gets a `Sink`: `sink.send(items)` appends to its section
+right away, `sink.stale()` says the query moved on (plugins kill their script then).
 
 ## Adding a provider
 

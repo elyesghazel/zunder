@@ -4,6 +4,8 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use gtk::{gdk, glib, graphene, prelude::*};
@@ -14,7 +16,7 @@ use crate::config;
 use crate::settings_window;
 use crate::store;
 use crate::theme;
-use crate::engine::{Engine, Section};
+use crate::engine::{Engine, Job, Section, Sink};
 use crate::item::Item;
 use crate::providers::windows::{self, Client};
 use crate::ipc;
@@ -102,8 +104,38 @@ struct Ui {
     /// Window keys under the overview.
     switch_hint: gtk::Label,
     state: RefCell<State>,
-    plugin_tx: async_channel::Sender<(u64, String, Vec<Item>)>,
+    plugin_tx: async_channel::Sender<Batch>,
+    /// `seq` for background jobs: they stop (and kill their scripts) once it moves on.
+    live: Arc<AtomicU64>,
     capture_tx: async_channel::Sender<String>,
+}
+
+/// Results from a background job for query `seq`. `first` is its first message (it makes the
+/// section, later ones append); `done` means the job ended.
+struct Batch {
+    seq: u64,
+    title: String,
+    items: Vec<Item>,
+    first: bool,
+    done: bool,
+}
+
+/// Run `job` on this thread, streaming what it finds to the UI until it ends or `live` moves past `seq`.
+fn run_job(seq: u64, title: String, job: Job, tx: async_channel::Sender<Batch>, live: Arc<AtomicU64>) {
+    let sent = Arc::new(AtomicBool::new(false));
+    let sink = {
+        let (tx, title, sent) = (tx.clone(), title.clone(), sent.clone());
+        Sink::new(
+            move |items| {
+                let first = !sent.swap(true, Ordering::Relaxed);
+                let _ = tx.send_blocking(Batch { seq, title: title.clone(), items, first, done: false });
+            },
+            move || live.load(Ordering::Relaxed) != seq,
+        )
+    };
+    let items = job(&sink);
+    let first = !sent.load(Ordering::Relaxed);
+    let _ = tx.send_blocking(Batch { seq, title, items, first, done: true });
 }
 
 /// Right-hand pane in ALT+TAB mode: a screenshot of the selected window.
@@ -340,6 +372,7 @@ impl Ui {
                 menu: None,
             }),
             plugin_tx,
+            live: Arc::new(AtomicU64::new(0)),
             capture_tx,
         });
         ui.connect();
@@ -364,11 +397,21 @@ impl Ui {
 
         let ui2 = ui.clone();
         glib::spawn_future_local(async move {
-            while let Ok((seq, title, items)) = plugin_rx.recv().await {
-                if ui2.state.borrow().seq != seq || items.is_empty() {
+            while let Ok(Batch { seq, title, items, first, done }) = plugin_rx.recv().await {
+                if ui2.state.borrow().seq != seq {
                     continue;
                 }
                 let mut sections = ui2.state.borrow().sections.clone();
+                // later batches of a streaming job grow the section its first batch made
+                if let Some(section) = sections.iter_mut().find(|s| !first && s.busy && s.title == title) {
+                    section.items.extend(items);
+                    section.busy = !done;
+                    ui2.render(sections, true);
+                    continue;
+                }
+                if items.is_empty() {
+                    continue;
+                }
                 // a "pending:" placeholder (e.g. "checking GitHub…") makes room for the real answer
                 let placeholder = sections
                     .iter()
@@ -380,7 +423,7 @@ impl Ui {
                     }
                     None => sections.iter().position(|s| s.title == "Other").unwrap_or(sections.len()),
                 };
-                sections.insert(at, Section { title, items });
+                sections.insert(at, Section { title, items, busy: !done });
                 ui2.render(sections, true);
             }
         });
@@ -654,6 +697,8 @@ impl Ui {
             let mut s = self.state.borrow_mut();
             s.hold = false;
             s.menu = None;
+            s.seq += 1; // late results are dropped and running plugins stop
+            self.live.store(s.seq, Ordering::Relaxed);
         }
         self.window.set_visible(false);
     }
@@ -667,6 +712,7 @@ impl Ui {
         let (sections, jobs, seq) = {
             let mut s = self.state.borrow_mut();
             s.seq += 1;
+            self.live.store(s.seq, Ordering::Relaxed);
             let t = std::time::Instant::now();
             let (sections, jobs) = s.engine.search(&query, &s.windows, s.switch);
             timing(&format!("search {query:?}"), t);
@@ -679,10 +725,8 @@ impl Ui {
             return;
         }
         for (title, job) in jobs {
-            let tx = self.plugin_tx.clone();
-            std::thread::spawn(move || {
-                let _ = tx.send_blocking((seq, title, job()));
-            });
+            let (tx, live) = (self.plugin_tx.clone(), self.live.clone());
+            std::thread::spawn(move || run_job(seq, title, job, tx, live));
         }
         let t = std::time::Instant::now();
         self.render(sections, false);
@@ -713,7 +757,7 @@ impl Ui {
         let mut items = Vec::new();
         let mut rows = Vec::new();
         for section in sections {
-            self.list.append(&heading(&section.title));
+            self.list.append(&heading(&section.title, section.busy));
             for item in section.items {
                 let (row, marker) = item_row(&item);
                 self.list.append(&row);
@@ -1410,7 +1454,7 @@ impl Ui {
         let favorite = self.state.borrow().engine.favorites.contains(&item.id);
         let entries = actions::menu(&item, &windows, favorite, query);
         let title = item.title.lines().next().unwrap_or_default().chars().take(60).collect::<String>();
-        self.render(vec![Section { title, items: entries }], false);
+        self.render(vec![Section { title, items: entries, busy: false }], false);
         self.status.set_text("esc back");
     }
 
@@ -1615,10 +1659,13 @@ fn alt_held(window: &gtk::ApplicationWindow) -> bool {
         .is_some_and(|kb| kb.modifier_state().contains(gdk::ModifierType::ALT_MASK))
 }
 
-fn heading(title: &str) -> gtk::ListBoxRow {
+fn heading(title: &str, busy: bool) -> gtk::ListBoxRow {
     let b = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     b.add_css_class("heading");
     b.append(&label(title, "heading-title"));
+    if busy {
+        b.append(&label("…", "heading-busy"));
+    }
     let rule = gtk::Separator::new(gtk::Orientation::Horizontal);
     rule.set_hexpand(true);
     rule.set_valign(gtk::Align::Center);
