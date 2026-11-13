@@ -1,7 +1,7 @@
 //! The settings window: a sidebar of pages on the left, the settings of the page on the right.
 //! A normal toplevel window (not the overlay), styled like the launcher.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gtk::{gdk, glib, prelude::*};
@@ -10,12 +10,15 @@ use gtk4 as gtk;
 use crate::config::{self, Kind, SETTINGS};
 use crate::item::{Action, Item};
 use crate::providers::plugins::{self, Plugin};
+use crate::registry::{Catalog, Registry, Report};
 use crate::store::{Binds, Favorites};
 
 /// What the window can't read from disk by itself.
 pub struct Info {
     pub providers: Vec<String>,
     pub plugins: Vec<Plugin>,
+    /// Rescan the plugins folder in the launcher and return what it found.
+    pub reload_plugins: Rc<dyn Fn() -> Vec<Plugin>>,
 }
 
 thread_local! {
@@ -436,21 +439,188 @@ fn plugins_page(info: &Rc<Info>, changed: &Rc<dyn Fn()>, status: &gtk::Label) ->
     let dir = plugins::dir();
     open.connect_clicked(move |_| crate::item::ensure_and_open(&dir, true));
     page.append(&row("Plugins folder", &plugins::dir().display().to_string().replace(&home(), "~"), &open));
-    if info.plugins.is_empty() {
-        page.append(&label("no plugins installed", "empty"));
+    let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    page.append(&body);
+    let view = Rc::new(PluginsView {
+        body,
+        plugins: RefCell::new(info.plugins.clone()),
+        catalog: RefCell::new(None),
+        busy: Cell::new(false),
+        reload: info.reload_plugins.clone(),
+        changed: changed.clone(),
+        status: status.clone(),
+    });
+    view.render();
+    view.run(None);
+    page
+}
+
+enum Op {
+    Install,
+    Update,
+    Remove,
+}
+
+/// The two plugin lists, redrawn after the registry answers or a plugin was added or removed.
+struct PluginsView {
+    body: gtk::Box,
+    plugins: RefCell<Vec<Plugin>>,
+    /// None while the registry is being read.
+    catalog: RefCell<Option<Result<Catalog, String>>>,
+    busy: Cell<bool>,
+    reload: Rc<dyn Fn() -> Vec<Plugin>>,
+    changed: Rc<dyn Fn()>,
+    status: gtk::Label,
+}
+
+impl PluginsView {
+    /// Run `op` (or nothing) and re-read the registry on a worker thread, then redraw.
+    fn run(self: &Rc<Self>, op: Option<(Op, String)>) {
+        if self.busy.replace(true) {
+            return;
+        }
+        if let Some((op, name)) = &op {
+            let verb = match op {
+                Op::Install => "installing",
+                Op::Update => "updating",
+                Op::Remove => "removing",
+            };
+            self.status.set_text(&format!("{verb} {name}…"));
+            self.render();
+        }
+        let (tx, rx) = async_channel::bounded::<(Option<Result<Report, String>>, Result<Catalog, String>)>(1);
+        std::thread::spawn(move || {
+            let reg = Registry::from_env();
+            let report = op.map(|(op, name)| {
+                let names = [name];
+                match op {
+                    Op::Install => reg.install(&names),
+                    Op::Update => reg.update(&names),
+                    Op::Remove => reg.remove(&names),
+                }
+            });
+            let _ = tx.send_blocking((report, reg.catalog()));
+        });
+        let view = self.clone();
+        glib::spawn_future_local(async move {
+            let Ok((report, catalog)) = rx.recv().await else { return };
+            view.busy.set(false);
+            if let Some(report) = report {
+                match report {
+                    Ok(r) => view.status.set_text(&r.summary()),
+                    Err(e) => view.status.set_text(&e),
+                }
+                *view.plugins.borrow_mut() = (view.reload)();
+                (view.changed)();
+            }
+            *view.catalog.borrow_mut() = Some(catalog);
+            view.render();
+        });
     }
-    for p in &info.plugins {
-        let how = if p.command { "command, runs once".to_owned() } else { format!("type `{} <query>`", p.prefix) };
-        let path = label(&p.path.display().to_string().replace(&home(), "~"), "setting-help");
-        page.append(&row(&format!("{}  {}", p.glyph, p.name), &how, &path));
-        for s in &p.settings {
-            let help = if s.help.is_empty() { format!("${}", plugins::env_name(&s.key)) } else { format!("{}  ·  ${}", s.help, plugins::env_name(&s.key)) };
-            let r = row(&s.key, &help, &plugin_setting_control(p, s, changed, status));
-            r.add_css_class("plugin-setting");
-            page.append(&r);
+
+    fn button(self: &Rc<Self>, text: &str, op: fn() -> Op, name: &str) -> gtk::Button {
+        let button = gtk::Button::with_label(text);
+        button.add_css_class("flat-button");
+        button.set_sensitive(!self.busy.get());
+        let (view, name) = (self.clone(), name.to_owned());
+        button.connect_clicked(move |_| view.run(Some((op(), name.clone()))));
+        button
+    }
+
+    fn render(self: &Rc<Self>) {
+        while let Some(child) = self.body.first_child() {
+            self.body.remove(&child);
+        }
+        let catalog = self.catalog.borrow();
+        let ok = catalog.as_ref().and_then(|c| c.as_ref().ok());
+
+        self.body.append(&section("Installed"));
+        let plugins = self.plugins.borrow();
+        if plugins.is_empty() {
+            self.body.append(&label("no plugins installed", "empty"));
+        }
+        for p in plugins.iter() {
+            let file = p.path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+            let how = if p.command { "command, runs once".to_owned() } else { format!("type `{} <query>`", p.prefix) };
+            let controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+            let from_registry = ok.is_some_and(|c| c.installed.contains_key(&file));
+            if from_registry {
+                if ok.is_some_and(|c| c.has_update(&file)) {
+                    let update = self.button("update", || Op::Update, &file);
+                    update.add_css_class("primary");
+                    controls.append(&update);
+                }
+                controls.append(&self.button("remove", || Op::Remove, &file));
+            } else {
+                controls.append(&label(&p.path.display().to_string().replace(&home(), "~"), "setting-help"));
+            }
+            self.body.append(&row(&format!("{}  {}", p.glyph, p.name), &how, &controls));
+            for s in &p.settings {
+                let help = if s.help.is_empty() { format!("${}", plugins::env_name(&s.key)) } else { format!("{}  ·  ${}", s.help, plugins::env_name(&s.key)) };
+                let r = row(&s.key, &help, &plugin_setting_control(p, s, &self.changed, &self.status));
+                r.add_css_class("plugin-setting");
+                self.body.append(&r);
+            }
+        }
+
+        self.body.append(&section("Available"));
+        let catalog = match catalog.as_ref() {
+            None => {
+                self.body.append(&label("reading the plugin registry…", "empty"));
+                return;
+            }
+            Some(Err(e)) => {
+                let l = label(&format!("can't read the plugin registry: {e}"), "empty");
+                l.set_wrap(true);
+                self.body.append(&l);
+                return;
+            }
+            Some(Ok(c)) => c,
+        };
+        if let Some(stale) = &catalog.stale {
+            let l = label(&stale.describe(), "setting-help");
+            l.set_wrap(true);
+            self.body.append(&l);
+        }
+        let loaded: Vec<String> = plugins.iter().filter_map(|p| p.path.file_name().map(|f| f.to_string_lossy().into_owned())).collect();
+        let available: Vec<_> = catalog
+            .plugins
+            .iter()
+            .filter(|e| !catalog.installed.contains_key(&e.name) && !loaded.contains(&e.name))
+            .collect();
+        if available.is_empty() {
+            self.body.append(&label("every plugin in the registry is installed", "empty"));
+        }
+        for e in available {
+            let title = if e.title.is_empty() { &e.name } else { &e.title };
+            let control: gtk::Widget = if !e.runs_here() {
+                label(&format!("{} only", e.platforms.join(", ")), "setting-help").upcast()
+            } else if catalog.taken.contains(&e.name) {
+                label("a file with this name is in the folder", "setting-help").upcast()
+            } else {
+                self.button("install", || Op::Install, &e.name).upcast()
+            };
+            let r = row(title, &e.description, &control);
+            if !e.requires.is_empty() {
+                let missing = catalog.missing.get(&e.name);
+                let text = e
+                    .requires
+                    .iter()
+                    .map(|b| if missing.is_some_and(|m| m.contains(b)) { format!("{b} (missing)") } else { b.clone() })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let needs = label(&format!("requires {text}"), "setting-help");
+                if let Some(text) = r.first_child().and_downcast::<gtk::Box>() {
+                    text.append(&needs);
+                }
+            }
+            self.body.append(&r);
         }
     }
-    page
+}
+
+fn section(title: &str) -> gtk::Label {
+    label(title, "section-title")
 }
 
 fn about_page() -> gtk::Box {
