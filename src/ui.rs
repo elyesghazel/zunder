@@ -581,8 +581,7 @@ impl Ui {
     fn command(self: &Rc<Self>, cmd: &str) {
         let visible = self.window.is_visible();
         if let Some(query) = cmd.strip_prefix("show ") {
-            self.show(false);
-            self.entry.set_text(query);
+            self.show_with(false, query);
             self.entry.set_position(-1);
             return;
         }
@@ -639,6 +638,11 @@ impl Ui {
     }
 
     fn show(self: &Rc<Self>, switch: bool) {
+        self.show_with(switch, "");
+    }
+
+    /// Show the launcher with `query` typed in (empty: the start screen).
+    fn show_with(self: &Rc<Self>, switch: bool, query: &str) {
         let started = std::time::Instant::now();
         {
             let mut s = self.state.borrow_mut();
@@ -671,8 +675,12 @@ impl Ui {
         self.scroll.set_min_content_height(height);
         self.scroll.set_max_content_height(height);
         self.preview.text_cache.borrow_mut().clear();
-        self.entry.set_text("");
-        self.refresh();
+        // a new text searches by itself (the entry's changed signal): search only once
+        if self.entry.text() == query {
+            self.refresh();
+        } else {
+            self.entry.set_text(query);
+        }
         let t = std::time::Instant::now();
         let realized = self.window.is_realized();
         self.window.present();
