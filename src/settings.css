@@ -153,3 +153,5 @@ button.flat-button.primary:hover { background: alpha(@accent, 0.85); }
   border: 1px solid @ghost;
   border-radius: 4px;
 }
+
+.section-title { color: @muted; font-weight: bold; margin: 18px 0 4px; }

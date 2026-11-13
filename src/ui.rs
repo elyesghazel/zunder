@@ -1359,7 +1359,15 @@ impl Ui {
         let Some(app) = self.window.application() else { return };
         let info = {
             let s = self.state.borrow();
-            settings_window::Info { providers: s.engine.provider_titles(), plugins: s.engine.plugins.list().to_vec() }
+            let ui = self.clone();
+            settings_window::Info {
+                providers: s.engine.provider_titles(),
+                plugins: s.engine.plugins.list().to_vec(),
+                reload_plugins: Rc::new(move || {
+                    ui.command("reload");
+                    ui.state.borrow().engine.plugins.list().to_vec()
+                }),
+            }
         };
         let ui = self.clone();
         let changed: Rc<dyn Fn()> = Rc::new(move || {

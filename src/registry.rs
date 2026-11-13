@@ -9,7 +9,7 @@
 //! `ZUNDER_PLUGIN_INDEX=<url or path>` points at another index, e.g. a local checkout of the
 //! registry; with a path, plugin files are read relative to the index's folder.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -64,9 +64,111 @@ pub struct Installed {
     pub sha256: String,
 }
 
+/// What install, update or remove did, line by line: the CLI prints it, the settings window shows it.
+#[derive(Debug)]
+pub struct Report {
+    /// false when something asked for wasn't done.
+    pub ok: bool,
+    pub lines: Vec<Line>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Line {
+    Out(String),
+    Err(String),
+}
+
+impl Report {
+    fn new() -> Self {
+        Report { ok: true, lines: Vec::new() }
+    }
+
+    fn out(&mut self, line: String) {
+        self.lines.push(Line::Out(line));
+    }
+
+    fn warn(&mut self, line: String) {
+        self.lines.push(Line::Err(line));
+    }
+
+    fn fail(&mut self, line: String) {
+        self.ok = false;
+        self.warn(line);
+    }
+
+    /// The lines as one sentence for a status line, what happened before the warnings.
+    pub fn summary(&self) -> String {
+        let outs = self.lines.iter().filter_map(|l| if let Line::Out(s) = l { Some(s.as_str()) } else { None });
+        let errs = self.lines.iter().filter_map(|l| if let Line::Err(s) = l { Some(s.as_str()) } else { None });
+        outs.chain(errs).collect::<Vec<_>>().join("; ")
+    }
+
+    fn print(&self) {
+        for line in &self.lines {
+            match line {
+                Line::Out(s) => println!("{s}"),
+                Line::Err(s) => eprintln!("zunder: {s}"),
+            }
+        }
+    }
+}
+
+/// The index fell back to the cache because it couldn't be downloaded.
+#[derive(Clone, Debug)]
+pub struct Stale {
+    pub error: String,
+    /// How old the cached index is.
+    pub age: Option<Duration>,
+}
+
+impl Stale {
+    pub fn describe(&self) -> String {
+        match self.age {
+            Some(age) => format!("offline, showing the plugin index from {} ago ({})", ago(age), self.error),
+            None => format!("offline, showing the cached plugin index ({})", self.error),
+        }
+    }
+}
+
+fn ago(age: Duration) -> String {
+    let min = age.as_secs() / 60;
+    match min {
+        0 => "less than a minute".to_owned(),
+        1..=59 => format!("{min} min"),
+        60..=2879 => format!("{} h", min / 60),
+        _ => format!("{} days", min / 1440),
+    }
+}
+
+/// Everything the settings window shows about the registry, read off the GTK thread.
+#[derive(Clone, Debug, Default)]
+pub struct Catalog {
+    pub plugins: Vec<Entry>,
+    pub installed: BTreeMap<String, Installed>,
+    pub stale: Option<Stale>,
+    /// Binaries from `requires` that aren't on PATH, by plugin name.
+    pub missing: BTreeMap<String, Vec<String>>,
+    /// Names whose file is in the plugins folder without being from the registry.
+    pub taken: BTreeSet<String>,
+}
+
+impl Catalog {
+    pub fn entry(&self, name: &str) -> Option<&Entry> {
+        self.plugins.iter().find(|p| p.name == name)
+    }
+
+    /// Installed from the registry and the index has different bytes.
+    pub fn has_update(&self, name: &str) -> bool {
+        match (self.installed.get(name), self.entry(name)) {
+            (Some(rec), Some(entry)) => !rec.sha256.eq_ignore_ascii_case(&entry.sha256),
+            _ => false,
+        }
+    }
+}
+
 impl Entry {
     /// Empty `platforms` means every OS.
-    fn runs_here(&self) -> bool {
+    pub fn runs_here(&self) -> bool {
         self.platforms.is_empty() || self.platforms.iter().any(|p| p == std::env::consts::OS)
     }
 }
@@ -131,13 +233,22 @@ impl Registry {
         self.index.starts_with("http://") || self.index.starts_with("https://")
     }
 
+    /// For the CLI: says on stderr when it falls back to the cache.
     fn load_index(&self) -> Result<Index, String> {
+        let (index, stale) = self.load_index_checked()?;
+        if let Some(stale) = stale {
+            eprintln!("zunder: {}; using the cached index", stale.error);
+        }
+        Ok(index)
+    }
+
+    fn load_index_checked(&self) -> Result<(Index, Option<Stale>), String> {
         if let Some(cache) = &self.cache {
             let fresh = fs::metadata(cache)
                 .and_then(|m| m.modified())
                 .is_ok_and(|t| SystemTime::now().duration_since(t).unwrap_or_default() < CACHE_FOR);
             if fresh && let Ok(index) = fs::read(cache).map_err(|e| e.to_string()).and_then(|b| parse_index(&b)) {
-                return Ok(index);
+                return Ok((index, None));
             }
         }
         match fetch(&self.index).and_then(|b| parse_index(&b).map(|i| (i, b))) {
@@ -146,13 +257,17 @@ impl Registry {
                     let _ = fs::create_dir_all(cache.parent().unwrap_or(Path::new(".")));
                     let _ = fs::write(cache, bytes);
                 }
-                Ok(index)
+                Ok((index, None))
             }
             // offline: an old index is better than none
             Err(e) => match self.cache.as_ref().and_then(|c| fs::read(c).ok()).and_then(|b| parse_index(&b).ok()) {
                 Some(index) => {
-                    eprintln!("zunder: {e}; using the cached index");
-                    Ok(index)
+                    let age = self
+                        .cache
+                        .as_ref()
+                        .and_then(|c| fs::metadata(c).and_then(|m| m.modified()).ok())
+                        .and_then(|t| SystemTime::now().duration_since(t).ok());
+                    Ok((index, Some(Stale { error: e, age })))
                 }
                 None => Err(e),
             },
@@ -217,117 +332,132 @@ impl Registry {
             .collect())
     }
 
-    pub fn install(&self, names: &[String]) -> Result<bool, String> {
-        let index = self.load_index()?;
+    /// The index (cached when fresh), what is installed and what each plugin is missing.
+    pub fn catalog(&self) -> Result<Catalog, String> {
+        let (index, stale) = self.load_index_checked()?;
+        let installed = self.installed();
+        let missing = index
+            .plugins
+            .iter()
+            .map(|p| (p.name.clone(), p.requires.iter().filter(|b| !on_path(b)).cloned().collect::<Vec<_>>()))
+            .filter(|(_, bins)| !bins.is_empty())
+            .collect();
+        let taken = index
+            .plugins
+            .iter()
+            .filter(|p| !installed.contains_key(&p.name) && self.dir.join(&p.name).exists())
+            .map(|p| p.name.clone())
+            .collect();
+        Ok(Catalog { plugins: index.plugins, installed, stale, missing, taken })
+    }
+
+    fn index_for(&self, report: &mut Report) -> Result<Index, String> {
+        let (index, stale) = self.load_index_checked()?;
+        if let Some(stale) = stale {
+            report.warn(format!("{}; using the cached index", stale.error));
+        }
+        Ok(index)
+    }
+
+    pub fn install(&self, names: &[String]) -> Result<Report, String> {
+        let mut report = Report::new();
+        let index = self.index_for(&mut report)?;
         let mut installed = self.installed();
-        let mut ok = true;
         for name in names {
             let Some(entry) = index.plugins.iter().find(|p| &p.name == name) else {
-                eprintln!("zunder: no plugin `{name}` in the registry (try `zunder plugin search`)");
-                ok = false;
+                report.fail(format!("no plugin `{name}` in the registry (try `zunder plugin search`)"));
                 continue;
             };
             if !entry.runs_here() {
-                eprintln!("zunder: {name} runs on {}, not {}", entry.platforms.join(", "), std::env::consts::OS);
-                ok = false;
+                report.fail(format!("{name} runs on {}, not {}", entry.platforms.join(", "), std::env::consts::OS));
                 continue;
             }
             if installed.contains_key(name) {
-                println!("{name} is already installed, `zunder plugin update {name}` gets the newest");
+                report.out(format!("{name} is already installed, `zunder plugin update {name}` gets the newest"));
                 continue;
             }
             if self.dir.join(name).exists() {
-                eprintln!("zunder: {} already exists and isn't from the registry, left alone", self.dir.join(name).display());
-                ok = false;
+                report.fail(format!("{} already exists and isn't from the registry, left alone", self.dir.join(name).display()));
                 continue;
             }
             for bin in &entry.requires {
                 if !on_path(bin) {
-                    eprintln!("zunder: warning: {name} needs `{bin}`, which isn't on your PATH");
+                    report.warn(format!("warning: {name} needs `{bin}`, which isn't on your PATH"));
                 }
             }
             match self.download(entry) {
                 Ok(rec) => {
-                    println!("installed {name} ({})", short(&rec.commit));
+                    report.out(format!("installed {name} ({})", short(&rec.commit)));
                     installed.insert(name.clone(), rec);
                     self.save_installed(&installed)?;
                 }
-                Err(e) => {
-                    eprintln!("zunder: {e}");
-                    ok = false;
-                }
+                Err(e) => report.fail(e),
             }
         }
-        Ok(ok)
+        Ok(report)
     }
 
-    pub fn update(&self, names: &[String]) -> Result<bool, String> {
+    pub fn update(&self, names: &[String]) -> Result<Report, String> {
+        let mut report = Report::new();
         let mut installed = self.installed();
         let names: Vec<String> = if names.is_empty() { installed.keys().cloned().collect() } else { names.to_vec() };
         if names.is_empty() {
-            println!("no plugins installed from the registry");
-            return Ok(true);
+            report.out("no plugins installed from the registry".to_owned());
+            return Ok(report);
         }
-        let index = self.load_index()?;
-        let mut ok = true;
+        let index = self.index_for(&mut report)?;
         for name in &names {
             let Some(rec) = installed.get(name).cloned() else {
-                eprintln!("zunder: {name} wasn't installed from the registry, skipped");
-                ok = false;
+                report.fail(format!("{name} wasn't installed from the registry, skipped"));
                 continue;
             };
             let Some(entry) = index.plugins.iter().find(|p| &p.name == name) else {
-                println!("{name} is no longer in the registry, kept as it is");
+                report.out(format!("{name} is no longer in the registry, kept as it is"));
                 continue;
             };
             let path = self.dir.join(name);
             match local_state(&path, &rec) {
                 LocalState::Edited => {
-                    println!("{name} was edited locally, skipped (remove it and install again to get the registry version)");
+                    report.out(format!("{name} was edited locally, skipped (remove it and install again to get the registry version)"));
                     continue;
                 }
                 LocalState::Unchanged if rec.commit == entry.commit && rec.sha256.eq_ignore_ascii_case(&entry.sha256) => {
-                    println!("{name} is up to date ({})", short(&rec.commit));
+                    report.out(format!("{name} is up to date ({})", short(&rec.commit)));
                     continue;
                 }
                 LocalState::Unchanged | LocalState::Missing => {}
             }
             match self.download(entry) {
                 Ok(new) => {
-                    println!("updated {name} {} -> {}", short(&rec.commit), short(&new.commit));
+                    report.out(format!("updated {name} {} -> {}", short(&rec.commit), short(&new.commit)));
                     installed.insert(name.clone(), new);
                     self.save_installed(&installed)?;
                 }
-                Err(e) => {
-                    eprintln!("zunder: {e}");
-                    ok = false;
-                }
+                Err(e) => report.fail(e),
             }
         }
-        Ok(ok)
+        Ok(report)
     }
 
-    pub fn remove(&self, names: &[String]) -> Result<bool, String> {
+    pub fn remove(&self, names: &[String]) -> Result<Report, String> {
+        let mut report = Report::new();
         let mut installed = self.installed();
-        let mut ok = true;
         for name in names {
             if installed.remove(name).is_none() {
-                eprintln!("zunder: {name} wasn't installed from the registry, left alone");
-                ok = false;
+                report.fail(format!("{name} wasn't installed from the registry, left alone"));
                 continue;
             }
             match fs::remove_file(self.dir.join(name)) {
-                Ok(()) => println!("removed {name}"),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => println!("removed {name} (the file was already gone)"),
+                Ok(()) => report.out(format!("removed {name}")),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => report.out(format!("removed {name} (the file was already gone)")),
                 Err(e) => {
-                    eprintln!("zunder: can't remove {name}: {e}");
-                    ok = false;
+                    report.fail(format!("can't remove {name}: {e}"));
                     continue;
                 }
             }
             self.save_installed(&installed)?;
         }
-        Ok(ok)
+        Ok(report)
     }
 
     pub fn list(&self) -> Vec<String> {
@@ -364,7 +494,7 @@ fn fetch(src: &str) -> Result<Vec<u8>, String> {
     Ok(out.stdout)
 }
 
-fn on_path(bin: &str) -> bool {
+pub fn on_path(bin: &str) -> bool {
     let Some(path) = std::env::var_os("PATH") else { return false };
     let exts: &[&str] = if cfg!(windows) { &["", ".exe", ".cmd", ".bat"] } else { &[""] };
     std::env::split_paths(&path).any(|dir| exts.iter().any(|ext| dir.join(format!("{bin}{ext}")).is_file()))
@@ -377,7 +507,7 @@ pub fn run(args: &[String]) -> Result<bool, String> {
         Some((cmd, rest)) => (cmd.as_str(), rest),
         None => return Err(USAGE.to_owned()),
     };
-    let changed = match cmd {
+    let report = match cmd {
         "search" => {
             let lines = reg.search(&rest.join(" "))?;
             if lines.is_empty() {
@@ -400,9 +530,10 @@ pub fn run(args: &[String]) -> Result<bool, String> {
         "remove" => reg.remove(rest)?,
         _ => return Err(USAGE.to_owned()),
     };
+    report.print();
     // the daemon rescans the folder on reload; not running is fine
     let _ = crate::ipc::send("reload");
-    Ok(changed)
+    Ok(report.ok)
 }
 
 #[cfg(test)]
@@ -484,7 +615,7 @@ mod tests {
         let wifi = root.join("plugins/wifi");
 
         assert!(reg.search("wi-fi").unwrap()[0].starts_with("wifi"));
-        assert!(reg.install(&["wifi".into()]).unwrap());
+        assert!(reg.install(&["wifi".into()]).unwrap().ok);
         assert_eq!(fs::read(&wifi).unwrap(), SCRIPT_V1);
         #[cfg(unix)]
         {
@@ -498,21 +629,57 @@ mod tests {
         // a new version is picked up
         let reg = fixture(&root, SCRIPT_V2, "2222222bbbb", "[]");
         assert!(reg.search("wifi").unwrap()[0].ends_with("[update available]"));
-        assert!(reg.update(&[]).unwrap());
+        assert!(reg.update(&[]).unwrap().ok);
         assert_eq!(fs::read(&wifi).unwrap(), SCRIPT_V2);
         assert_eq!(reg.installed()["wifi"].commit, "2222222bbbb");
 
         // a hand edit survives the next update
         fs::write(&wifi, b"#!/bin/sh\necho mine\n").unwrap();
         let reg = fixture(&root, SCRIPT_V1, "3333333cccc", "[]");
-        assert!(reg.update(&[]).unwrap());
+        assert!(reg.update(&[]).unwrap().ok);
         assert_eq!(fs::read(&wifi).unwrap(), b"#!/bin/sh\necho mine\n");
         assert_eq!(reg.installed()["wifi"].commit, "2222222bbbb");
         assert!(reg.list()[0].contains("edited locally"));
 
-        assert!(reg.remove(&["wifi".into()]).unwrap());
+        assert!(reg.remove(&["wifi".into()]).unwrap().ok);
         assert!(!wifi.exists());
         assert!(reg.installed().is_empty());
+    }
+
+    #[test]
+    fn catalog_for_the_settings_window() {
+        let root = tmp("catalog");
+        let reg = fixture(&root, SCRIPT_V1, "1111111", "[]");
+        let c = reg.catalog().unwrap();
+        assert_eq!(c.plugins.len(), 1);
+        assert!(c.installed.is_empty() && c.taken.is_empty() && c.stale.is_none());
+        assert_eq!(c.missing["wifi"], ["definitely-not-a-binary"]);
+
+        let report = reg.install(&["wifi".into()]).unwrap();
+        assert!(report.ok);
+        assert!(report.summary().contains("installed wifi (1111111)"), "{}", report.summary());
+        assert!(!reg.catalog().unwrap().has_update("wifi"));
+        let reg = fixture(&root, SCRIPT_V2, "2222222", "[]");
+        assert!(reg.catalog().unwrap().has_update("wifi"));
+
+        assert!(reg.remove(&["wifi".into()]).unwrap().ok);
+        fs::write(root.join("plugins/wifi"), b"mine").unwrap();
+        assert!(reg.catalog().unwrap().taken.contains("wifi"));
+    }
+
+    #[test]
+    fn falls_back_to_a_stale_cache() {
+        let root = tmp("stale");
+        let mut reg = fixture(&root, SCRIPT_V1, "1111111", "[]");
+        let cache = root.join("cache.json");
+        fs::copy(root.join("repo/index.json"), &cache).unwrap();
+        // older than CACHE_FOR, and the index itself is gone
+        let old = SystemTime::now() - Duration::from_secs(3 * 3600);
+        fs::File::options().write(true).open(&cache).unwrap().set_modified(old).unwrap();
+        fs::remove_file(root.join("repo/index.json")).unwrap();
+        reg.cache = Some(cache);
+        let stale = reg.catalog().unwrap().stale.expect("stale");
+        assert!(stale.describe().contains("from 3 h ago"), "{}", stale.describe());
     }
 
     #[test]
@@ -522,9 +689,9 @@ mod tests {
         fs::create_dir_all(root.join("plugins")).unwrap();
         fs::write(root.join("plugins/wifi"), b"mine").unwrap();
         fs::write(root.join("plugins/mine"), b"mine").unwrap();
-        assert!(!reg.install(&["wifi".into()]).unwrap());
-        assert!(!reg.update(&["mine".into()]).unwrap());
-        assert!(!reg.remove(&["mine".into(), "wifi".into()]).unwrap());
+        assert!(!reg.install(&["wifi".into()]).unwrap().ok);
+        assert!(!reg.update(&["mine".into()]).unwrap().ok);
+        assert!(!reg.remove(&["mine".into(), "wifi".into()]).unwrap().ok);
         assert_eq!(fs::read(root.join("plugins/wifi")).unwrap(), b"mine");
         assert_eq!(fs::read(root.join("plugins/mine")).unwrap(), b"mine");
     }
@@ -533,12 +700,12 @@ mod tests {
     fn refuses_bad_checksum_and_other_platforms() {
         let root = tmp("refuse");
         let reg = fixture(&root, SCRIPT_V1, "1111111", r#"["plan9"]"#);
-        assert!(!reg.install(&["wifi".into()]).unwrap());
+        assert!(!reg.install(&["wifi".into()]).unwrap().ok);
         assert!(!root.join("plugins/wifi").exists());
 
         let reg = fixture(&root, SCRIPT_V1, "1111111", "[]");
         fs::write(root.join("repo/wifi/wifi"), SCRIPT_V2).unwrap();
-        assert!(!reg.install(&["wifi".into()]).unwrap());
+        assert!(!reg.install(&["wifi".into()]).unwrap().ok);
         assert!(!root.join("plugins/wifi").exists());
         assert!(reg.installed().is_empty());
     }
