@@ -76,7 +76,15 @@ pub fn parse_index(bytes: &[u8]) -> Result<Index, String> {
     if index.version != 1 {
         return Err(format!("plugin index version {} is newer than this zunder understands, update zunder", index.version));
     }
+    // names become file names in the plugins folder
+    if let Some(p) = index.plugins.iter().find(|p| !valid_name(&p.name)) {
+        return Err(format!("plugin index has an invalid name `{}`", p.name));
+    }
     Ok(index)
+}
+
+fn valid_name(name: &str) -> bool {
+    !name.is_empty() && !name.starts_with('.') && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
@@ -440,6 +448,16 @@ mod tests {
         assert!(index.plugins[1].platforms.is_empty() && index.plugins[1].runs_here());
         assert!(parse_index(br#"{"version": 2, "plugins": []}"#).is_err());
         assert!(parse_index(b"not json").is_err());
+    }
+
+    #[test]
+    fn rejects_unsafe_names() {
+        let ok = r#"{"version": 1, "plugins": [{"name": "wifi", "file": "x/x", "commit": "c", "sha256": "s"}]}"#;
+        assert!(parse_index(ok.as_bytes()).is_ok());
+        for name in ["../evil", "a/b", ".hidden", ""] {
+            let json = format!(r#"{{"version": 1, "plugins": [{{"name": "{name}", "file": "x/x", "commit": "c", "sha256": "s"}}]}}"#);
+            assert!(parse_index(json.as_bytes()).is_err(), "{name}");
+        }
     }
 
     #[test]
