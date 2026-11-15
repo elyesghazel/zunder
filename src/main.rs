@@ -2,6 +2,7 @@
 #![cfg_attr(all(windows, not(debug_assertions), not(feature = "console")), windows_subsystem = "windows")]
 
 mod actions;
+mod auth;
 mod changelog_window;
 // Linux keeps its history in cliphist; the tests run everywhere
 #[cfg(any(not(target_os = "linux"), test))]
@@ -44,6 +45,8 @@ usage:
   zunder reload          rescan apps and plugins
   zunder import vicinae  take over favorites and launch counts from vicinae
   zunder plugin <cmd>    search, install, update, remove or list plugins from the registry
+  zunder login           log in to GitHub for sync (--status shows who is logged in)
+  zunder logout          forget the GitHub login
   zunder quit            stop the server";
 
 fn main() -> ExitCode {
@@ -82,6 +85,20 @@ fn main() -> ExitCode {
         Some("plugin" | "plugins") => match registry::run(&args[1..]) {
             Ok(true) => ExitCode::SUCCESS,
             Ok(false) => ExitCode::FAILURE,
+            Err(e) => {
+                eprintln!("zunder: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("login") => match auth::login(&args[1..]) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("zunder: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("logout") => match auth::logout() {
+            Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("zunder: {e}");
                 ExitCode::FAILURE
