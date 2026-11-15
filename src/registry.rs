@@ -855,7 +855,10 @@ mod tests {
         assert!(reg.search("wifi").unwrap()[0].starts_with("wifi"));
         assert!(!reg.search("wifi").unwrap()[0].contains("not for this system"));
         let c = reg.catalog().unwrap();
-        assert!(!c.missing["wifi"].contains(&"definitely-not-a-binary".to_owned()), "the variant's requires count");
+        assert!(
+            c.missing.get("wifi").is_none_or(|m| !m.contains(&"definitely-not-a-binary".to_owned())),
+            "the variant's requires count"
+        );
 
         assert!(reg.install(&["wifi".into()]).unwrap().ok);
         assert_eq!(fs::read(&ps1).unwrap(), PS1);
