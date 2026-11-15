@@ -166,7 +166,7 @@ pub const SETTINGS: &[Setting] = &[
     Setting { key: "terminal", group: "General", title: "Terminal", help: "for > commands, empty = $TERMINAL or kitty" },
     Setting { key: "search_url", group: "General", title: "Search engine", help: "URL with {q} for the query" },
     Setting { key: "update_check", group: "General", title: "Check for updates", help: "once a day, shows a note on the start screen" },
-    Setting { key: "sync", group: "General", title: "Sync", help: "config, favorites, themes and plugins through a private gist, needs GitHub login" },
+    Setting { key: "sync", group: "Account", title: "Sync", help: "config, favorites, themes and plugins through a private gist, needs GitHub login" },
     Setting { key: "tray", group: "General", title: "Tray icon", help: "shows zunder runs; menu with open, settings, reload, quit" },
     #[cfg(not(target_os = "linux"))]
     Setting { key: "clipboard_history", group: "General", title: "Clipboard history", help: "remembers what you copy for `clip`, skips passwords" },
