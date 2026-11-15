@@ -157,6 +157,7 @@ pub fn run(initial: Option<&'static str>) -> ExitCode {
         eprintln!("zunder: {e}");
         return ExitCode::FAILURE;
     }
+    crate::sync::spawn();
     let app = gtk::Application::builder()
         .application_id("dev.zunder.Zunder")
         .flags(gtk::gio::ApplicationFlags::NON_UNIQUE)
@@ -634,6 +635,12 @@ impl Ui {
                 self.state.borrow_mut().engine.reload();
                 if visible {
                     self.refresh();
+                }
+            }
+            // `zunder sync` pulled binds.json; the shortcuts are registered on this thread
+            "reload-binds" => {
+                if let Err(e) = crate::platform::install_binds(&store::Binds::load().list) {
+                    eprintln!("zunder: can't install the synced keybinds: {e}");
                 }
             }
             "quit" => {
