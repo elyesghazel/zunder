@@ -53,6 +53,25 @@ pub struct Entry {
     pub requires: Vec<String>,
     pub platforms: Vec<String>,
     pub settings: Vec<Setting>,
+    /// A file to install on Windows instead of `file`, e.g. a PowerShell port.
+    pub windows: Option<Variant>,
+}
+
+/// An OS-specific file for a plugin; same name everywhere, so sync's plugins.json carries over.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct Variant {
+    pub file: String,
+    pub sha256: String,
+    pub requires: Vec<String>,
+}
+
+/// The file, checksum and binaries an entry has on one OS.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Pick<'a> {
+    pub file: &'a str,
+    pub sha256: &'a str,
+    pub requires: &'a [String],
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -66,6 +85,15 @@ pub struct Setting {
 pub struct Installed {
     pub commit: String,
     pub sha256: String,
+    /// Its file in the plugins folder when that isn't the plugin's name (`wifi.ps1` on Windows).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
+}
+
+impl Installed {
+    pub fn file_name<'a>(&'a self, name: &'a str) -> &'a str {
+        self.file.as_deref().unwrap_or(name)
+    }
 }
 
 /// What install, update or remove did, line by line: the CLI prints it, the settings window shows it.
@@ -154,6 +182,8 @@ pub struct Catalog {
     pub missing: BTreeMap<String, Vec<String>>,
     /// Names whose file is in the plugins folder without being from the registry.
     pub taken: BTreeSet<String>,
+    /// The OS the variants were picked for.
+    pub os: &'static str,
 }
 
 impl Catalog {
@@ -164,16 +194,51 @@ impl Catalog {
     /// Installed from the registry and the index has different bytes.
     pub fn has_update(&self, name: &str) -> bool {
         match (self.installed.get(name), self.entry(name)) {
-            (Some(rec), Some(entry)) => !rec.sha256.eq_ignore_ascii_case(&entry.sha256),
+            (Some(rec), Some(entry)) => !rec.sha256.eq_ignore_ascii_case(entry.pick(self.os).sha256),
             _ => false,
         }
+    }
+
+    /// The registry plugin a file in the plugins folder belongs to, if any.
+    pub fn registry_name(&self, path: &Path) -> Option<&str> {
+        let file = path.file_name()?.to_str()?;
+        self.installed.iter().find(|(name, rec)| rec.file_name(name) == file).map(|(name, _)| name.as_str())
     }
 }
 
 impl Entry {
-    /// Empty `platforms` means every OS.
+    /// Empty `platforms` means every OS; a `windows` variant adds Windows.
+    pub fn runs_on(&self, os: &str) -> bool {
+        self.platforms.is_empty() || self.platforms.iter().any(|p| p == os) || (os == "windows" && self.windows.is_some())
+    }
+
     pub fn runs_here(&self) -> bool {
-        self.platforms.is_empty() || self.platforms.iter().any(|p| p == std::env::consts::OS)
+        self.runs_on(std::env::consts::OS)
+    }
+
+    /// What to download on `os`: the Windows variant there when there is one, else `file`.
+    pub fn pick(&self, os: &str) -> Pick<'_> {
+        match &self.windows {
+            Some(w) if os == "windows" => Pick { file: &w.file, sha256: &w.sha256, requires: &w.requires },
+            _ => Pick { file: &self.file, sha256: &self.sha256, requires: &self.requires },
+        }
+    }
+
+    pub fn here(&self) -> Pick<'_> {
+        self.pick(std::env::consts::OS)
+    }
+}
+
+/// The file name a plugin gets in the plugins folder. Elsewhere that's its name; Windows runs
+/// by extension, so it keeps the source's (`wifi.ps1`), and a python script without one gets `.py`.
+pub fn local_name(name: &str, file: &str, bytes: &[u8], os: &str) -> String {
+    if os != "windows" {
+        return name.to_owned();
+    }
+    match Path::new(file).extension().and_then(|e| e.to_str()) {
+        Some(ext) => format!("{name}.{ext}"),
+        None if crate::providers::plugins::python_shebang(bytes) => format!("{name}.py"),
+        None => name.to_owned(),
     }
 }
 
@@ -221,6 +286,8 @@ pub struct Registry {
     index: String,
     cache: Option<PathBuf>,
     dir: PathBuf,
+    /// Which variant to install; tests pretend to be Windows.
+    os: &'static str,
 }
 
 impl Registry {
@@ -230,6 +297,7 @@ impl Registry {
             cache: custom.is_none().then(|| dirs::cache_dir().unwrap_or_default().join("zunder/plugins-index.json")),
             index: custom.unwrap_or_else(|| INDEX_URL.to_owned()),
             dir: crate::providers::plugins::dir(),
+            os: std::env::consts::OS,
         }
     }
 
@@ -279,11 +347,28 @@ impl Registry {
     }
 
     fn file_source(&self, entry: &Entry) -> String {
+        let file = entry.pick(self.os).file;
         if self.is_url() {
-            format!("{RAW_BASE}/{}/{}", entry.commit, entry.file)
+            format!("{RAW_BASE}/{}/{file}", entry.commit)
         } else {
-            Path::new(&self.index).parent().unwrap_or(Path::new(".")).join(&entry.file).to_string_lossy().into_owned()
+            Path::new(&self.index).parent().unwrap_or(Path::new(".")).join(file).to_string_lossy().into_owned()
         }
+    }
+
+    fn runs(&self, entry: &Entry) -> bool {
+        entry.runs_on(self.os)
+    }
+
+    /// Where an installed plugin's file is.
+    fn path_of(&self, name: &str, rec: &Installed) -> PathBuf {
+        self.dir.join(rec.file_name(name))
+    }
+
+    /// A file for `entry` that isn't from the registry: under its name or, before the
+    /// download says more, the name its source file gives it.
+    fn taken(&self, entry: &Entry) -> Option<PathBuf> {
+        let ext = local_name(&entry.name, entry.pick(self.os).file, b"", self.os);
+        [entry.name.clone(), ext].into_iter().map(|f| self.dir.join(f)).find(|p| p.exists())
     }
 
     fn installed(&self) -> BTreeMap<String, Installed> {
@@ -296,15 +381,22 @@ impl Registry {
         fs::write(self.dir.join(INSTALLED), json + "\n").map_err(|e| format!("can't write {INSTALLED}: {e}"))
     }
 
-    /// Download, verify and write one plugin.
-    fn download(&self, entry: &Entry) -> Result<Installed, String> {
+    /// Download, verify and write one plugin. `old` is the install it replaces: its file goes
+    /// when the new one has another name; without it an existing file is left alone.
+    fn download(&self, entry: &Entry, old: Option<&Installed>) -> Result<Installed, String> {
+        let pick = entry.pick(self.os);
         let bytes = fetch(&self.file_source(entry))?;
         let sum = sha256_hex(&bytes);
-        if !entry.sha256.eq_ignore_ascii_case(&sum) {
-            return Err(format!("{}: checksum mismatch (index {}, downloaded {sum}), not installed", entry.name, entry.sha256));
+        if !pick.sha256.eq_ignore_ascii_case(&sum) {
+            return Err(format!("{}: checksum mismatch (index {}, downloaded {sum}), not installed", entry.name, pick.sha256));
+        }
+        let file = local_name(&entry.name, pick.file, &bytes, self.os);
+        let path = self.dir.join(&file);
+        let old_file = old.map(|rec| rec.file_name(&entry.name));
+        if old_file != Some(file.as_str()) && path.exists() {
+            return Err(format!("{} already exists and isn't from the registry, left alone", path.display()));
         }
         fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
-        let path = self.dir.join(&entry.name);
         let tmp = self.dir.join(format!(".{}.part", entry.name));
         fs::write(&tmp, &bytes).map_err(|e| format!("can't write {}: {e}", tmp.display()))?;
         #[cfg(unix)]
@@ -313,7 +405,11 @@ impl Registry {
             fs::set_permissions(&tmp, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
         }
         fs::rename(&tmp, &path).map_err(|e| format!("can't write {}: {e}", path.display()))?;
-        Ok(Installed { commit: entry.commit.clone(), sha256: sum })
+        if let Some(old) = old_file.filter(|f| *f != file) {
+            let _ = fs::remove_file(self.dir.join(old));
+        }
+        let file = (file != entry.name).then_some(file);
+        Ok(Installed { commit: entry.commit.clone(), sha256: sum, file })
     }
 
     pub fn search(&self, query: &str) -> Result<Vec<String>, String> {
@@ -328,7 +424,7 @@ impl Registry {
                 let marker = match installed.get(&p.name) {
                     Some(rec) if rec.commit != p.commit => "  [update available]",
                     Some(_) => "  [installed]",
-                    None if !p.runs_here() => "  [not for this system]",
+                    None if !self.runs(p) => "  [not for this system]",
                     None => "",
                 };
                 format!("{:<16} {}{marker}", p.name, p.description)
@@ -343,16 +439,16 @@ impl Registry {
         let missing = index
             .plugins
             .iter()
-            .map(|p| (p.name.clone(), p.requires.iter().filter(|b| !on_path(b)).cloned().collect::<Vec<_>>()))
+            .map(|p| (p.name.clone(), p.pick(self.os).requires.iter().filter(|b| !on_path(b)).cloned().collect::<Vec<_>>()))
             .filter(|(_, bins)| !bins.is_empty())
             .collect();
         let taken = index
             .plugins
             .iter()
-            .filter(|p| !installed.contains_key(&p.name) && self.dir.join(&p.name).exists())
+            .filter(|p| !installed.contains_key(&p.name) && self.taken(p).is_some())
             .map(|p| p.name.clone())
             .collect();
-        Ok(Catalog { plugins: index.plugins, installed, stale, missing, taken })
+        Ok(Catalog { plugins: index.plugins, installed, stale, missing, taken, os: self.os })
     }
 
     fn index_for(&self, report: &mut Report) -> Result<Index, String> {
@@ -372,24 +468,24 @@ impl Registry {
                 report.fail(format!("no plugin `{name}` in the registry (try `zunder plugin search`)"));
                 continue;
             };
-            if !entry.runs_here() {
-                report.fail(format!("{name} runs on {}, not {}", entry.platforms.join(", "), std::env::consts::OS));
+            if !self.runs(entry) {
+                report.fail(format!("{name} runs on {}, not {}", entry.platforms.join(", "), self.os));
                 continue;
             }
             if installed.contains_key(name) {
                 report.out(format!("{name} is already installed, `zunder plugin update {name}` gets the newest"));
                 continue;
             }
-            if self.dir.join(name).exists() {
-                report.fail(format!("{} already exists and isn't from the registry, left alone", self.dir.join(name).display()));
+            if let Some(path) = self.taken(entry) {
+                report.fail(format!("{} already exists and isn't from the registry, left alone", path.display()));
                 continue;
             }
-            for bin in &entry.requires {
+            for bin in entry.pick(self.os).requires {
                 if !on_path(bin) {
                     report.warn(format!("warning: {name} needs `{bin}`, which isn't on your PATH"));
                 }
             }
-            match self.download(entry) {
+            match self.download(entry, None) {
                 Ok(rec) => {
                     report.out(format!("installed {name} ({})", short(&rec.commit)));
                     installed.insert(name.clone(), rec);
@@ -419,19 +515,19 @@ impl Registry {
                 report.out(format!("{name} is no longer in the registry, kept as it is"));
                 continue;
             };
-            let path = self.dir.join(name);
-            match local_state(&path, &rec) {
+            let sha256 = entry.pick(self.os).sha256;
+            match local_state(&self.path_of(name, &rec), &rec) {
                 LocalState::Edited => {
                     report.out(format!("{name} was edited locally, skipped (remove it and install again to get the registry version)"));
                     continue;
                 }
-                LocalState::Unchanged if rec.commit == entry.commit && rec.sha256.eq_ignore_ascii_case(&entry.sha256) => {
+                LocalState::Unchanged if rec.commit == entry.commit && rec.sha256.eq_ignore_ascii_case(sha256) => {
                     report.out(format!("{name} is up to date ({})", short(&rec.commit)));
                     continue;
                 }
                 LocalState::Unchanged | LocalState::Missing => {}
             }
-            match self.download(entry) {
+            match self.download(entry, Some(&rec)) {
                 Ok(new) => {
                     report.out(format!("updated {name} {} -> {}", short(&rec.commit), short(&new.commit)));
                     installed.insert(name.clone(), new);
@@ -447,11 +543,11 @@ impl Registry {
         let mut report = Report::new();
         let mut installed = self.installed();
         for name in names {
-            if installed.remove(name).is_none() {
+            let Some(rec) = installed.remove(name) else {
                 report.fail(format!("{name} wasn't installed from the registry, left alone"));
                 continue;
-            }
-            match fs::remove_file(self.dir.join(name)) {
+            };
+            match fs::remove_file(self.path_of(name, &rec)) {
                 Ok(()) => report.out(format!("removed {name}")),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => report.out(format!("removed {name} (the file was already gone)")),
                 Err(e) => {
@@ -468,7 +564,7 @@ impl Registry {
         self.installed()
             .iter()
             .map(|(name, rec)| {
-                let state = match local_state(&self.dir.join(name), rec) {
+                let state = match local_state(&self.path_of(name, rec), rec) {
                     LocalState::Unchanged => "",
                     LocalState::Edited => "  [edited locally]",
                     LocalState::Missing => "  [file missing]",
@@ -498,10 +594,19 @@ fn fetch(src: &str) -> Result<Vec<u8>, String> {
     Ok(out.stdout)
 }
 
+/// A binary from `requires` can be found; on Windows the way `where.exe` finds it (PATHEXT).
+#[cfg(windows)]
+pub fn on_path(bin: &str) -> bool {
+    crate::platform::no_window(Command::new("where.exe").arg("/Q").arg(bin))
+        .stdin(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+#[cfg(not(windows))]
 pub fn on_path(bin: &str) -> bool {
     let Some(path) = std::env::var_os("PATH") else { return false };
-    let exts: &[&str] = if cfg!(windows) { &["", ".exe", ".cmd", ".bat"] } else { &[""] };
-    std::env::split_paths(&path).any(|dir| exts.iter().any(|ext| dir.join(format!("{bin}{ext}")).is_file()))
+    std::env::split_paths(&path).any(|dir| dir.join(bin).is_file())
 }
 
 /// `zunder plugin <args>`.
@@ -565,7 +670,7 @@ mod tests {
             sha256_hex(script)
         );
         fs::write(root.join("repo/index.json"), index).unwrap();
-        Registry { index: root.join("repo/index.json").to_string_lossy().into_owned(), cache: None, dir: root.join("plugins") }
+        Registry { index: root.join("repo/index.json").to_string_lossy().into_owned(), cache: None, dir: root.join("plugins"), os: "linux" }
     }
 
     #[test]
@@ -604,7 +709,7 @@ mod tests {
     fn detects_local_edits() {
         let dir = tmp("state");
         let path = dir.join("p");
-        let rec = Installed { commit: "c".into(), sha256: sha256_hex(SCRIPT_V1) };
+        let rec = Installed { commit: "c".into(), sha256: sha256_hex(SCRIPT_V1), file: None };
         assert_eq!(local_state(&path, &rec), LocalState::Missing);
         fs::write(&path, SCRIPT_V1).unwrap();
         assert_eq!(local_state(&path, &rec), LocalState::Unchanged);
@@ -698,6 +803,106 @@ mod tests {
         assert!(!reg.remove(&["mine".into(), "wifi".into()]).unwrap().ok);
         assert_eq!(fs::read(root.join("plugins/wifi")).unwrap(), b"mine");
         assert_eq!(fs::read(root.join("plugins/mine")).unwrap(), b"mine");
+    }
+
+    const PS1: &[u8] = b"# @zunder.name Wi-Fi\r\nnetsh wlan show networks\r\n";
+
+    /// `fixture` plus a `windows` variant at wifi/wifi.ps1, the index as zunder-plugins#7 builds it.
+    fn windows_fixture(root: &Path, ps1: &[u8], commit: &str) -> Registry {
+        let mut reg = fixture(root, SCRIPT_V1, commit, r#"["linux"]"#);
+        fs::write(root.join("repo/wifi/wifi.ps1"), ps1).unwrap();
+        let mut index: serde_json::Value = serde_json::from_slice(&fs::read(root.join("repo/index.json")).unwrap()).unwrap();
+        index["plugins"][0]["windows"] = serde_json::json!({"file": "wifi/wifi.ps1", "sha256": sha256_hex(ps1), "requires": ["netsh"]});
+        fs::write(root.join("repo/index.json"), index.to_string()).unwrap();
+        reg.os = "windows";
+        reg
+    }
+
+    #[test]
+    fn picks_the_variant_for_the_os() {
+        let index = parse_index(
+            br#"{"version": 1, "plugins": [
+                {"name": "wifi", "file": "wifi/wifi", "commit": "c", "sha256": "aa", "requires": ["nmcli"], "platforms": ["linux"],
+                 "windows": {"file": "wifi/wifi.ps1", "sha256": "bb", "requires": []}},
+                {"name": "todo", "file": "todo/todo", "commit": "c", "sha256": "cc", "platforms": ["linux", "windows"]},
+                {"name": "mac", "file": "mac/mac", "commit": "c", "sha256": "dd", "platforms": ["macos"]}]}"#,
+        )
+        .unwrap();
+        let [wifi, todo, mac] = &index.plugins[..] else { panic!() };
+        assert_eq!(wifi.pick("windows"), Pick { file: "wifi/wifi.ps1", sha256: "bb", requires: &[] });
+        assert_eq!(wifi.pick("linux"), Pick { file: "wifi/wifi", sha256: "aa", requires: &["nmcli".to_owned()] });
+        assert_eq!(wifi.pick("macos").file, "wifi/wifi");
+        assert_eq!(todo.pick("windows").file, "todo/todo");
+        assert!(wifi.runs_on("windows") && wifi.runs_on("linux") && !wifi.runs_on("macos"));
+        assert!(todo.runs_on("windows") && !todo.runs_on("macos"));
+        assert!(!mac.runs_on("windows") && mac.runs_on("macos"));
+    }
+
+    #[test]
+    fn names_files_for_windows() {
+        assert_eq!(local_name("wifi", "wifi/wifi.ps1", PS1, "windows"), "wifi.ps1");
+        assert_eq!(local_name("wifi", "wifi/wifi.ps1", PS1, "linux"), "wifi");
+        assert_eq!(local_name("todo", "todo/todo", b"#!/usr/bin/env python3\n", "windows"), "todo.py");
+        assert_eq!(local_name("todo", "todo/todo", b"#!/usr/bin/env python3\n", "macos"), "todo");
+        assert_eq!(local_name("sh", "sh/sh", b"#!/bin/sh\n", "windows"), "sh");
+    }
+
+    #[test]
+    fn installs_the_windows_variant() {
+        let root = tmp("windows");
+        let reg = windows_fixture(&root, PS1, "1111111");
+        let ps1 = root.join("plugins/wifi.ps1");
+        assert!(reg.search("wifi").unwrap()[0].starts_with("wifi"));
+        assert!(!reg.search("wifi").unwrap()[0].contains("not for this system"));
+        let c = reg.catalog().unwrap();
+        assert!(!c.missing["wifi"].contains(&"definitely-not-a-binary".to_owned()), "the variant's requires count");
+
+        assert!(reg.install(&["wifi".into()]).unwrap().ok);
+        assert_eq!(fs::read(&ps1).unwrap(), PS1);
+        assert!(!root.join("plugins/wifi").exists());
+        let rec = &reg.installed()["wifi"];
+        assert_eq!((rec.file.as_deref(), rec.sha256.as_str()), (Some("wifi.ps1"), sha256_hex(PS1).as_str()));
+        assert_eq!(reg.catalog().unwrap().registry_name(&ps1), Some("wifi"));
+        assert!(!reg.catalog().unwrap().has_update("wifi"));
+        assert!(reg.list()[0].starts_with("wifi") && !reg.list()[0].contains("["));
+
+        let v2 = b"# @zunder.name Wi-Fi\r\nnetsh wlan show networks mode=bssid\r\n";
+        let reg = windows_fixture(&root, v2, "2222222");
+        assert!(reg.catalog().unwrap().has_update("wifi"));
+        assert!(reg.update(&[]).unwrap().ok);
+        assert_eq!(fs::read(&ps1).unwrap(), v2);
+
+        assert!(reg.remove(&["wifi".into()]).unwrap().ok);
+        assert!(!ps1.exists());
+        assert!(reg.installed().is_empty());
+
+        // someone's own wifi.ps1 is left alone
+        fs::write(&ps1, b"mine").unwrap();
+        assert!(reg.catalog().unwrap().taken.contains("wifi"));
+        assert!(!reg.install(&["wifi".into()]).unwrap().ok);
+        assert_eq!(fs::read(&ps1).unwrap(), b"mine");
+    }
+
+    /// A plugin that got a Windows port after it was installed moves to the new file.
+    #[test]
+    fn update_moves_to_a_new_variant_file() {
+        let root = tmp("move");
+        let mut reg = fixture(&root, SCRIPT_V1, "1111111", r#"["linux", "windows"]"#);
+        reg.os = "windows";
+        assert!(reg.install(&["wifi".into()]).unwrap().ok);
+        assert!(root.join("plugins/wifi").exists());
+        let reg = windows_fixture(&root, PS1, "2222222");
+        assert!(reg.update(&[]).unwrap().ok);
+        assert!(!root.join("plugins/wifi").exists());
+        assert_eq!(fs::read(root.join("plugins/wifi.ps1")).unwrap(), PS1);
+        assert_eq!(reg.installed()["wifi"].file.as_deref(), Some("wifi.ps1"));
+    }
+
+    #[test]
+    fn records_stay_as_they_were_off_windows() {
+        let rec: Installed = serde_json::from_str(r#"{"commit": "c", "sha256": "s"}"#).unwrap();
+        assert_eq!(rec.file_name("wifi"), "wifi");
+        assert_eq!(serde_json::to_string(&rec).unwrap(), r#"{"commit":"c","sha256":"s"}"#);
     }
 
     #[test]
