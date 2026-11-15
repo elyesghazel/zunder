@@ -15,7 +15,11 @@
 //!          where action is one of run, term, open, copy, focus, fill, and an optional
 //!          "actions": [{"title": "Copy id", "copy": "42"}] adds entries to the Ctrl+K menu.
 //! command: shows up in the main search by name; Enter runs it once.
+//!
+//! Windows has no shebangs: `.ps1` runs through PowerShell, `.py` through the `py` launcher or
+//! `python`, `.exe`/`.cmd`/`.bat` directly.
 
+use std::ffi::OsString;
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -84,12 +88,70 @@ pub fn env(path: &Path) -> Vec<(String, String)> {
 /// For a command-mode run (`'/…/plugins/x'`, also from favorites and shortcuts): the plugin's
 /// env vars. Resolved when it runs, so values never end up in favorites.json or binds.
 pub fn command_env(cmd: &str) -> Vec<(String, String)> {
-    let Some(path) = cmd.strip_prefix('\'').and_then(|c| c.strip_suffix('\'')) else { return Vec::new() };
+    command_path(cmd).map(|p| env(&p)).unwrap_or_default()
+}
+
+/// The plugin path in a command-mode run (`'/…/plugins/x'`), if it is one.
+fn command_path(cmd: &str) -> Option<PathBuf> {
+    let path = cmd.strip_prefix('\'')?.strip_suffix('\'')?;
     let path = PathBuf::from(path.replace(r"'\''", "'"));
-    if path.parent() != Some(dir().as_path()) {
-        return Vec::new();
+    (path.parent() == Some(dir().as_path())).then_some(path)
+}
+
+/// The shell line for a command-mode run: on Windows the plugin's interpreter in front,
+/// anything else as it is.
+pub fn command_line(cmd: &str) -> String {
+    if !cfg!(windows) {
+        return cmd.to_owned();
     }
-    env(&path)
+    let Some(path) = command_path(cmd) else { return cmd.to_owned() };
+    match runner(&path, true, crate::registry::on_path) {
+        Ok(argv) => cmd_exe_line(&argv),
+        Err(e) => {
+            eprintln!("zunder: {}: {e}", path.display());
+            cmd.to_owned()
+        }
+    }
+}
+
+/// A first line like `#!/usr/bin/env python3` or `#!/usr/bin/python`.
+pub fn python_shebang(head: &[u8]) -> bool {
+    let first = head.split(|&b| b == b'\n').next().unwrap_or_default();
+    first.starts_with(b"#!") && String::from_utf8_lossy(first).contains("python")
+}
+
+/// The program and leading arguments that run the plugin at `path`. Off Windows the file runs
+/// itself; on Windows the extension picks the interpreter, and `has` says whether a program is
+/// installed (`py` is the launcher python.org installs, `python` the fallback).
+pub fn runner(path: &Path, windows: bool, has: impl Fn(&str) -> bool) -> Result<Vec<OsString>, String> {
+    let file = path.as_os_str().to_owned();
+    if !windows {
+        return Ok(vec![file]);
+    }
+    let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    let with = |pre: &[&str]| pre.iter().map(OsString::from).chain([file.clone()]).collect();
+    Ok(match ext.as_str() {
+        "ps1" => with(&["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]),
+        "py" if has("py") => with(&["py", "-3"]),
+        "py" if has("python") => with(&["python"]),
+        "py" => return Err("needs Python (python.org), which isn't installed".into()),
+        _ => vec![file],
+    })
+}
+
+/// A `Command` for the plugin at `path`; `spawn` hides its console on Windows.
+fn command(path: &Path) -> Result<Command, String> {
+    let argv = runner(path, cfg!(windows), crate::registry::on_path)?;
+    let mut cmd = Command::new(&argv[0]);
+    cmd.args(&argv[1..]);
+    Ok(cmd)
+}
+
+/// `argv` as one cmd.exe `/C` line: each part quoted (profile paths have spaces) and the
+/// whole wrapped once more, because cmd strips the first and last quote of the line.
+pub fn cmd_exe_line(argv: &[OsString]) -> String {
+    let parts: Vec<String> = argv.iter().map(|a| format!("\"{}\"", a.to_string_lossy())).collect();
+    format!("\"{}\"", parts.join(" "))
 }
 
 /// `token "GitHub token"` → key and help; quotes around the help are optional.
@@ -220,7 +282,10 @@ impl Call {
     }
 
     fn run_with(&self, sink: &Sink, env: Vec<(String, String)>) -> Vec<Item> {
-        let mut cmd = Command::new(&self.plugin.path);
+        let mut cmd = match command(&self.plugin.path) {
+            Ok(cmd) => cmd,
+            Err(e) => return vec![error_item(&e)],
+        };
         cmd.arg(&self.arg).envs(env).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         #[cfg(unix)]
         std::os::unix::process::CommandExt::process_group(&mut cmd, 0); // kill takes its children too
@@ -511,6 +576,54 @@ mod tests {
     fn command_env_only_for_plugins() {
         assert!(super::command_env("'/usr/bin/true'").is_empty());
         assert!(super::command_env("echo hi").is_empty());
+    }
+
+    #[test]
+    fn picks_the_windows_interpreter() {
+        let strs = |v: Vec<OsString>| v.into_iter().map(|s| s.to_string_lossy().into_owned()).collect::<Vec<_>>();
+        let all = |_: &str| true;
+        let none = |_: &str| false;
+        let ps1 = Path::new(r"C:\Users\A B\plugins\wifi.ps1");
+        assert_eq!(
+            strs(runner(ps1, true, none).unwrap()),
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", r"C:\Users\A B\plugins\wifi.ps1"]
+        );
+        let py = Path::new("todo.PY");
+        assert_eq!(strs(runner(py, true, all).unwrap()), ["py", "-3", "todo.PY"]);
+        assert_eq!(strs(runner(py, true, |b| b == "python").unwrap()), ["python", "todo.PY"]);
+        assert!(runner(py, true, none).unwrap_err().contains("needs Python"));
+        assert_eq!(strs(runner(Path::new("x.cmd"), true, none).unwrap()), ["x.cmd"]);
+        // elsewhere the shebang does it
+        assert_eq!(strs(runner(ps1, false, none).unwrap()), [r"C:\Users\A B\plugins\wifi.ps1"]);
+        assert_eq!(strs(runner(Path::new("todo.py"), false, none).unwrap()), ["todo.py"]);
+    }
+
+    #[test]
+    fn quotes_for_cmd_exe() {
+        let argv: Vec<OsString> = ["py", "-3", r"C:\A B\x.py"].iter().map(OsString::from).collect();
+        assert_eq!(cmd_exe_line(&argv), r#"""py" "-3" "C:\A B\x.py"""#);
+    }
+
+    #[test]
+    fn spots_python_shebangs() {
+        assert!(python_shebang(b"#!/usr/bin/env python3\nprint(1)\n"));
+        assert!(python_shebang(b"#!/usr/bin/python"));
+        assert!(!python_shebang(b"#!/bin/sh\n# python\n"));
+        assert!(!python_shebang(b"print('#!python')"));
+        assert!(!python_shebang(b""));
+    }
+
+    /// `.ps1` headers use `#` comments too.
+    #[test]
+    fn reads_powershell_headers() {
+        let dir = std::env::temp_dir().join(format!("zunder-ps1-test-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("wifi.ps1");
+        fs::write(&path, "# @zunder.name Wi-Fi\r\n# @zunder.prefix wifi\r\n# @zunder.setting iface \"interface\"\r\nnetsh wlan show networks\r\n").unwrap();
+        let p = read_plugin(path).unwrap();
+        fs::remove_dir_all(&dir).unwrap();
+        assert_eq!((p.name.as_str(), p.prefix.as_str(), p.stem()), ("Wi-Fi", "wifi", "wifi".to_owned()));
+        assert_eq!(p.settings, [PluginSetting { key: "iface".into(), help: "interface".into() }]);
     }
 
     #[test]
