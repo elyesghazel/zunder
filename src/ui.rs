@@ -1785,6 +1785,10 @@ fn item_row(item: &Item) -> (gtk::ListBoxRow, gtk::Label) {
         None => {
             let glyph = label(&item.glyph, "glyph");
             glyph.set_xalign(0.5);
+            if let Some(tint) = crate::theme::parse_hex(&item.tint) {
+                let text = glib::markup_escape_text(&item.glyph);
+                glyph.set_markup(&format!("<span foreground=\"{tint}\">{text}</span>"));
+            }
             glyph.upcast()
         }
     };

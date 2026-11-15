@@ -6,6 +6,7 @@
 //!     # @zunder.prefix kill            typing `kill <query>` runs the script
 //!     # @zunder.glyph  \uf120          a Nerd Font glyph, literal or \uXXXX
 //!     # @zunder.mode   search          `search` (default) or `command`
+//!     # @zunder.color  #89b4fa         its glyph's colour; without it one from the theme
 //!     # @zunder.setting token "GitHub token"   a value set in Settings → Plugins, passed
 //!                                              to the script as $ZUNDER_TOKEN
 //!
@@ -33,6 +34,8 @@ pub struct Plugin {
     pub prefix: String,
     pub glyph: String,
     pub command: bool,
+    /// `@zunder.color`, as written.
+    pub color: Option<String>,
     pub path: PathBuf,
     /// `@zunder.setting` lines, in header order.
     pub settings: Vec<PluginSetting>,
@@ -53,6 +56,11 @@ impl PluginSetting {
 }
 
 impl Plugin {
+    /// Its colour in results and in Settings → Plugins.
+    pub fn tint(&self, palette: &[String; 8]) -> String {
+        crate::theme::pick(&self.stem(), self.color.as_deref(), palette)
+    }
+
     /// Where its values live in config.toml: the file name without extension.
     pub fn stem(&self) -> String {
         stem(&self.path)
@@ -152,6 +160,7 @@ impl Provider for Plugins {
         if cx.query.is_empty() {
             return Vec::new();
         }
+        let palette = crate::theme::current_palette();
         self.list
             .iter()
             .filter_map(|p| {
@@ -167,6 +176,7 @@ impl Provider for Plugins {
                     subtitle: String::new(),
                     hint,
                     glyph: p.glyph.clone(),
+                    tint: p.tint(&palette),
                     action,
                     score: score + cx.history.boost(&id),
                     id,
@@ -240,6 +250,7 @@ impl Call {
             }
         });
 
+        let tint = self.plugin.tint(&crate::theme::current_palette());
         let (mut batch, mut count, mut since) = (Vec::new(), 0, None::<Instant>);
         loop {
             if sink.stale() {
@@ -249,7 +260,7 @@ impl Call {
             let wait = since.map_or(BATCH_WAIT, |t| BATCH_WAIT.saturating_sub(t.elapsed()));
             match lines.recv_timeout(wait) {
                 Ok(line) => {
-                    batch.push(self.item(&line, count));
+                    batch.push(self.item(&line, count, &tint));
                     count += 1;
                     since.get_or_insert_with(Instant::now);
                 }
@@ -270,7 +281,7 @@ impl Call {
     }
 
     /// One stdout line as a result: JSON or plain text. `i` is its position in the output.
-    fn item(&self, line: &str, i: usize) -> Item {
+    fn item(&self, line: &str, i: usize, tint: &str) -> Item {
         let score = -(i as i64);
         match serde_json::from_str::<Line>(line) {
             Ok(l) => Item {
@@ -279,6 +290,7 @@ impl Call {
                 subtitle: l.subtitle,
                 hint: l.hint,
                 glyph: l.glyph.unwrap_or_else(|| self.plugin.glyph.clone()),
+                tint: tint.to_owned(),
                 icon: l.icon,
                 image: l.image,
                 text: l.preview.map(crate::item::Text::Literal),
@@ -291,6 +303,7 @@ impl Call {
                 title: line.to_owned(),
                 hint: "copy".into(),
                 glyph: self.plugin.glyph.clone(),
+                tint: tint.to_owned(),
                 action: Action::Copy(line.to_owned()),
                 score,
                 ..Default::default()
@@ -378,7 +391,7 @@ fn read_plugin(path: PathBuf) -> Option<Plugin> {
     let stem = path.file_stem()?.to_string_lossy().into_owned();
     let mut head = Vec::new();
     fs::File::open(&path).ok()?.take(4096).read_to_end(&mut head).ok()?;
-    let mut p = Plugin { name: stem.clone(), prefix: stem, glyph: "\u{f12e}".into(), command: false, path, settings: Vec::new() };
+    let mut p = Plugin { name: stem.clone(), prefix: stem, glyph: "\u{f12e}".into(), command: false, color: None, path, settings: Vec::new() };
     for line in String::from_utf8_lossy(&head).lines().take(30) {
         let Some((_, rest)) = line.split_once("@zunder.") else { continue };
         let (key, value) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
@@ -388,6 +401,7 @@ fn read_plugin(path: PathBuf) -> Option<Plugin> {
             "prefix" => p.prefix = value,
             "glyph" => p.glyph = unescape(&value),
             "mode" => p.command = value == "command",
+            "color" => p.color = Some(value),
             "setting" => p.settings.extend(parse_setting(&value)),
             _ => {}
         }
@@ -407,7 +421,7 @@ mod tests {
         let path = dir.join(name);
         fs::write(&path, script).unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
-        let plugin = Plugin { name: "t".into(), prefix: "t".into(), glyph: String::new(), command: false, path, settings: Vec::new() };
+        let plugin = Plugin { name: "t".into(), prefix: "t".into(), glyph: String::new(), command: false, color: None, path, settings: Vec::new() };
         Call { plugin, arg: "q".into() }
     }
 
@@ -478,6 +492,7 @@ mod tests {
             prefix: "hello".into(),
             glyph: String::new(),
             command: false,
+            color: None,
             path: path.clone(),
             settings: Vec::new(),
         };
