@@ -20,6 +20,7 @@ mod registry;
 mod settings_window;
 mod setup;
 mod store;
+mod sync;
 mod theme;
 mod ui;
 
@@ -47,6 +48,8 @@ usage:
   zunder plugin <cmd>    search, install, update, remove or list plugins from the registry
   zunder login           log in to GitHub for sync (--status shows who is logged in)
   zunder logout          forget the GitHub login
+  zunder sync            sync settings, favorites, themes and plugins with a private gist
+                         (--pull, --push; works headless)
   zunder quit            stop the server";
 
 fn main() -> ExitCode {
@@ -99,6 +102,14 @@ fn main() -> ExitCode {
         },
         Some("logout") => match auth::logout() {
             Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("zunder: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("sync") => match sync::run(&args[1..]) {
+            Ok(true) => ExitCode::SUCCESS,
+            Ok(false) => ExitCode::FAILURE,
             Err(e) => {
                 eprintln!("zunder: {e}");
                 ExitCode::FAILURE

@@ -49,6 +49,8 @@ pub struct Config {
     pub clipboard_history: bool,
     /// Windows: Win+V opens zunder's clipboard history instead of the Windows one.
     pub win_v: bool,
+    /// Sync config, favorites, themes, plugins and keybinds through a private GitHub gist.
+    pub sync: bool,
     /// Values for plugin `@zunder.setting`s, by plugin file stem: `[plugins.github] token = "…"`.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub plugins: BTreeMap<String, BTreeMap<String, String>>,
@@ -78,6 +80,7 @@ impl Default for Config {
             tray: true,
             clipboard_history: true,
             win_v: true,
+            sync: true,
             plugins: BTreeMap::new(),
         }
     }
@@ -163,6 +166,7 @@ pub const SETTINGS: &[Setting] = &[
     Setting { key: "terminal", group: "General", title: "Terminal", help: "for > commands, empty = $TERMINAL or kitty" },
     Setting { key: "search_url", group: "General", title: "Search engine", help: "URL with {q} for the query" },
     Setting { key: "update_check", group: "General", title: "Check for updates", help: "once a day, shows a note on the start screen" },
+    Setting { key: "sync", group: "General", title: "Sync", help: "config, favorites, themes and plugins through a private gist, needs GitHub login" },
     Setting { key: "tray", group: "General", title: "Tray icon", help: "shows zunder runs; menu with open, settings, reload, quit" },
     #[cfg(not(target_os = "linux"))]
     Setting { key: "clipboard_history", group: "General", title: "Clipboard history", help: "remembers what you copy for `clip`, skips passwords" },
