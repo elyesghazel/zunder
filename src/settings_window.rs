@@ -2,6 +2,7 @@
 //! A normal toplevel window (not the overlay), styled like the launcher.
 
 use std::cell::{Cell, RefCell};
+use std::collections::BTreeSet;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -27,6 +28,8 @@ pub struct Info {
 thread_local! {
     static WINDOW: RefCell<Option<gtk::Window>> = const { RefCell::new(None) };
     static CSS: gtk::CssProvider = gtk::CssProvider::new();
+    /// Per-plugin colours on the Plugins page, rewritten on every redraw.
+    static TINTS: gtk::CssProvider = gtk::CssProvider::new();
 }
 
 const PAGES: &[(&str, &str)] = &[
@@ -146,6 +149,7 @@ pub fn load_css() {
             css.load_from_string(include_str!("settings.css"));
             if let Some(display) = gdk::Display::default() {
                 gtk::style_context_add_provider_for_display(&display, css, gtk::STYLE_PROVIDER_PRIORITY_USER);
+                TINTS.with(|t| gtk::style_context_add_provider_for_display(&display, t, gtk::STYLE_PROVIDER_PRIORITY_USER + 1));
             }
         }
     });
@@ -437,13 +441,19 @@ fn plugin_setting_control(plugin: &Plugin, s: &plugins::PluginSetting, changed: 
 fn plugins_page(info: &Rc<Info>, changed: &Rc<dyn Fn()>, status: &gtk::Label) -> gtk::Box {
     let page = page_box(
         "Plugins",
-        "Executables in the plugins folder. Their header comments set name, prefix, glyph, mode and settings.",
+        "Executables in the plugins folder. Their header comments set name, prefix, glyph, colour, mode and settings.",
     );
     let open = gtk::Button::with_label("open folder");
     open.add_css_class("flat-button");
     let dir = plugins::dir();
     open.connect_clicked(move |_| crate::item::ensure_and_open(&dir, true));
     page.append(&row("Plugins folder", &plugins::dir().display().to_string().replace(&home(), "~"), &open));
+    let search = gtk::SearchEntry::new();
+    search.set_placeholder_text(Some("search plugins"));
+    search.add_css_class("plugin-search");
+    // typing anywhere on the page searches
+    search.set_key_capture_widget(Some(&page));
+    page.append(&search);
     let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
     page.append(&body);
     let view = Rc::new(PluginsView {
@@ -451,9 +461,17 @@ fn plugins_page(info: &Rc<Info>, changed: &Rc<dyn Fn()>, status: &gtk::Label) ->
         plugins: RefCell::new(info.plugins.clone()),
         catalog: RefCell::new(None),
         busy: Cell::new(false),
+        query: RefCell::new(String::new()),
+        other_open: Cell::new(false),
+        open_settings: RefCell::new(BTreeSet::new()),
         reload: info.reload_plugins.clone(),
         changed: changed.clone(),
         status: status.clone(),
+    });
+    let v = view.clone();
+    search.connect_search_changed(move |e| {
+        *v.query.borrow_mut() = e.text().trim().to_lowercase();
+        v.render();
     });
     view.render();
     view.run(None);
@@ -466,13 +484,63 @@ enum Op {
     Remove,
 }
 
-/// The two plugin lists, redrawn after the registry answers or a plugin was added or removed.
+/// One plugin card: tile, title, chip, badges and the button(s) on the right.
+struct Card {
+    /// File name in the plugins folder, also the registry name and the colour key.
+    key: String,
+    glyph: String,
+    title: String,
+    description: String,
+    /// `wifi` for search plugins, None for command ones.
+    prefix: Option<String>,
+    color: String,
+    badges: Vec<(String, &'static str)>,
+    control: gtk::Box,
+}
+
+impl Card {
+    fn matches(&self, query: &str) -> bool {
+        query.is_empty()
+            || [&self.key, &self.title, &self.description].iter().any(|s| s.to_lowercase().contains(query))
+            || self.prefix.as_ref().is_some_and(|p| p.to_lowercase().starts_with(query))
+    }
+}
+
+/// `#89b4fa` → `89b4fa`, a CSS class suffix. Only ever called with a `theme::parse_hex` result.
+fn tint_class(color: &str) -> String {
+    format!("tint-{}", color.trim_start_matches('#'))
+}
+
+/// One rule set per colour in use: the tile, the chip and the card's border on hover and focus.
+fn load_tints(colors: &BTreeSet<String>) {
+    let css: String = colors
+        .iter()
+        .map(|c| {
+            let class = tint_class(c);
+            format!(
+                ".plugin-tile.{class} {{ background: {c}; }}\n\
+                 .chip.{class} {{ color: {c}; border-color: alpha({c}, 0.45); background: alpha({c}, 0.08); }}\n\
+                 .plugin-card.{class}:hover, .plugin-card.{class}:focus-within {{ border-color: alpha({c}, 0.7); }}\n"
+            )
+        })
+        .collect();
+    TINTS.with(|p| p.load_from_string(&css));
+}
+
+/// The two plugin lists, redrawn after the registry answers, a plugin was added or removed, or
+/// the search changed.
 struct PluginsView {
     body: gtk::Box,
     plugins: RefCell<Vec<Plugin>>,
     /// None while the registry is being read.
     catalog: RefCell<Option<Result<Catalog, String>>>,
     busy: Cell<bool>,
+    /// Lowercased search text.
+    query: RefCell<String>,
+    /// The "Not for <os>" expander, kept across redraws.
+    other_open: Cell<bool>,
+    /// Plugins whose settings are unfolded.
+    open_settings: RefCell<BTreeSet<String>>,
     reload: Rc<dyn Fn() -> Vec<Plugin>>,
     changed: Rc<dyn Fn()>,
     status: gtk::Label,
@@ -532,95 +600,242 @@ impl PluginsView {
         button
     }
 
+    fn card(self: &Rc<Self>, c: &Card, settings: Option<&Plugin>) -> gtk::Box {
+        let card = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        card.add_css_class("plugin-card");
+        card.add_css_class(&tint_class(&c.color));
+        let top = gtk::Box::new(gtk::Orientation::Horizontal, 14);
+
+        let tile = label(&c.glyph, "plugin-glyph");
+        tile.set_xalign(0.5);
+        let tile_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        tile_box.add_css_class("plugin-tile");
+        tile_box.add_css_class(&tint_class(&c.color));
+        tile_box.set_valign(gtk::Align::Center);
+        tile.set_vexpand(true);
+        tile_box.append(&tile);
+        top.append(&tile_box);
+
+        let text = gtk::Box::new(gtk::Orientation::Vertical, 3);
+        text.set_hexpand(true);
+        text.set_valign(gtk::Align::Center);
+        let line = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        line.append(&label(&c.title, "plugin-title"));
+        let chip = label(c.prefix.as_deref().unwrap_or("command"), "chip");
+        chip.add_css_class(&tint_class(&c.color));
+        chip.set_valign(gtk::Align::Center);
+        line.append(&chip);
+        let toggle = settings.filter(|p| !p.settings.is_empty()).map(|p| {
+            let n = p.settings.len();
+            let t = gtk::ToggleButton::with_label(&format!("\u{f013} {n} setting{}", if n == 1 { "" } else { "s" }));
+            t.add_css_class("settings-toggle");
+            t.set_valign(gtk::Align::Center);
+            t.set_active(self.open_settings.borrow().contains(&c.key));
+            line.append(&t);
+            t
+        });
+        for (badge, class) in &c.badges {
+            let b = label(badge, "badge");
+            b.add_css_class(class);
+            b.set_valign(gtk::Align::Center);
+            line.append(&b);
+        }
+        text.append(&line);
+        if !c.description.is_empty() {
+            let d = label(&c.description, "plugin-desc");
+            d.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            text.append(&d);
+        }
+        top.append(&text);
+        c.control.set_valign(gtk::Align::Center);
+        top.append(&c.control);
+        card.append(&top);
+
+        if let (Some(p), Some(toggle)) = (settings, toggle) {
+            let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
+            list.add_css_class("plugin-settings");
+            for s in &p.settings {
+                let help = if s.help.is_empty() { format!("${}", plugins::env_name(&s.key)) } else { format!("{}  ·  ${}", s.help, plugins::env_name(&s.key)) };
+                list.append(&row(&s.key, &help, &plugin_setting_control(p, s, &self.changed, &self.status)));
+            }
+            list.set_visible(toggle.is_active());
+            let (view, key, shown) = (self.clone(), c.key.clone(), list.clone());
+            toggle.connect_toggled(move |t| {
+                shown.set_visible(t.is_active());
+                let mut open = view.open_settings.borrow_mut();
+                if t.is_active() { open.insert(key.clone()) } else { open.remove(&key) };
+            });
+            card.append(&list);
+        }
+        card
+    }
+
+    fn section(&self, title: &str, count: usize) -> gtk::Box {
+        let head = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        head.add_css_class("plugin-section");
+        head.append(&label(title, "section-title"));
+        head.append(&label(&count.to_string(), "section-count"));
+        head
+    }
+
     fn render(self: &Rc<Self>) {
         while let Some(child) = self.body.first_child() {
             self.body.remove(&child);
         }
+        let palette = crate::theme::current_palette();
+        let query = self.query.borrow().clone();
         let catalog = self.catalog.borrow();
         let ok = catalog.as_ref().and_then(|c| c.as_ref().ok());
+        let mut colors = BTreeSet::new();
 
-        self.body.append(&section("Installed"));
+        // installed: whatever is in the folder, described by the registry when it's from there
         let plugins = self.plugins.borrow();
-        if plugins.is_empty() {
-            self.body.append(&label("no plugins installed", "empty"));
-        }
-        for p in plugins.iter() {
-            let file = p.path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
-            let how = if p.command { "command, runs once".to_owned() } else { format!("type `{} <query>`", p.prefix) };
-            let controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-            let from_registry = ok.is_some_and(|c| c.installed.contains_key(&file));
-            if from_registry {
-                if ok.is_some_and(|c| c.has_update(&file)) {
-                    let update = self.button("update", || Op::Update, &file);
-                    update.add_css_class("primary");
-                    controls.append(&update);
+        let installed: Vec<(Card, &Plugin)> = plugins
+            .iter()
+            .map(|p| {
+                let file = p.path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+                let entry = ok.and_then(|c| c.entry(&file));
+                let from_registry = ok.is_some_and(|c| c.installed.contains_key(&file));
+                let controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+                let mut badges = Vec::new();
+                if from_registry {
+                    if ok.is_some_and(|c| c.has_update(&file)) {
+                        badges.push(("update".to_owned(), "badge-new"));
+                        let update = self.button("update", || Op::Update, &file);
+                        update.add_css_class("primary");
+                        controls.append(&update);
+                    }
+                    controls.append(&self.button("remove", || Op::Remove, &file));
+                } else {
+                    badges.push(("local".to_owned(), "badge-plain"));
                 }
-                controls.append(&self.button("remove", || Op::Remove, &file));
-            } else {
-                controls.append(&label(&p.path.display().to_string().replace(&home(), "~"), "setting-help"));
-            }
-            self.body.append(&row(&format!("{}  {}", p.glyph, p.name), &how, &controls));
-            for s in &p.settings {
-                let help = if s.help.is_empty() { format!("${}", plugins::env_name(&s.key)) } else { format!("{}  ·  ${}", s.help, plugins::env_name(&s.key)) };
-                let r = row(&s.key, &help, &plugin_setting_control(p, s, &self.changed, &self.status));
-                r.add_css_class("plugin-setting");
-                self.body.append(&r);
-            }
+                let description = match entry {
+                    Some(e) if !e.description.is_empty() => e.description.clone(),
+                    _ if from_registry => String::new(),
+                    _ => p.path.display().to_string().replace(&home(), "~"),
+                };
+                let color = crate::theme::pick(&p.stem(), p.color.as_deref().or(entry.and_then(|e| e.color.as_deref())), &palette);
+                let card = Card {
+                    key: file,
+                    glyph: p.glyph.clone(),
+                    title: p.name.clone(),
+                    description,
+                    prefix: (!p.command).then(|| p.prefix.clone()),
+                    color,
+                    badges,
+                    control: controls,
+                };
+                (card, p)
+            })
+            .filter(|(c, _)| c.matches(&query))
+            .collect();
+
+        self.body.append(&self.section("Installed", installed.len()));
+        if installed.is_empty() {
+            self.body.append(&label(if query.is_empty() { "no plugins installed" } else { "no installed plugin matches" }, "empty"));
+        }
+        for (c, p) in &installed {
+            colors.insert(c.color.clone());
+            self.body.append(&self.card(c, Some(p)));
         }
 
-        self.body.append(&section("Available"));
         let catalog = match catalog.as_ref() {
             None => {
+                self.body.append(&self.section("Available", 0));
                 self.body.append(&label("reading the plugin registry…", "empty"));
+                load_tints(&colors);
                 return;
             }
             Some(Err(e)) => {
+                self.body.append(&self.section("Available", 0));
                 let l = label(&format!("can't read the plugin registry: {e}"), "empty");
                 l.set_wrap(true);
                 self.body.append(&l);
+                load_tints(&colors);
                 return;
             }
             Some(Ok(c)) => c,
         };
+        let loaded: Vec<String> = plugins.iter().filter_map(|p| p.path.file_name().map(|f| f.to_string_lossy().into_owned())).collect();
+        let (mut here, mut elsewhere) = (Vec::new(), Vec::new());
+        for e in catalog.plugins.iter().filter(|e| !catalog.installed.contains_key(&e.name) && !loaded.contains(&e.name)) {
+            let controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+            let mut badges = Vec::new();
+            let missing = catalog.missing.get(&e.name);
+            // only what's missing: a found binary is nothing to act on
+            for b in e.requires.iter().filter(|b| e.runs_here() && missing.is_some_and(|m| m.contains(b))) {
+                badges.push((format!("needs {b}"), "badge-warn"));
+            }
+            if !e.settings.is_empty() {
+                let n = e.settings.len();
+                badges.push((format!("{n} setting{}", if n == 1 { "" } else { "s" }), "badge-plain"));
+            }
+            if !e.runs_here() {
+                badges.push((format!("{} only", e.platforms.join(", ")), "badge-plain"));
+            } else if catalog.taken.contains(&e.name) {
+                badges.push(("name taken in folder".to_owned(), "badge-warn"));
+            } else {
+                controls.append(&self.button("install", || Op::Install, &e.name));
+            }
+            let card = Card {
+                key: e.name.clone(),
+                glyph: if e.glyph.is_empty() { "\u{f12e}".to_owned() } else { e.glyph.clone() },
+                title: if e.title.is_empty() { e.name.clone() } else { e.title.clone() },
+                description: e.description.clone(),
+                prefix: (!e.prefix.is_empty()).then(|| e.prefix.clone()),
+                color: crate::theme::pick(&e.name, e.color.as_deref(), &palette),
+                badges,
+                control: controls,
+            };
+            if !card.matches(&query) {
+                continue;
+            }
+            if e.runs_here() { here.push(card) } else { elsewhere.push(card) }
+        }
+
+        self.body.append(&self.section("Available", here.len()));
         if let Some(stale) = &catalog.stale {
             let l = label(&stale.describe(), "setting-help");
             l.set_wrap(true);
             self.body.append(&l);
         }
-        let loaded: Vec<String> = plugins.iter().filter_map(|p| p.path.file_name().map(|f| f.to_string_lossy().into_owned())).collect();
-        let available: Vec<_> = catalog
-            .plugins
-            .iter()
-            .filter(|e| !catalog.installed.contains_key(&e.name) && !loaded.contains(&e.name))
-            .collect();
-        if available.is_empty() {
-            self.body.append(&label("every plugin in the registry is installed", "empty"));
+        if here.is_empty() {
+            let text = if !query.is_empty() { "no available plugin matches" } else { "every plugin in the registry is installed" };
+            self.body.append(&label(text, "empty"));
         }
-        for e in available {
-            let title = if e.title.is_empty() { &e.name } else { &e.title };
-            let control: gtk::Widget = if !e.runs_here() {
-                label(&format!("{} only", e.platforms.join(", ")), "setting-help").upcast()
-            } else if catalog.taken.contains(&e.name) {
-                label("a file with this name is in the folder", "setting-help").upcast()
-            } else {
-                self.button("install", || Op::Install, &e.name).upcast()
-            };
-            let r = row(title, &e.description, &control);
-            if !e.requires.is_empty() {
-                let missing = catalog.missing.get(&e.name);
-                let text = e
-                    .requires
-                    .iter()
-                    .map(|b| if missing.is_some_and(|m| m.contains(b)) { format!("{b} (missing)") } else { b.clone() })
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let needs = label(&format!("requires {text}"), "setting-help");
-                if let Some(text) = r.first_child().and_downcast::<gtk::Box>() {
-                    text.append(&needs);
-                }
+        for c in &here {
+            colors.insert(c.color.clone());
+            self.body.append(&self.card(c, None));
+        }
+
+        if !elsewhere.is_empty() {
+            let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
+            list.add_css_class("plugin-other");
+            for c in &elsewhere {
+                colors.insert(c.color.clone());
+                list.append(&self.card(c, None));
             }
-            self.body.append(&r);
+            let other = gtk::Expander::new(None);
+            other.set_label_widget(Some(&self.section(&format!("Not for {}", os_name()), elsewhere.len())));
+            other.add_css_class("plugin-expander");
+            other.set_child(Some(&list));
+            // a search that hits only these shows them without a click
+            other.set_expanded(self.other_open.get() || (!query.is_empty() && here.is_empty() && installed.is_empty()));
+            let view = self.clone();
+            other.connect_expanded_notify(move |x| view.other_open.set(x.is_expanded()));
+            self.body.append(&other);
         }
+        load_tints(&colors);
+    }
+}
+
+/// `linux` → `Linux`, how the "Not for …" section names this OS.
+fn os_name() -> &'static str {
+    match std::env::consts::OS {
+        "linux" => "Linux",
+        "macos" => "macOS",
+        "windows" => "Windows",
+        other => other,
     }
 }
 
@@ -839,10 +1054,6 @@ fn when(t: std::time::SystemTime) -> String {
         1 => t.format("yesterday %H:%M").to_string(),
         _ => t.format("%-d %b %Y %H:%M").to_string(),
     }
-}
-
-fn section(title: &str) -> gtk::Label {
-    label(title, "section-title")
 }
 
 fn about_page() -> gtk::Box {

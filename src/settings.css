@@ -156,3 +156,64 @@ button.flat-button.primary:hover { background: alpha(@accent, 0.85); }
 
 .section-title { color: @muted; font-weight: bold; margin: 18px 0 4px; }
 .device-code { font-size: 28px; font-weight: bold; letter-spacing: 4px; color: @accent; padding: 10px 0 4px 0; }
+
+/* ── plugin cards ─────────────────────── */
+window.zunder-settings entry.plugin-search { margin: 14px 0 4px; min-height: 34px; }
+.plugin-section { margin: 18px 0 8px; }
+.plugin-section .section-title { margin: 0; }
+.section-count {
+  color: @faint;
+  font-size: 9pt;
+  padding: 0 7px;
+  border-radius: 99px;
+  background: @sel;
+}
+.plugin-card {
+  background: alpha(@hover, 0.7);
+  border: 1px solid alpha(@ghost, 0.7);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+.plugin-tile {
+  min-width: 42px;
+  min-height: 42px;
+  border-radius: 11px;
+  background: @accent;
+}
+.plugin-glyph { color: @bg; font-size: 17pt; }
+.plugin-title { color: @fg; font-weight: bold; }
+.plugin-desc  { color: @muted; font-size: 10pt; }
+.chip {
+  font-size: 9pt;
+  padding: 0 7px;
+  border-radius: 6px;
+  border: 1px solid @ghost;
+  color: @muted;
+}
+.badge { font-size: 9pt; padding: 0 7px; border-radius: 99px; }
+.badge-plain { color: @faint; border: 1px solid @ghost; }
+.badge-new   { color: @bg; background: @green; font-weight: bold; }
+.badge-warn  { color: mix(@fg, #e06c75, 0.7); border: 1px solid alpha(#e06c75, 0.55); background: alpha(#e06c75, 0.1); }
+.plugin-settings {
+  margin: 10px 0 0 56px;
+  border-top: 1px solid alpha(@ghost, 0.6);
+}
+.plugin-settings .setting { padding: 8px 0; }
+.plugin-settings .setting:last-child { border-bottom: none; padding-bottom: 0; }
+.plugin-expander { margin-top: 10px; }
+.plugin-expander > title .plugin-section { margin: 8px 0 0 6px; }
+.plugin-expander > title > arrow { color: @faint; }
+.plugin-other { margin-top: 8px; opacity: 0.55; }
+window.zunder-settings button.settings-toggle {
+  font-size: 9pt;
+  min-height: 0;
+  padding: 0 8px;
+  border-radius: 99px;
+  border: 1px solid @ghost;
+  background: none;
+  box-shadow: none;
+  color: @muted;
+}
+window.zunder-settings button.settings-toggle:hover   { background: @sel; color: @fg; }
+window.zunder-settings button.settings-toggle:checked { background: @sel; color: @fg; border-color: @faint; }

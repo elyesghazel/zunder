@@ -43,6 +43,10 @@ pub struct Entry {
     pub name: String,
     pub title: String,
     pub description: String,
+    pub prefix: String,
+    pub glyph: String,
+    /// `@zunder.color #hex`; without it the settings window picks one from the theme.
+    pub color: Option<String>,
     pub file: String,
     pub commit: String,
     pub sha256: String,
@@ -708,5 +712,18 @@ mod tests {
         assert!(!reg.install(&["wifi".into()]).unwrap().ok);
         assert!(!root.join("plugins/wifi").exists());
         assert!(reg.installed().is_empty());
+    }
+
+    #[test]
+    fn reads_optional_colour() {
+        let index = parse_index(
+            br##"{"version": 1, "plugins": [
+                {"name": "wifi", "prefix": "wifi", "glyph": "x", "color": "#89b4fa", "file": "w/w", "commit": "a", "sha256": "0"},
+                {"name": "bare", "file": "b/b", "commit": "b", "sha256": "1"}]}"##,
+        )
+        .unwrap();
+        assert_eq!(index.plugins[0].color.as_deref(), Some("#89b4fa"));
+        assert_eq!(index.plugins[0].prefix, "wifi");
+        assert_eq!(index.plugins[1].color, None);
     }
 }
