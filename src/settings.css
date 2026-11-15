@@ -155,3 +155,4 @@ button.flat-button.primary:hover { background: alpha(@accent, 0.85); }
 }
 
 .section-title { color: @muted; font-weight: bold; margin: 18px 0 4px; }
+.device-code { font-size: 28px; font-weight: bold; letter-spacing: 4px; color: @accent; padding: 10px 0 4px 0; }

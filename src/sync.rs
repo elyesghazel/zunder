@@ -243,6 +243,11 @@ fn state_path() -> PathBuf {
     crate::store::data_dir().join(STATE)
 }
 
+/// When the last sync from any process went through: sync.json is written at its end.
+pub fn last_sync() -> Option<SystemTime> {
+    mtime(&state_path())
+}
+
 fn root() -> PathBuf {
     dirs::config_dir().unwrap_or_default().join("zunder")
 }
@@ -553,6 +558,13 @@ fn announce(out: &Outcome, server: bool) {
     {
         eprintln!("zunder: can't install the synced keybinds: {e}");
     }
+}
+
+/// "Sync now" in the settings window, which runs inside the server. Blocks on the network.
+pub fn sync_now() -> Result<Outcome, String> {
+    let out = sync(Mode::Both)?;
+    announce(&out, true);
+    Ok(out)
 }
 
 /// `zunder sync [--pull|--push]`. Works without a display: nothing here touches GTK.

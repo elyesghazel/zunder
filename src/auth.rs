@@ -10,6 +10,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
@@ -32,7 +33,7 @@ pub enum Source {
 }
 
 impl Source {
-    fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
             Source::Env => "ZUNDER_GITHUB_TOKEN",
             Source::Keyring => "system keyring",
@@ -116,6 +117,19 @@ pub fn login(args: &[String]) -> Result<(), String> {
 
 /// `zunder logout`: removes the token from the keyring and the file.
 pub fn logout() -> Result<(), String> {
+    if sign_out()? {
+        println!("logged out of GitHub");
+    } else {
+        println!("not logged in");
+    }
+    if env_set() {
+        println!("note: ZUNDER_GITHUB_TOKEN is still set and keeps being used");
+    }
+    Ok(())
+}
+
+/// Remove the saved token and login name. True when there was a saved token.
+pub fn sign_out() -> Result<bool, String> {
     let had_keyring = keyring::delete();
     let path = token_path();
     let had_file = path.exists();
@@ -124,15 +138,19 @@ pub fn logout() -> Result<(), String> {
     }
     let _ = fs::remove_file(user_path());
     forget_cache();
-    if had_keyring || had_file {
-        println!("logged out of GitHub");
-    } else {
-        println!("not logged in");
-    }
-    if env_token(std::env::var("ZUNDER_GITHUB_TOKEN").ok()).is_some() {
-        println!("note: ZUNDER_GITHUB_TOKEN is still set and keeps being used");
-    }
-    Ok(())
+    Ok(had_keyring || had_file)
+}
+
+/// `ZUNDER_GITHUB_TOKEN` is set: a logout can't drop that one.
+pub fn env_set() -> bool {
+    env_token(std::env::var("ZUNDER_GITHUB_TOKEN").ok()).is_some()
+}
+
+/// Who is logged in, for the settings page. `None` without a token. Looks the name up on
+/// GitHub when no login cached it (a token from the environment), so run it off the UI thread.
+pub fn account() -> Option<(Option<String>, Source)> {
+    let (token, source) = lookup()?;
+    Some((user().or_else(|| fetch_login(&token)), source))
 }
 
 fn status() -> String {
@@ -146,13 +164,26 @@ fn status() -> String {
 }
 
 fn device_login() -> Result<(), String> {
-    let client_id = client_id();
-    let code = request_device_code(&client_id)?;
+    let code = request_code()?;
     println!("Open {} and enter the code:\n\n    {}\n", code.verification_uri, code.user_code);
     crate::platform::open(&code.verification_uri);
     println!("waiting for the confirmation on github.com…");
+    match finish_login(&code, &AtomicBool::new(false))? {
+        Some(name) => println!("logged in to GitHub as {name}"),
+        None => println!("logged in to GitHub"),
+    }
+    Ok(())
+}
 
-    let token = poll_token(&client_id, &code)?;
+/// Step one of a login: the code the user types on github.com.
+pub fn request_code() -> Result<DeviceCode, String> {
+    request_device_code(&client_id())
+}
+
+/// Step two: wait until the code was confirmed (or `cancel` is set), save the token and return
+/// the login name. Blocks for minutes: never on the UI thread.
+pub fn finish_login(code: &DeviceCode, cancel: &AtomicBool) -> Result<Option<String>, String> {
+    let token = poll_token(&client_id(), code, cancel)?;
     let login = fetch_login(&token);
     save(&token)?;
     if let Some(name) = &login {
@@ -161,11 +192,7 @@ fn device_login() -> Result<(), String> {
         let _ = fs::write(&path, name);
     }
     forget_cache();
-    match login {
-        Some(name) => println!("logged in to GitHub as {name}"),
-        None => println!("logged in to GitHub"),
-    }
-    Ok(())
+    Ok(login)
 }
 
 /// Keyring first; the file when there is no secret-service.
@@ -180,11 +207,12 @@ fn save(token: &str) -> Result<(), String> {
 
 // ── device flow ─────────────────────────────────────────
 
+/// A pending device-flow login.
 #[derive(Debug, Deserialize, PartialEq)]
-struct DeviceCode {
+pub struct DeviceCode {
     device_code: String,
-    user_code: String,
-    verification_uri: String,
+    pub user_code: String,
+    pub verification_uri: String,
     expires_in: u64,
     #[serde(default = "default_interval")]
     interval: u64,
@@ -244,7 +272,7 @@ fn parse_poll(body: &[u8], interval: u64) -> Poll {
 
 fn describe(e: &OauthError) -> String {
     match e.error.as_str() {
-        "expired_token" => "the code expired; run `zunder login` again".into(),
+        "expired_token" => "the code expired; log in again".into(),
         "access_denied" => "the login was cancelled on github.com".into(),
         "device_flow_disabled" => "Device Flow is not enabled for this OAuth app".into(),
         // an unknown client id gets a bare `{"error":"Not Found"}`
@@ -261,13 +289,26 @@ fn request_device_code(client_id: &str) -> Result<DeviceCode, String> {
     parse_device_code(&body)
 }
 
-fn poll_token(client_id: &str, code: &DeviceCode) -> Result<String, String> {
+/// The message `finish_login` fails with when it was cancelled.
+pub const CANCELLED: &str = "login cancelled";
+
+fn poll_token(client_id: &str, code: &DeviceCode, cancel: &AtomicBool) -> Result<String, String> {
     let deadline = Instant::now() + Duration::from_secs(code.expires_in);
     let mut interval = code.interval.max(1);
     loop {
-        std::thread::sleep(Duration::from_secs(interval));
+        // in small steps, so a cancel doesn't wait out the interval
+        let wake = Instant::now() + Duration::from_secs(interval);
+        while Instant::now() < wake {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(CANCELLED.into());
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        if cancel.load(Ordering::Relaxed) {
+            return Err(CANCELLED.into());
+        }
         if Instant::now() > deadline {
-            return Err("the code expired; run `zunder login` again".into());
+            return Err("the code expired; log in again".into());
         }
         let body = match post_form(
             TOKEN_URL,
@@ -458,10 +499,18 @@ mod tests {
         assert_eq!(parse_poll(br#"{"error":"authorization_pending"}"#, 5), Poll::Pending);
         assert_eq!(parse_poll(br#"{"error":"slow_down","interval":10}"#, 5), Poll::SlowDown(10));
         assert_eq!(parse_poll(br#"{"error":"slow_down"}"#, 5), Poll::SlowDown(10));
-        assert_eq!(parse_poll(br#"{"error":"expired_token"}"#, 5), Poll::Failed("the code expired; run `zunder login` again".into()));
+        assert_eq!(parse_poll(br#"{"error":"expired_token"}"#, 5), Poll::Failed("the code expired; log in again".into()));
         assert_eq!(parse_poll(br#"{"error":"access_denied"}"#, 5), Poll::Failed("the login was cancelled on github.com".into()));
         assert!(matches!(parse_poll(b"garbage", 5), Poll::Failed(_)));
         assert!(matches!(parse_poll(b"{}", 5), Poll::Failed(_)));
+    }
+
+    #[test]
+    fn a_cancelled_login_stops_before_asking_github() {
+        let code = DeviceCode { device_code: "d".into(), user_code: "u".into(), verification_uri: "v".into(), expires_in: 900, interval: 5 };
+        let started = Instant::now();
+        assert_eq!(poll_token("client", &code, &AtomicBool::new(true)), Err(CANCELLED.into()));
+        assert!(started.elapsed() < Duration::from_secs(1));
     }
 
     #[test]

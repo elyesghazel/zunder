@@ -3,11 +3,14 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use gtk::{gdk, glib, prelude::*};
 use gtk4 as gtk;
 
 use crate::config::{self, Kind, SETTINGS};
+use crate::{auth, sync};
 use crate::item::{Action, Item};
 use crate::providers::plugins::{self, Plugin};
 use crate::registry::{Catalog, Registry, Report};
@@ -35,6 +38,7 @@ const PAGES: &[(&str, &str)] = &[
     ("Favorites", "\u{f005}"),
     ("Shortcuts", "\u{f11c}"),
     ("Plugins", "\u{f12e}"),
+    ("Account", "\u{f2bd}"),
     ("About", "\u{f05a}"),
 ];
 
@@ -279,6 +283,7 @@ fn build_page(name: &str, info: &Rc<Info>, changed: &Rc<dyn Fn()>) -> gtk::Box {
         "Favorites" => favorites_page(changed),
         "Shortcuts" => shortcuts_page(changed, &status),
         "Plugins" => plugins_page(info, changed, &status),
+        "Account" => account_page(changed, &status),
         "About" => about_page(),
         group => {
             let intro = match group {
@@ -616,6 +621,223 @@ impl PluginsView {
             }
             self.body.append(&r);
         }
+    }
+}
+
+fn account_page(changed: &Rc<dyn Fn()>, status: &gtk::Label) -> gtk::Box {
+    let page = page_box(
+        "Account",
+        "Log in with GitHub to sync config, favorites, themes, plugins and shortcuts through a private gist.",
+    );
+    let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    page.append(&body);
+    let view = Rc::new(AccountView {
+        body: body.clone(),
+        state: RefCell::new(Account::Checking),
+        busy: Cell::new(false),
+        changed: changed.clone(),
+        status: status.clone(),
+    });
+    // a login still waiting for github.com stops with the window
+    let v2 = view.clone();
+    body.connect_destroy(move |_| {
+        if let Account::Waiting { cancel, .. } = &*v2.state.borrow() {
+            cancel.store(true, Ordering::Relaxed);
+        }
+    });
+    view.render();
+    view.check();
+    page
+}
+
+enum Account {
+    Checking,
+    LoggedOut,
+    /// The device code is shown; a worker polls github.com until it's confirmed.
+    Waiting { code: String, uri: String, cancel: Arc<AtomicBool> },
+    LoggedIn { user: Option<String>, source: auth::Source },
+}
+
+/// What a worker thread tells the page.
+enum Msg {
+    State(Account),
+    /// An error or a summary for the status line.
+    Line(String),
+    Synced(Result<sync::Outcome, String>),
+}
+
+struct AccountView {
+    body: gtk::Box,
+    state: RefCell<Account>,
+    busy: Cell<bool>,
+    changed: Rc<dyn Fn()>,
+    status: gtk::Label,
+}
+
+fn who() -> Account {
+    match auth::account() {
+        Some((user, source)) => Account::LoggedIn { user, source },
+        None => Account::LoggedOut,
+    }
+}
+
+impl AccountView {
+    /// Run `job` on a worker thread (the keyring and GitHub can take seconds) and apply what it
+    /// sends on the UI thread, then redraw.
+    fn spawn(self: &Rc<Self>, job: impl FnOnce(&async_channel::Sender<Msg>) + Send + 'static) {
+        if self.busy.replace(true) {
+            return;
+        }
+        self.render();
+        let (tx, rx) = async_channel::unbounded::<Msg>();
+        std::thread::spawn(move || job(&tx));
+        let view = self.clone();
+        glib::spawn_future_local(async move {
+            while let Ok(msg) = rx.recv().await {
+                match msg {
+                    Msg::State(state) => *view.state.borrow_mut() = state,
+                    Msg::Line(line) => view.status.set_text(&line),
+                    Msg::Synced(Ok(out)) => {
+                        view.status.set_text(&out.lines.join(", "));
+                        if out.pulled {
+                            (view.changed)();
+                        }
+                    }
+                    Msg::Synced(Err(e)) => view.status.set_text(&e),
+                }
+                view.render();
+            }
+            view.busy.set(false);
+            view.render();
+        });
+    }
+
+    fn check(self: &Rc<Self>) {
+        self.spawn(|tx| {
+            let _ = tx.send_blocking(Msg::State(who()));
+        });
+    }
+
+    fn login(self: &Rc<Self>) {
+        self.status.set_text("asking GitHub for a code…");
+        self.spawn(|tx| {
+            let code = match auth::request_code() {
+                Ok(code) => code,
+                Err(e) => {
+                    let _ = tx.send_blocking(Msg::Line(e));
+                    return;
+                }
+            };
+            let cancel = Arc::new(AtomicBool::new(false));
+            let waiting = Account::Waiting { code: code.user_code.clone(), uri: code.verification_uri.clone(), cancel: cancel.clone() };
+            let _ = tx.send_blocking(Msg::State(waiting));
+            let _ = tx.send_blocking(Msg::Line(String::new()));
+            match auth::finish_login(&code, &cancel) {
+                Ok(name) => {
+                    let line = match &name {
+                        Some(n) => format!("logged in as {n}"),
+                        None => "logged in".into(),
+                    };
+                    let _ = tx.send_blocking(Msg::State(who()));
+                    let _ = tx.send_blocking(Msg::Line(line));
+                }
+                Err(e) => {
+                    let _ = tx.send_blocking(Msg::State(Account::LoggedOut));
+                    let _ = tx.send_blocking(Msg::Line(if e == auth::CANCELLED { String::new() } else { e }));
+                }
+            }
+        });
+    }
+
+    fn logout(self: &Rc<Self>) {
+        self.spawn(|tx| {
+            let line = match auth::sign_out() {
+                Ok(_) if auth::env_set() => "logged out, but ZUNDER_GITHUB_TOKEN is still set and keeps being used".into(),
+                Ok(_) => "logged out".into(),
+                Err(e) => e,
+            };
+            let _ = tx.send_blocking(Msg::State(who()));
+            let _ = tx.send_blocking(Msg::Line(line));
+        });
+    }
+
+    fn sync_now(self: &Rc<Self>) {
+        self.status.set_text("syncing…");
+        self.spawn(|tx| {
+            let _ = tx.send_blocking(Msg::Synced(sync::sync_now()));
+        });
+    }
+
+    fn button(self: &Rc<Self>, text: &str, on: fn(&Rc<Self>)) -> gtk::Button {
+        let button = gtk::Button::with_label(text);
+        button.add_css_class("flat-button");
+        button.set_sensitive(!self.busy.get());
+        let view = self.clone();
+        button.connect_clicked(move |_| on(&view));
+        button
+    }
+
+    fn render(self: &Rc<Self>) {
+        while let Some(child) = self.body.first_child() {
+            self.body.remove(&child);
+        }
+        match &*self.state.borrow() {
+            Account::Checking => self.body.append(&label("checking the login…", "empty")),
+            Account::LoggedOut => {
+                let login = self.button("Log in with GitHub", Self::login);
+                login.add_css_class("primary");
+                self.body.append(&row("GitHub", "not logged in", &login));
+            }
+            Account::Waiting { code, uri, cancel } => {
+                let controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+                let open = gtk::Button::with_label("copy and open github.com");
+                open.add_css_class("flat-button");
+                open.add_css_class("primary");
+                let (code2, uri2) = (code.clone(), uri.clone());
+                open.connect_clicked(move |b| {
+                    b.clipboard().set_text(&code2);
+                    crate::platform::open(&uri2);
+                });
+                controls.append(&open);
+                let stop = gtk::Button::with_label("cancel");
+                stop.add_css_class("flat-button");
+                let cancel = cancel.clone();
+                stop.connect_clicked(move |b| {
+                    cancel.store(true, Ordering::Relaxed);
+                    b.set_sensitive(false);
+                });
+                controls.append(&stop);
+                let help = format!("enter it on {uri}, this page carries on by itself");
+                self.body.append(&row("Waiting for github.com", &help, &controls));
+                let code = label(code, "device-code");
+                code.set_selectable(true);
+                self.body.append(&code);
+            }
+            Account::LoggedIn { user, source } => {
+                let who = match user {
+                    Some(u) => format!("logged in as {u}, token from the {}", source.label()),
+                    None => format!("logged in, token from the {}", source.label()),
+                };
+                let who = who.replace("the ZUNDER_GITHUB_TOKEN", "ZUNDER_GITHUB_TOKEN");
+                self.body.append(&row("GitHub", &who, &self.button("Log out", Self::logout)));
+                let last = sync::last_sync().map_or("never".to_owned(), when);
+                self.body.append(&row("Last sync", &last, &self.button("Sync now", Self::sync_now)));
+                if let Some(s) = SETTINGS.iter().find(|s| s.key == "sync") {
+                    self.body.append(&row(s.title, s.help, &setting_control(s.key, &self.changed, &self.status)));
+                }
+            }
+        }
+    }
+}
+
+/// A sync time for people: "today 14:05", "yesterday 09:12", else the date.
+fn when(t: std::time::SystemTime) -> String {
+    let t: chrono::DateTime<chrono::Local> = t.into();
+    let today = chrono::Local::now().date_naive();
+    match (today - t.date_naive()).num_days() {
+        0 => t.format("today %H:%M").to_string(),
+        1 => t.format("yesterday %H:%M").to_string(),
+        _ => t.format("%-d %b %Y %H:%M").to_string(),
     }
 }
 
