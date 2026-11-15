@@ -79,7 +79,7 @@ zunder --version
 | `time in ny`, `tokyo time` | world clock |
 | `time in 2h in london`, `in 90 min in la` | the time there, later |
 | `3pm in ny`, `9am tokyo`, `3pm ny in zurich` | time conversion |
-| `clip`, `clip ssh` | clipboard history |
+| `clip`, `clip ssh` | clipboard history, by day (today, yesterday, last week…) |
 | `history`, `history firefox` | everything you ran from zunder |
 | `> htop` | run a command |
 | `theme`, `theme nord` | color schemes, Enter applies live and keeps the list open |
@@ -258,6 +258,10 @@ or the GitHub shortcode: `:red hea` → ❤️. Enter copies.
 `clip` shows your clipboard history, newest first, images included. Text after `clip ` fuzzy
 searches it. Enter copies the entry again. The pane on the right shows the selected entry in full:
 the whole text, scrollable and wrapped, or the image.
+
+Entries are grouped by when you copied them: Today, Yesterday, 3 days ago, Last week… Pinned
+clips stay on top under their own header. cliphist keeps no dates, so on Linux the server notes
+when each entry shows up (in `clipboard-times.json`); entries from before it ran go under Older.
 
 Where the history comes from:
 

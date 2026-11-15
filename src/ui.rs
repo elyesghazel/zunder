@@ -158,6 +158,7 @@ pub fn run(initial: Option<&'static str>) -> ExitCode {
         return ExitCode::FAILURE;
     }
     crate::sync::spawn();
+    crate::providers::clipboard::watch();
     let app = gtk::Application::builder()
         .application_id("dev.zunder.Zunder")
         .flags(gtk::gio::ApplicationFlags::NON_UNIQUE)

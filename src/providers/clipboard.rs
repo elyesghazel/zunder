@@ -1,6 +1,9 @@
 //! `clip`: clipboard history. Enter puts the entry back on the clipboard.
 //! On Linux it comes from cliphist, which needs `wl-paste --watch cliphist store` running (most
 //! Hyprland setups already have it). On Windows and macOS zunder keeps its own (`crate::clips`).
+//! The history is split into Today, Yesterday, 3 days ago… by when each entry was copied.
+
+use chrono::{DateTime, Datelike, Local, NaiveDate, TimeZone};
 
 use crate::engine::{Ctx, Provider};
 use crate::item::{Action, Item};
@@ -50,6 +53,44 @@ impl Provider for Clipboard {
     }
 }
 
+/// Dates new clipboard entries as they're copied, for as long as the server runs. cliphist keeps
+/// no dates; zunder's own store does.
+pub fn watch() {
+    #[cfg(target_os = "linux")]
+    cliphist::watch();
+}
+
+fn date_of(t: i64) -> Option<DateTime<Local>> {
+    Local.timestamp_opt(t, 0).single()
+}
+
+/// Section of an entry copied at `at`: Today, Yesterday, 3 days ago, Last week…
+fn day_group(at: Option<i64>, today: NaiveDate) -> String {
+    let Some(date) = at.and_then(date_of).map(|d| d.date_naive()) else { return "Older".into() };
+    match (today - date).num_days() {
+        ..=0 => "Today".into(),
+        1 => "Yesterday".into(),
+        d @ 2..=6 => format!("{d} days ago"),
+        7..=13 => "Last week".into(),
+        d @ 14..=29 => format!("{} weeks ago", d / 7),
+        30..=59 => "Last month".into(),
+        _ => "Older".into(),
+    }
+}
+
+/// `14:32` today, `Mon 14:32` this week, `12 Oct` before, `12 Oct 2025` in another year.
+fn time_hint(at: i64, now: DateTime<Local>) -> String {
+    let Some(t) = date_of(at) else { return String::new() };
+    let days = (now.date_naive() - t.date_naive()).num_days();
+    let fmt = match days {
+        ..=0 => "%H:%M",
+        1..=6 => "%a %H:%M",
+        _ if t.year() == now.year() => "%-d %b",
+        _ => "%-d %b %Y",
+    };
+    t.format(fmt).to_string()
+}
+
 /// Id prefix of pinned clips in favorites.json.
 pub const PINNED: &str = "clip:";
 
@@ -84,13 +125,18 @@ pub fn pinned(pin: &str, entry: &Item) -> Option<Item> {
 
 #[cfg(target_os = "linux")]
 mod cliphist {
+    use std::collections::{HashMap, HashSet};
+    use std::io::{BufRead, BufReader};
     use std::path::PathBuf;
-    use std::process::Command;
-    use std::sync::LazyLock;
+    use std::process::{Command, Stdio};
+    use std::sync::{LazyLock, Mutex};
+    use std::thread;
+    use std::time::Duration;
 
+    use chrono::Local;
     use regex::Regex;
 
-    use super::{GLYPH, IMAGE_GLYPH, SHOWN};
+    use super::{GLYPH, IMAGE_GLYPH, SHOWN, day_group, time_hint};
     use crate::engine::Ctx;
     use crate::item::{Action, Item, Text, shell_quote};
 
@@ -105,6 +151,9 @@ mod cliphist {
                 )];
             }
         };
+        let seen = SEEN.lock().unwrap().clone();
+        let newest = seen.keys().max().copied().unwrap_or(0);
+        let now = Local::now();
         String::from_utf8_lossy(&out.stdout)
             .lines()
             .filter_map(|line| {
@@ -116,12 +165,14 @@ mod cliphist {
             .enumerate()
             .map(|(i, (score, id, preview, line))| {
                 let image = preview.starts_with("[[ binary data");
+                let at = copied_at(id, &seen, newest, now.timestamp());
                 Item {
                     title: if image { image_title(preview) } else { preview.trim().replace('\t', " ") },
                     image: image.then(|| image_path(id, preview)).flatten(),
                     image_cmd: image.then(|| decode_cmd(id, preview, line)).flatten(),
                     text: (!image).then(|| Text::Command(format!("printf '%s' {} | cliphist decode", shell_quote(line)))),
-                    hint: format!("#{id}"),
+                    hint: at.map(|t| time_hint(t, now)).unwrap_or_default(),
+                    group: day_group(at, now.date_naive()),
                     glyph: if image { IMAGE_GLYPH.into() } else { GLYPH.into() },
                     subtitle: if image { "image".into() } else { String::new() },
                     pin: Some(line.to_owned()),
@@ -132,6 +183,61 @@ mod cliphist {
                 }
             })
             .collect()
+    }
+
+    /// cliphist entry id → unix time it was first seen; 0 for entries from before zunder ran.
+    static SEEN: LazyLock<Mutex<HashMap<u64, i64>>> =
+        LazyLock::new(|| Mutex::new(crate::store::read_json(&seen_path())));
+
+    fn seen_path() -> PathBuf {
+        crate::store::data_dir().join("clipboard-times.json")
+    }
+
+    pub fn watch() {
+        thread::spawn(|| {
+            // whatever is in the history now predates us (or the server was down): no date
+            stamp(0);
+            let child = Command::new("wl-paste")
+                .args(["--watch", "echo"])
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .spawn();
+            let Some(out) = child.ok().and_then(|mut c| c.stdout.take()) else { return };
+            for _ in BufReader::new(out).lines() {
+                // give the `cliphist store` watcher time to write the entry
+                thread::sleep(Duration::from_millis(500));
+                stamp(Local::now().timestamp());
+            }
+        });
+    }
+
+    /// Records `at` for every entry not seen yet and forgets entries cliphist dropped.
+    fn stamp(at: i64) {
+        let Ok(out) = Command::new("cliphist").arg("list").output() else { return };
+        let ids: HashSet<u64> = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter_map(|l| l.split_once('\t')?.0.parse().ok())
+            .collect();
+        let mut seen = SEEN.lock().unwrap();
+        let before = seen.clone();
+        seen.retain(|id, _| ids.contains(id));
+        for id in ids {
+            seen.entry(id).or_insert(at);
+        }
+        if *seen != before {
+            crate::store::write_json(&seen_path(), &*seen);
+        }
+    }
+
+    /// When entry `id` was copied. One newer than anything recorded was copied just now and the
+    /// watcher hasn't caught up yet; before the first look at the history nothing is dated.
+    fn copied_at(id: &str, seen: &HashMap<u64, i64>, newest: u64, now: i64) -> Option<i64> {
+        let id: u64 = id.parse().ok()?;
+        match seen.get(&id) {
+            Some(&t) => (t > 0).then_some(t),
+            None => (!seen.is_empty() && id > newest).then_some(now),
+        }
     }
 
     /// The decoded content of a cliphist list line.
@@ -173,12 +279,29 @@ mod cliphist {
             t = shell_quote(&tmp)
         ))
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn dates_entries() {
+            let seen = HashMap::from([(5, 100), (6, 0)]);
+            assert_eq!(copied_at("5", &seen, 6, 999), Some(100));
+            assert_eq!(copied_at("6", &seen, 6, 999), None);
+            assert_eq!(copied_at("7", &seen, 6, 999), Some(999));
+            assert_eq!(copied_at("4", &seen, 6, 999), None);
+            assert_eq!(copied_at("7", &HashMap::new(), 0, 999), None);
+        }
+    }
 }
 
 /// Windows and macOS: the history the platform watcher keeps in `crate::clips`.
 #[cfg(not(target_os = "linux"))]
 mod own {
-    use super::{GLYPH, IMAGE_GLYPH, SHOWN};
+    use chrono::Local;
+
+    use super::{GLYPH, IMAGE_GLYPH, SHOWN, day_group, time_hint};
     use crate::clips::{self, Content};
     use crate::engine::Ctx;
     use crate::item::{Action, Item, Text};
@@ -197,7 +320,7 @@ mod own {
                 ..Default::default()
             }];
         }
-        let now = chrono::Utc::now().timestamp();
+        let now = Local::now();
         let found = clips::list().into_iter().filter_map(|clip| {
             let path = clips::image_path(&clip.id);
             let title = match &clip.content {
@@ -220,7 +343,8 @@ mod own {
             .map(|(i, (score, clip, path, title))| {
                 let common = Item {
                     title,
-                    hint: age(now - clip.at),
+                    hint: time_hint(clip.at, now),
+                    group: day_group(Some(clip.at), now.date_naive()),
                     pin: Some(clip.id),
                     score: score * 1000 - i as i64,
                     ..Default::default()
@@ -263,14 +387,36 @@ mod own {
             _ => format!("{:.1} MiB", bytes as f64 / 1_048_576.0),
         }
     }
+}
 
-    /// How long ago it was copied: `now`, `5m`, `3h`, `2d`.
-    fn age(secs: i64) -> String {
-        match secs {
-            ..60 => "now".into(),
-            60..3600 => format!("{}m", secs / 60),
-            3600..86_400 => format!("{}h", secs / 3600),
-            _ => format!("{}d", secs / 86_400),
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ts(y: i32, m: u32, d: u32, h: u32) -> i64 {
+        Local.with_ymd_and_hms(y, m, d, h, 0, 0).unwrap().timestamp()
+    }
+
+    #[test]
+    fn groups_by_day() {
+        let today = NaiveDate::from_ymd_opt(2026, 10, 19).unwrap();
+        let group = |d| day_group(Some(ts(2026, 10, d, 12)), today);
+        assert_eq!(group(19), "Today");
+        assert_eq!(group(18), "Yesterday");
+        assert_eq!(group(16), "3 days ago");
+        assert_eq!(group(10), "Last week");
+        assert_eq!(group(1), "2 weeks ago");
+        assert_eq!(day_group(Some(ts(2026, 9, 10, 12)), today), "Last month");
+        assert_eq!(day_group(Some(ts(2026, 6, 1, 12)), today), "Older");
+        assert_eq!(day_group(None, today), "Older");
+    }
+
+    #[test]
+    fn hints() {
+        let now = Local.with_ymd_and_hms(2026, 10, 19, 15, 0, 0).unwrap();
+        assert_eq!(time_hint(ts(2026, 10, 19, 9), now), "09:00");
+        assert_eq!(time_hint(ts(2026, 10, 18, 9), now), "Sun 09:00");
+        assert_eq!(time_hint(ts(2026, 10, 1, 9), now), "1 Oct");
+        assert_eq!(time_hint(ts(2025, 10, 1, 9), now), "1 Oct 2025");
     }
 }
