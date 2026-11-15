@@ -39,9 +39,8 @@ pub const USAGE: &str = "usage:
   zunder sync --pull   take the gist's version of every file that differs
   zunder sync --push   put this machine's version of every file that differs in the gist";
 
-// TODO(#14): replace with `crate::auth::token()` once the login lands.
 fn token() -> Option<String> {
-    std::env::var("ZUNDER_GITHUB_TOKEN").ok().map(|t| t.trim().to_owned()).filter(|t| !t.is_empty())
+    crate::auth::token()
 }
 
 /// Sync is on and there is a token; otherwise nothing may go over the network.
@@ -435,7 +434,7 @@ pub fn sync(mode: Mode) -> Result<Outcome, String> {
     if !crate::config::get().sync {
         return Err("sync is off (`sync = false` in config.toml)".into());
     }
-    let token = token().ok_or("not logged in to GitHub: set ZUNDER_GITHUB_TOKEN to a token with the `gist` scope")?;
+    let token = token().ok_or("not logged in to GitHub: run `zunder login`")?;
     let mut state: State = crate::store::read_json(&state_path());
     let gist = find_gist(&token, &state.gist)?;
     let (remote, remote_at) = match &gist {

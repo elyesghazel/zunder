@@ -48,7 +48,6 @@ static CACHE: Mutex<Cached> = Mutex::new(None);
 const CACHE_FOR: Duration = Duration::from_secs(60);
 
 /// The GitHub token: `ZUNDER_GITHUB_TOKEN`, then the keyring, then the token file.
-#[allow(dead_code)] // sync (#15) is the first caller
 pub fn token() -> Option<String> {
     lookup().map(|(t, _)| t)
 }
