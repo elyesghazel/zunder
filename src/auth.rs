@@ -41,8 +41,11 @@ impl Source {
     }
 }
 
-/// The stored token is read once per process: the keyring is a D-Bus round trip.
-static CACHE: Mutex<Option<Option<(String, Source)>>> = Mutex::new(None);
+/// The keyring is a D-Bus round trip, so a lookup is kept for a minute. Not longer: the server
+/// runs for days and has to notice a `zunder login` / `logout` from another process.
+type Cached = Option<(Instant, Option<(String, Source)>)>;
+static CACHE: Mutex<Cached> = Mutex::new(None);
+const CACHE_FOR: Duration = Duration::from_secs(60);
 
 /// The GitHub token: `ZUNDER_GITHUB_TOKEN`, then the keyring, then the token file.
 #[allow(dead_code)] // sync (#15) is the first caller
@@ -62,13 +65,16 @@ fn lookup() -> Option<(String, Source)> {
         return Some((t, Source::Env));
     }
     let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
-    cache
-        .get_or_insert_with(|| {
-            keyring::get()
-                .map(|t| (t, Source::Keyring))
-                .or_else(|| read_token_file(&token_path()).map(|t| (t, Source::File)))
-        })
-        .clone()
+    if let Some((at, found)) = &*cache
+        && at.elapsed() < CACHE_FOR
+    {
+        return found.clone();
+    }
+    let found = keyring::get()
+        .map(|t| (t, Source::Keyring))
+        .or_else(|| read_token_file(&token_path()).map(|t| (t, Source::File)));
+    *cache = Some((Instant::now(), found.clone()));
+    found
 }
 
 fn forget_cache() {
