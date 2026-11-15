@@ -14,9 +14,9 @@ use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 
-/// The OAuth app's client id (an OAuth app with Device Flow enabled). Placeholder until the owner
-/// registers the app; `ZUNDER_GITHUB_CLIENT_ID` overrides it.
-const GITHUB_CLIENT_ID: &str = "PLACEHOLDER_GITHUB_CLIENT_ID";
+/// The OAuth app's client id (public, Device Flow enabled).
+/// `ZUNDER_GITHUB_CLIENT_ID` overrides it.
+const GITHUB_CLIENT_ID: &str = "Ov23liFCsHy34iE7kQF5";
 const SCOPE: &str = "gist";
 const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
 const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
@@ -79,16 +79,12 @@ fn env_token(value: Option<String>) -> Option<String> {
     value.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
 }
 
-fn client_id() -> Result<String, String> {
+fn client_id() -> String {
     pick_client_id(std::env::var("ZUNDER_GITHUB_CLIENT_ID").ok())
 }
 
-fn pick_client_id(env: Option<String>) -> Result<String, String> {
-    let id = env.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()).unwrap_or_else(|| GITHUB_CLIENT_ID.to_owned());
-    if id == GITHUB_CLIENT_ID && id.starts_with("PLACEHOLDER") {
-        return Err("no GitHub OAuth client id in this build yet; set ZUNDER_GITHUB_CLIENT_ID".into());
-    }
-    Ok(id)
+fn pick_client_id(env: Option<String>) -> String {
+    env.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()).unwrap_or_else(|| GITHUB_CLIENT_ID.to_owned())
 }
 
 fn token_path() -> PathBuf {
@@ -145,7 +141,7 @@ fn status() -> String {
 }
 
 fn device_login() -> Result<(), String> {
-    let client_id = client_id()?;
+    let client_id = client_id();
     let code = request_device_code(&client_id)?;
     println!("Open {} and enter the code:\n\n    {}\n", code.verification_uri, code.user_code);
     crate::platform::open(&code.verification_uri);
@@ -471,10 +467,10 @@ mod tests {
     }
 
     #[test]
-    fn placeholder_client_id_needs_override() {
-        assert!(pick_client_id(None).is_err());
-        assert!(pick_client_id(Some(" ".into())).is_err());
-        assert_eq!(pick_client_id(Some("Ov23liExample".into())).unwrap(), "Ov23liExample");
+    fn client_id_env_overrides_the_built_in_one() {
+        assert_eq!(pick_client_id(None), GITHUB_CLIENT_ID);
+        assert_eq!(pick_client_id(Some(" ".into())), GITHUB_CLIENT_ID);
+        assert_eq!(pick_client_id(Some("Ov23liExample".into())), "Ov23liExample");
     }
 
     #[test]
