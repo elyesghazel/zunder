@@ -693,9 +693,12 @@ impl PluginsView {
         let installed: Vec<(Card, &Plugin)> = plugins
             .iter()
             .map(|p| {
-                let file = p.path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+                // `wifi.ps1` on Windows is the registry's `wifi`
+                let registry_name = ok.and_then(|c| c.registry_name(&p.path)).map(str::to_owned);
+                let from_registry = registry_name.is_some();
+                let file = registry_name
+                    .unwrap_or_else(|| p.path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default());
                 let entry = ok.and_then(|c| c.entry(&file));
-                let from_registry = ok.is_some_and(|c| c.installed.contains_key(&file));
                 let controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
                 let mut badges = Vec::new();
                 if from_registry {
@@ -763,7 +766,7 @@ impl PluginsView {
             let mut badges = Vec::new();
             let missing = catalog.missing.get(&e.name);
             // only what's missing: a found binary is nothing to act on
-            for b in e.requires.iter().filter(|b| e.runs_here() && missing.is_some_and(|m| m.contains(b))) {
+            for b in e.here().requires.iter().filter(|b| e.runs_here() && missing.is_some_and(|m| m.contains(b))) {
                 badges.push((format!("needs {b}"), "badge-warn"));
             }
             if !e.settings.is_empty() {
