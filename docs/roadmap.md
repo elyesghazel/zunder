@@ -17,7 +17,7 @@ Enter) faster; zunder isn't trying to be a Raycast clone.
 - [x] one-line installer: `curl … | sh`
 - [x] interactive `zunder setup`: keybinds, autostart, theme, import from vicinae / rofi / wofi
 - [x] update notice in the launcher
-- [ ] ALT+TAB: reliable quick tap, multiple monitors, fullscreen windows
+- [x] ALT+TAB: reliable quick tap, multiple monitors, fullscreen windows
 - [x] opens and closes with a quick fade instead of the layer slide
 - [x] speed budget: open in under 30 ms, search in under 5 ms, measured
 - [x] first-run screen
@@ -51,7 +51,11 @@ Enter) faster; zunder isn't trying to be a Raycast clone.
 - [x] streaming plugin results
 
 **0.5: sync**
-- [ ] log in with GitHub; favorites, themes, plugins and settings in a private gist
+- [x] log in with GitHub; favorites, themes, plugins and settings in a private gist
+- [x] Settings → Account: log in, sync now, log out
+- [x] clipboard history grouped by day
+- [x] registry plugins on Windows (PowerShell variants, Python plugins through `py`)
+- [x] plugins as coloured cards in Settings, with search
 
 **0.6: macOS and Windows parity**
 - [x] global shortcuts on Windows
