@@ -109,6 +109,84 @@ pub fn is_light(name: &str) -> bool {
     hex.len() >= 6 && 0.299 * channel(0) + 0.587 * channel(2) + 0.114 * channel(4) > 140.0
 }
 
+/// `#rgb` or `#rrggbb`, normalised to lowercase `#rrggbb`; anything else gives None.
+pub fn parse_hex(value: &str) -> Option<String> {
+    let hex = value.trim().strip_prefix('#')?;
+    if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let hex = match hex.len() {
+        3 => hex.chars().flat_map(|c| [c, c]).collect(),
+        6 => hex.to_owned(),
+        _ => return None,
+    };
+    Some(format!("#{}", hex.to_ascii_lowercase()))
+}
+
+fn to_hsl(hex: &str) -> (f64, f64, f64) {
+    let hex = hex.trim_start_matches('#');
+    let c = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).unwrap_or(0) as f64 / 255.0;
+    let (r, g, b) = (c(0), c(2), c(4));
+    let (max, min) = (r.max(g).max(b), r.min(g).min(b));
+    let l = (max + min) / 2.0;
+    if max == min {
+        return (0.0, 0.0, l);
+    }
+    let d = max - min;
+    let s = if l > 0.5 { d / (2.0 - max - min) } else { d / (max + min) };
+    let h = if max == r {
+        (g - b) / d + if g < b { 6.0 } else { 0.0 }
+    } else if max == g {
+        (b - r) / d + 2.0
+    } else {
+        (r - g) / d + 4.0
+    };
+    (h * 60.0, s, l)
+}
+
+fn from_hsl(h: f64, s: f64, l: f64) -> String {
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+    let m = l - c / 2.0;
+    let (r, g, b) = match (h.rem_euclid(360.0) / 60.0) as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let byte = |v: f64| ((v + m) * 255.0).round().clamp(0.0, 255.0) as u8;
+    format!("#{:02x}{:02x}{:02x}", byte(r), byte(g), byte(b))
+}
+
+/// Eight colours in the feel of a theme: its accent turned around the colour wheel in 45° steps,
+/// with enough saturation to tell them apart and a lightness that reads on its background.
+pub fn palette(accent: &str, light: bool) -> [String; 8] {
+    let (h, s, l) = to_hsl(&parse_hex(accent).unwrap_or_else(|| "#b4befe".into()));
+    let s = s.clamp(0.45, 0.85);
+    let l = if light { l.clamp(0.38, 0.52) } else { l.clamp(0.62, 0.78) };
+    std::array::from_fn(|i| from_hsl(h + 45.0 * i as f64, s, l))
+}
+
+/// A plugin's colour: its own `color` when that is a valid hex, else one from `palette` picked
+/// by a hash of its name, so the same plugin keeps its colour.
+pub fn pick(name: &str, own: Option<&str>, palette: &[String; 8]) -> String {
+    if let Some(c) = own.and_then(parse_hex) {
+        return c;
+    }
+    // FNV-1a: stable across runs and builds, unlike DefaultHasher
+    let hash = name.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3));
+    palette[(hash % palette.len() as u64) as usize].clone()
+}
+
+/// The palette of the theme in use, with the `accent` setting applied.
+pub fn current_palette() -> [String; 8] {
+    let cfg = crate::config::get();
+    let accent = parse_hex(&cfg.accent).or_else(|| color(&cfg.theme, "accent")).unwrap_or_default();
+    palette(&accent, is_light(&cfg.theme))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,5 +241,44 @@ mod tests {
     fn reads_single_color() {
         assert_eq!(color("nord", "accent").as_deref(), Some("#88c0d0"));
         assert_eq!(color("nord", "nope"), None);
+    }
+
+    #[test]
+    fn parses_hex() {
+        assert_eq!(parse_hex("#ABC").as_deref(), Some("#aabbcc"));
+        assert_eq!(parse_hex(" #a6e3a1 ").as_deref(), Some("#a6e3a1"));
+        assert_eq!(parse_hex("red"), None);
+        assert_eq!(parse_hex("#12345"), None);
+        assert_eq!(parse_hex("#a6e3a1;}"), None);
+    }
+
+    #[test]
+    fn hsl_round_trips() {
+        for hex in ["#b4befe", "#88c0d0", "#8839ef", "#fabd2f"] {
+            let (h, s, l) = to_hsl(hex);
+            assert_eq!(from_hsl(h, s, l), hex);
+        }
+    }
+
+    #[test]
+    fn palette_starts_at_the_accent_and_differs() {
+        let p = palette("#88c0d0", false);
+        assert!((to_hsl(&p[0]).0 - to_hsl("#88c0d0").0).abs() < 2.0, "{}", p[0]);
+        let unique: std::collections::BTreeSet<_> = p.iter().collect();
+        assert_eq!(unique.len(), 8);
+        // a grey accent still gives colours
+        assert_eq!(palette("#808080", true).iter().collect::<std::collections::BTreeSet<_>>().len(), 8);
+    }
+
+    #[test]
+    fn picks_own_colour_or_a_stable_one() {
+        let p = palette("#b4befe", false);
+        assert_eq!(pick("wifi", Some("#F00"), &p), "#ff0000");
+        assert_eq!(pick("wifi", Some("nope"), &p), pick("wifi", None, &p));
+        assert_eq!(pick("wifi", None, &p), pick("wifi", None, &p));
+        assert!(p.contains(&pick("gh", None, &p)));
+        let names = ["agenda", "audio", "bluetooth", "wifi", "gh", "kill", "emoji", "notes"];
+        let colours: std::collections::BTreeSet<_> = names.iter().map(|n| pick(n, None, &p)).collect();
+        assert!(colours.len() >= 4, "{colours:?}");
     }
 }

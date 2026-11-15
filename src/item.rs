@@ -15,6 +15,9 @@ pub struct Item {
     pub hint: String,
     /// A Nerd Font glyph shown before the title.
     pub glyph: String,
+    /// `#rrggbb` for the glyph, e.g. a plugin's colour; empty keeps the theme's.
+    #[serde(skip)]
+    pub tint: String,
     /// Icon theme name or absolute path; replaces the glyph when it resolves.
     pub icon: String,
     /// Hyprland `stableId` of a window to show a live preview of.
