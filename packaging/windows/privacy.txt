@@ -1,0 +1,19 @@
+What zunder sends over the network
+
+zunder runs on your computer. It sends nothing anywhere unless one of these applies:
+
+- Update check: once a day zunder asks GitHub (api.github.com) for the newest release and
+  shows a note on the start screen. Turn it off in Settings > General > Check for updates.
+- Plugins: Settings > Plugins and "zunder plugin" download the plugin list and plugins
+  from GitHub (raw.githubusercontent.com), only when you open that page or run the command.
+- Currency conversion: typing a conversion like "20 usd to chf" loads exchange rates from
+  open.er-api.com, at most every 12 hours.
+- Login and sync: only after you log in (Settings > Account or "zunder login"), zunder
+  syncs your settings and favorites to a private gist on your own GitHub account.
+  Plugin tokens are never synced.
+- Web search and links open in your browser, which then talks to that site.
+
+zunder has no analytics, no telemetry and no account of its own.
+Plugins you install are separate programs and can do their own networking.
+
+Code signing policy: https://github.com/elyesghazel/zunder/blob/main/docs/code-signing.md

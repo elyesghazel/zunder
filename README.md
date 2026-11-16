@@ -36,7 +36,7 @@ On Arch it installs the release package, elsewhere the binary goes to `~/.local/
 vicinae, rofi or wofi, it takes over from them.
 
 **Windows:** run [zunder-windows-setup.exe](https://github.com/elyesghazel/zunder/releases/latest/download/zunder-windows-setup.exe).
-It installs for your user, no admin needed. ALT+SPACE opens zunder.
+It installs for your user, no admin needed. ALT+SPACE opens zunder. [Code signing policy](docs/code-signing.md).
 
 **macOS (Apple Silicon):** the `.dmg` from the [latest release](https://github.com/elyesghazel/zunder/releases/latest).
 Drag it to Applications, then right-click → Open the first time.
@@ -98,6 +98,7 @@ zunder plugin install wifi
 - [Usage](docs/usage.md): every feature, key and command
 - [Configuration](docs/configuration.md) and [themes](docs/themes.md): settings, `config.toml`, CSS
 - [Plugins](docs/plugins.md): writing your own, in any language
+- [Code signing policy](docs/code-signing.md): how Windows builds are signed, and what zunder sends over the network
 - [Troubleshooting](docs/troubleshooting.md)
 - [Development](docs/development.md): how it works inside, building from source, releasing
 - [Roadmap](docs/roadmap.md): what's done and what's next
