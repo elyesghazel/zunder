@@ -1,17 +1,33 @@
-<p align="center"><img src="assets/logo.svg" width="96" alt="zunder logo"></p>
+<a id="readme-top"></a>
 
-<h1 align="center">zunder</h1>
+<div align="center">
 
-<p align="center"><b>One prompt for your apps and your windows.</b><br>A launcher and ALT+TAB window switcher for Hyprland that looks like a terminal.</p>
+<img src="assets/logo.svg" width="96" alt="zunder logo">
 
-<p align="center">
-  <a href="https://elyesghazel.tech/zunder/">Website</a> ·
-  <a href="https://github.com/elyesghazel/zunder/releases/latest">Download</a> ·
-  <a href="docs/README.md">Docs</a> ·
-  <a href="docs/roadmap.md">Roadmap</a>
-  <br><br>
-  <a href="https://github.com/elyesghazel/zunder/actions/workflows/ci.yml"><img src="https://github.com/elyesghazel/zunder/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
+<h1>zunder</h1>
+
+<p><b>One prompt for your apps and your windows.</b><br>A launcher and ALT+TAB window switcher for Hyprland that looks like a terminal.</p>
+
+<p>
+  <a href="https://github.com/elyesghazel/zunder/actions/workflows/ci.yml"><img alt="ci" src="https://img.shields.io/github/actions/workflow/status/elyesghazel/zunder/ci.yml?style=flat-square&label=ci&logo=githubactions&logoColor=white"></a>
+  <a href="https://github.com/elyesghazel/zunder/releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/elyesghazel/zunder?style=flat-square&logo=github&label=release&color=4c1"></a>
+  <a href="https://github.com/elyesghazel/zunder/releases"><img alt="downloads" src="https://img.shields.io/github/downloads/elyesghazel/zunder/total?style=flat-square&color=blue"></a>
+  <a href="https://github.com/elyesghazel/zunder/blob/main/LICENSE"><img alt="license" src="https://img.shields.io/github/license/elyesghazel/zunder?style=flat-square&color=lightgrey"></a>
+  <br>
+  <a href="https://www.rust-lang.org"><img alt="rust" src="https://img.shields.io/badge/rust-2024-CE422B?style=flat-square&logo=rust&logoColor=white"></a>
+  <a href="https://gtk.org"><img alt="gtk4" src="https://img.shields.io/badge/GTK-4-4A86CF?style=flat-square&logo=gtk&logoColor=white"></a>
+  <a href="https://hyprland.org"><img alt="hyprland" src="https://img.shields.io/badge/Hyprland-ready-58E1FF?style=flat-square&logo=hyprland&logoColor=white"></a>
+  <img alt="platform" src="https://img.shields.io/badge/platform-linux%20%7C%20macOS%20%7C%20windows-555555?style=flat-square">
+  <a href="https://github.com/elyesghazel/zunder/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/elyesghazel/zunder?style=flat-square&logo=github&color=yellow"></a>
 </p>
+
+<p><a href="https://elyesghazel.tech/zunder/"><b>Website</b></a> · <a href="https://github.com/elyesghazel/zunder/releases/latest"><b>Download</b></a> · <a href="docs/README.md"><b>Docs</b></a> · <a href="https://github.com/elyesghazel/zunder-plugins"><b>Plugins</b></a> · <a href="docs/roadmap.md"><b>Roadmap</b></a></p>
+
+<a href="https://ko-fi.com/elyesghazel"><img alt="Support me on Ko-fi" src="https://ko-fi.com/img/githubbutton_sm.svg"></a>
+
+</div>
+
+---
 
 ![zunder demo](assets/demo.gif)
 
@@ -111,6 +127,22 @@ their own.
 Written in Rust with GTK4. Bug reports and small fixes are welcome; for bigger ideas, open an
 issue first.
 
+## Support
+
+If zunder saves you time, you can [buy me a coffee on Ko-fi](https://ko-fi.com/elyesghazel). Bug reports, ideas and
+pull requests are just as welcome: [open an issue](https://github.com/elyesghazel/zunder/issues/new).
+
+## Star history
+
+<a href="https://star-history.com/#elyesghazel/zunder&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=elyesghazel/zunder&type=Date&theme=dark">
+    <img alt="Star history chart" src="https://api.star-history.com/svg?repos=elyesghazel/zunder&type=Date" width="600">
+  </picture>
+</a>
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+<div align="right"><a href="#readme-top">back to top ↑</a></div>
