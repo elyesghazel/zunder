@@ -112,11 +112,12 @@ switcher and previews don't exist on macOS: ⌘Tab is built in.
 ## Windows
 
 Download [zunder-windows-setup.exe](https://github.com/elyesghazel/zunder/releases/latest/download/zunder-windows-setup.exe)
-(about 16 MB) and run it. Releases are signed: free code signing provided by
-[SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)
-([code signing policy](code-signing.md)). Until the
-signature has built up reputation, SmartScreen can still warn: **More info → Run anyway**. The
-installer lists what zunder sends over the network before it installs.
+(about 16 MB) and run it. Until a release is signed and its signature has built up reputation,
+SmartScreen can warn: **More info → Run anyway**. The installer lists what zunder sends over the
+network before it installs.
+
+Code signing: free code signing provided by [SignPath.io](https://about.signpath.io), certificate
+by [SignPath Foundation](https://signpath.org). See the [code signing policy](code-signing.md).
 
 - Installs for your user only, to `%LOCALAPPDATA%\Programs\zunder`, so no admin is needed.
 - Options: start with Windows, Ctrl+Alt+Space on the Start menu entry, desktop shortcut.

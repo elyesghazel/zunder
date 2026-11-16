@@ -1,7 +1,7 @@
 # Code signing policy
 
 Windows builds of zunder (`zunder.exe`, `zunder-console.exe` and `zunder-windows-setup.exe`)
-are signed.
+are signed through SignPath. Each release's notes say whether its Windows files are signed.
 
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)
 
