@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration "exes": zunder.exe and zunder-console.exe from the
+     release workflow. Paste into SignPath (project zunder > Artifact configurations); this file
+     is the reference copy. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file-set product-name="zunder" product-version="${version}">
+      <include path="zunder.exe" />
+      <include path="zunder-console.exe" />
+      <for-each>
+        <authenticode-sign />
+      </for-each>
+    </pe-file-set>
+  </zip-file>
+</artifact-configuration>

@@ -74,6 +74,9 @@ jobs:
     env:
       # one cargo home for MSYS2's cargo and rust-cache, so the registry gets cached too
       CARGO_HOME: D:\cargo-home
+      # SignPath signs tagged releases once the repo variable SIGNPATH_ORGANIZATION_ID and the
+      # secret SIGNPATH_API_TOKEN are set; without them (or on a manual run) the exes stay unsigned
+      SIGN: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' && github.ref_type == 'tag' && 'yes' || '' }}
     defaults:
       run:
         shell: msys2 {0}
@@ -132,9 +135,39 @@ jobs:
           printf '@start "" "%%~dp0bin\\zunder.exe" %%*\r\n' > "$app/zunder.cmd"
           # same program with a console that shows every error, for when zunder.cmd does nothing
           printf '@echo off\r\necho zunder debug run, errors show up below. Close this window to stop.\r\n"%%~dp0bin\\zunder-console.exe"\r\necho exit code %%errorlevel%%\r\npause\r\n' > "$app/zunder-debug.cmd"
+      # signing: see docs/code-signing.md; artifact configurations in packaging/windows/signpath
+      - name: upload exes to sign
+        id: unsigned-exes
+        if: env.SIGN
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-exes
+          path: |
+            zunder-${{ env.VER }}/bin/zunder.exe
+            zunder-${{ env.VER }}/bin/zunder-console.exe
+      - name: sign exes
+        if: env.SIGN
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: zunder
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: exes
+          github-artifact-id: ${{ steps.unsigned-exes.outputs.artifact-id }}
+          # an approver approves each request by hand on signpath.io
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed-exes
+          parameters: |
+            version: ${{ toJSON(env.VER) }}
+      - name: use the signed exes
+        if: env.SIGN
+        run: cp signed-exes/zunder.exe signed-exes/zunder-console.exe "zunder-$VER/bin/"
+      - name: zip
+        run: |
           mkdir -p dist
-          zip -qr "dist/zunder-$VER-windows-x86_64.zip" "$app"
-          du -sh "$app" "dist/zunder-$VER-windows-x86_64.zip"
+          zip -qr "dist/zunder-$VER-windows-x86_64.zip" "zunder-$VER"
+          du -sh "zunder-$VER" "dist/zunder-$VER-windows-x86_64.zip"
       - name: installer
         shell: pwsh
         run: |
@@ -143,6 +176,41 @@ jobs:
           & $iscc /Qp "/DZunderVersion=$env:VER" "/DSrc=$PWD\zunder-$env:VER" "/DOut=$PWD\dist" packaging\windows\zunder.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Get-ChildItem dist | Format-Table Name, @{n='MB'; e={[math]::Round($_.Length / 1MB, 1)}}
+      - name: upload installer to sign
+        id: unsigned-setup
+        if: env.SIGN
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-setup
+          path: dist/zunder-windows-setup.exe
+      - name: sign installer
+        if: env.SIGN
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: zunder
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: setup
+          github-artifact-id: ${{ steps.unsigned-setup.outputs.artifact-id }}
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed-setup
+          parameters: |
+            version: ${{ toJSON(env.VER) }}
+      - name: check signatures
+        if: env.SIGN
+        shell: pwsh
+        run: |
+          Copy-Item signed-setup\zunder-windows-setup.exe dist\ -Force
+          Expand-Archive "dist\zunder-$env:VER-windows-x86_64.zip" check
+          $files = "dist\zunder-windows-setup.exe", "check\zunder-$env:VER\bin\zunder.exe", "check\zunder-$env:VER\bin\zunder-console.exe"
+          $bad = 0
+          foreach ($f in $files) {
+            $sig = Get-AuthenticodeSignature $f
+            "{0}: {1} ({2})" -f $f, $sig.Status, $sig.SignerCertificate.Subject
+            if ($sig.Status -ne 'Valid') { $bad++ }
+          }
+          exit $bad
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -229,15 +297,23 @@ jobs:
           fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
-          path: files
-          merge-multiple: true
+          path: artifacts
+      - name: collect release files
+        # not the unsigned-* artifacts the signing steps upload
+        run: mkdir files && cp artifacts/arch/* artifacts/linux/* artifacts/windows/* artifacts/macos/* files/
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          SIGNED: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
         run: |
           # checked by get.sh before installing
           (cd files && sha256sum * > SHA256SUMS)
           # the changelog first: zunder shows the release body in its update notice
           packaging/notes.sh "$TAG" > notes.md
-          echo "Arch: \`sudo pacman -U\` the .pkg.tar.zst · Linux: the tarball and install.sh · Windows: run zunder-windows-setup.exe (no admin; More info → Run anyway), then ALT+SPACE · macOS (Apple Silicon): open the .dmg, drag zunder to Applications, right-click → Open the first time (it isn't signed). macOS and Windows don't have the window switcher yet." >> notes.md
+          if [ -n "$SIGNED" ]; then
+            WINSIGN="; signed, [code signing policy](https://github.com/elyesghazel/zunder/blob/main/docs/code-signing.md)"
+          else
+            WINSIGN="; More info → Run anyway"
+          fi
+          echo "Arch: \`sudo pacman -U\` the .pkg.tar.zst · Linux: the tarball and install.sh · Windows: run zunder-windows-setup.exe (no admin$WINSIGN), then ALT+SPACE · macOS (Apple Silicon): open the .dmg, drag zunder to Applications, right-click → Open the first time (it isn't signed). macOS and Windows don't have the window switcher yet." >> notes.md
           gh release create "$TAG" files/* --title "zunder ${TAG#v}" --generate-notes --notes-file notes.md
