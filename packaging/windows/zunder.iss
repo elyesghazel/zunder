@@ -33,6 +33,17 @@ SetupIconFile=..\..\assets\icons\zunder.ico
 UninstallDisplayIcon={app}\bin\zunder.exe
 UninstallDisplayName=zunder
 LicenseFile={#Src}\LICENSE
+; what zunder sends over the network, shown before installing (SignPath Foundation requires it)
+InfoBeforeFile=privacy.txt
+; version info on the setup exe; code signing checks product name and version
+VersionInfoProductName=zunder
+VersionInfoProductVersion={#ZunderVersion}
+VersionInfoProductTextVersion={#ZunderVersion}
+VersionInfoVersion={#ZunderVersion}
+VersionInfoTextVersion={#ZunderVersion}
+VersionInfoCompany=Elyes Ghazel
+VersionInfoDescription=zunder setup
+VersionInfoCopyright=Copyright (c) 2026 Elyes Ghazel, MIT License
 
 [Tasks]
 Name: "autostart"; Description: "Start zunder with Windows"
