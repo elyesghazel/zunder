@@ -97,6 +97,35 @@ https://kagi.com/search?q={q}
 The config folder is safe to keep in your dotfiles. Leave `~/.local/share/zunder` out, it's
 machine-specific.
 
+## Sync
+
+After `zunder login` (or Settings → Account), `zunder sync` keeps these in a private gist called
+`zunder-sync` on your GitHub account. The server syncs on start, every hour and a few seconds
+after one of the files changed; `sync = false` turns it off.
+
+| Gist file | What |
+|-----------|------|
+| `config.toml` | config.toml without `[plugins.*]` (plugin tokens stay on the machine) |
+| `favorites.json` | favorites that work everywhere: zunder commands, plugin results, web searches, emoji |
+| `favorites-<os>.json` | favorites tied to a system (apps, files, system commands), one file per system |
+| `theme--<name>.css` | your themes |
+| `plugins.json` | registry plugins and their commits; a pull installs the missing ones |
+| `binds-<os>.json` | global shortcuts, one file per system |
+
+Pinned clipboard entries never leave the machine. Locally there's still one `favorites.json`.
+
+Favorites merge per entry: a favorite added on one machine shows up on the others at the end
+of the list, and one removed on one machine goes on the others too. Your own order stays. The
+other files sync whole: the side that changed since the last sync wins, and if both changed,
+the newer one does. What gets overwritten here is kept as `<file>.bak`. Deleting a whole file
+doesn't sync.
+
+`zunder sync --pull` takes the gist's version of everything, `--push` this machine's.
+
+Older versions kept all favorites in one `favorites.json`. This one takes only this system's
+apps from it and writes the new layout on its next push, so update every machine: an older one
+would replace its favorites with the portable ones (its old list stays in `favorites.json.bak`).
+
 ## CSS
 
 The built-in look is [`src/style.css`](../src/style.css) for the launcher and
