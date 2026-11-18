@@ -5,15 +5,24 @@
 //! | gist                 | local                                                        |
 //! |----------------------|--------------------------------------------------------------|
 //! | `config.toml`        | config.toml without `[plugins.*]` (plugin tokens stay local) |
-//! | `favorites.json`     | favorites.json                                               |
+//! | `favorites.json`     | the portable favorites from favorites.json: `cmd:`, plugins, web searches, emoji |
+//! | `favorites-<os>.json`| the rest of favorites.json, one per system (apps, files, system commands) |
 //! | `theme--<name>.css`  | themes/<name>.css                                            |
 //! | `plugins.json`       | registry plugin names and commits from plugins/.installed.json |
 //! | `binds-<os>.json`    | binds.json, one per system (combos differ between them)      |
 //!
+//! Pinned clips (`clip:`) never leave favorites.json: they can hold secrets.
+//!
 //! Merge rule, per file: the hash both sides had after the last sync is kept in
 //! `<data dir>/zunder/sync.json`. A side that still has that hash didn't change, so the other one
 //! wins. When both changed, the newer one wins: the gist's `updated_at` against the local mtime.
-//! The overwritten side is kept next to the local file as `<file>.bak`. Deletions don't sync.
+//! The overwritten side is kept next to the local file as `<file>.bak`. Deleted files don't sync.
+//!
+//! Favorites merge per entry instead (see [`merge_favorites`]): sync.json also keeps the ids each
+//! favorites file had after the last sync, so an entry that's new on one side is added to the
+//! other and one that was removed on one side goes on the other too. Without those ids (the first
+//! sync) nothing is removed. The local list keeps its order; new entries go at the end. An old
+//! gist's `favorites.json` with apps in it gives this machine only the ones made on this system.
 //!
 //! The server pulls on start and every hour and pushes ~5 s after one of the files changed.
 //! Nothing touches the network while `sync = false` or without a GitHub token.
@@ -70,7 +79,7 @@ enum Kind {
     Plugins,
     /// binds.json; a pull reinstalls the shortcuts.
     Binds,
-    /// favorites.json without pinned clips: they can hold secrets and stay on this machine.
+    /// favorites.json, both gist files of it: merged per entry by [`merge_favorites`].
     Favorites,
 }
 
@@ -86,6 +95,12 @@ fn binds_name() -> String {
     format!("binds-{}.json", std::env::consts::OS)
 }
 
+const FAVORITES: &str = "favorites.json";
+
+fn favorites_os_name(os: &str) -> String {
+    format!("favorites-{os}.json")
+}
+
 fn valid_theme(name: &str) -> bool {
     !name.is_empty() && !name.starts_with('.') && !name.contains(['/', '\\']) && !name.contains("..")
 }
@@ -95,7 +110,8 @@ fn valid_theme(name: &str) -> bool {
 fn local_for(root: &Path, name: &str) -> Option<Mapped> {
     let (path, kind) = match name {
         "config.toml" => (root.join("config.toml"), Kind::Config),
-        "favorites.json" => (root.join("favorites.json"), Kind::Favorites),
+        FAVORITES => (root.join(FAVORITES), Kind::Favorites),
+        n if n == favorites_os_name(std::env::consts::OS) => (root.join(FAVORITES), Kind::Favorites),
         "plugins.json" => (root.join("plugins").join(".installed.json"), Kind::Plugins),
         n if n == binds_name() => (root.join("binds.json"), Kind::Binds),
         n => {
@@ -111,7 +127,8 @@ fn local_for(root: &Path, name: &str) -> Option<Mapped> {
 
 /// Every file under `root` that exists here and is synced.
 fn local_files(root: &Path) -> Vec<Mapped> {
-    let mut names: Vec<String> = ["config.toml", "favorites.json", "plugins.json"].map(String::from).to_vec();
+    let mut names: Vec<String> = ["config.toml", FAVORITES, "plugins.json"].map(String::from).to_vec();
+    names.push(favorites_os_name(std::env::consts::OS));
     names.push(binds_name());
     let mut themes: Vec<String> = fs::read_dir(root.join("themes"))
         .into_iter()
@@ -131,14 +148,8 @@ fn local_files(root: &Path) -> Vec<Mapped> {
 fn read_local(m: &Mapped) -> Option<String> {
     let bytes = fs::read(&m.path).ok()?;
     let text = match m.kind {
-        Kind::Plain | Kind::Binds => String::from_utf8(bytes).ok()?,
-        Kind::Favorites => {
-            let text = String::from_utf8(bytes).ok()?;
-            match split_pinned(&text) {
-                Some((rest, pinned)) if !pinned.is_empty() => serde_json::to_string_pretty(&rest).ok()?,
-                _ => text,
-            }
-        }
+        // favorites don't go through here: see `merge_favorites`
+        Kind::Plain | Kind::Binds | Kind::Favorites => String::from_utf8(bytes).ok()?,
         Kind::Config => {
             let text = String::from_utf8(bytes).ok()?;
             match text.parse::<toml::Table>() {
@@ -156,12 +167,6 @@ fn read_local(m: &Mapped) -> Option<String> {
         }
     };
     (!text.trim().is_empty()).then_some(text)
-}
-
-/// A favorites list split into (everything else, pinned clips). `None` if it isn't a JSON list.
-fn split_pinned(text: &str) -> Option<(Vec<serde_json::Value>, Vec<serde_json::Value>)> {
-    let items: Vec<serde_json::Value> = serde_json::from_str(text).ok()?;
-    Some(items.into_iter().partition(|i| !i.get("id").and_then(|id| id.as_str()).is_some_and(|id| id.starts_with(crate::providers::clipboard::PINNED))))
 }
 
 fn mtime(path: &Path) -> Option<SystemTime> {
@@ -182,18 +187,8 @@ fn write_local(m: &Mapped, text: &str) -> Result<(), String> {
             }
             None => text.to_owned(),
         },
-        // pinned clips stay as they are here, and the gist's (old gists may have some) are dropped
-        Kind::Favorites => {
-            let local = fs::read_to_string(&m.path).ok().and_then(|t| split_pinned(&t)).map(|(_, pinned)| pinned).unwrap_or_default();
-            let (mut items, remote) = split_pinned(text).ok_or("favorites.json in the gist isn't a list")?;
-            if local.is_empty() && remote.is_empty() {
-                text.to_owned()
-            } else {
-                items.extend(local);
-                serde_json::to_string_pretty(&items).map_err(|e| e.to_string())?
-            }
-        }
-        Kind::Plain | Kind::Binds => text.to_owned(),
+        // favorites arrive already merged with the local list
+        Kind::Plain | Kind::Binds | Kind::Favorites => text.to_owned(),
     };
     if let Some(dir) = m.path.parent() {
         fs::create_dir_all(dir).map_err(|e| format!("can't create {}: {e}", dir.display()))?;
@@ -263,6 +258,8 @@ struct State {
     gist: String,
     /// sha256 of each file's text as both sides had it after the last sync.
     files: BTreeMap<String, String>,
+    /// The entry ids each favorites file in the gist had after the last sync.
+    favorites: BTreeMap<String, Vec<String>>,
 }
 
 fn state_path() -> PathBuf {
@@ -424,7 +421,7 @@ pub struct Outcome {
     pub binds: bool,
 }
 
-/// What to do with each file, given the gist's texts.
+/// What to do with each file except favorites, given the gist's texts.
 fn plan(root: &Path, remote: &BTreeMap<String, String>, remote_at: SystemTime, base: &BTreeMap<String, String>, mode: Mode) -> Vec<(Mapped, Option<String>, Step)> {
     let mut files = local_files(root);
     for name in remote.keys() {
@@ -436,6 +433,7 @@ fn plan(root: &Path, remote: &BTreeMap<String, String>, remote_at: SystemTime, b
     }
     files
         .into_iter()
+        .filter(|m| m.kind != Kind::Favorites)
         .map(|m| {
             let mut text = read_local(&m);
             if m.kind == Kind::Plugins
@@ -461,6 +459,176 @@ fn union_pins(local: Option<&str>, remote: &str) -> Option<String> {
     (!pins.is_empty()).then(|| serde_json::to_string_pretty(&pins).unwrap_or_default() + "\n")
 }
 
+// ── favorites ────────────────────────────────────────────
+
+type Entry = serde_json::Value;
+
+/// Where a favorite goes in the gist.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Class {
+    /// Pinned clips and entries without an id: never synced.
+    Local,
+    /// The same on every system: `favorites.json`.
+    Portable,
+    /// Bound to the system it was made on: `favorites-<os>.json`.
+    System,
+}
+
+/// Ids that mean the same thing everywhere. Everything else holds a path or a platform command:
+/// `app:` (a .desktop id, a .lnk or .app path), `file:`, `sys:` and whatever comes later.
+const PORTABLE: &[&str] = &["cmd:", "plugin:", "web:", "ai:", "emoji:"];
+
+fn class(id: &str) -> Class {
+    if id.is_empty() || id.starts_with(crate::providers::clipboard::PINNED) {
+        Class::Local
+    } else if PORTABLE.iter().any(|p| id.starts_with(p)) {
+        Class::Portable
+    } else {
+        Class::System
+    }
+}
+
+fn id_of(e: &Entry) -> &str {
+    e.get("id").and_then(|id| id.as_str()).unwrap_or_default()
+}
+
+/// The system an app or file favorite was made on, as `std::env::consts::OS` names it; `None`
+/// when the id doesn't say.
+fn made_on(id: &str) -> Option<&'static str> {
+    let windows = |p: &str| p.contains('\\') || p.as_bytes().get(1) == Some(&b':');
+    if let Some(app) = id.strip_prefix("app:") {
+        let lower = app.to_lowercase();
+        if lower.ends_with(".desktop") {
+            Some("linux")
+        } else if lower.ends_with(".lnk") || windows(app) {
+            Some("windows")
+        } else if lower.trim_end_matches('/').ends_with(".app") {
+            Some("macos")
+        } else {
+            None
+        }
+    } else if let Some(path) = id.strip_prefix("file:") {
+        if windows(path) {
+            Some("windows")
+        } else if path.starts_with("/Users/") || path.starts_with("/Volumes/") {
+            Some("macos")
+        } else if path.starts_with('/') {
+            Some("linux")
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+fn parse_list(text: &str, what: &str) -> Result<Vec<Entry>, String> {
+    serde_json::from_str(text).map_err(|_| format!("{what} isn't a list of favorites, not synced"))
+}
+
+/// The entries of one class, first of each id only.
+fn of_class(items: &[Entry], c: Class) -> Vec<Entry> {
+    let mut seen = std::collections::HashSet::new();
+    items.iter().filter(|e| class(id_of(e)) == c && seen.insert(id_of(e).to_owned())).cloned().collect()
+}
+
+/// One gist file's entries after the sync. `remote` is `None` when the gist doesn't have the
+/// file; `extra` are entries offered by the old layout, which can be added but never remove
+/// anything; `base` the ids the file had after the last sync.
+fn merge_class(local: &[Entry], remote: Option<&[Entry]>, extra: &[Entry], base: Option<&[String]>, mode: Mode) -> Vec<Entry> {
+    let has = |list: &[Entry], id: &str| list.iter().any(|e| id_of(e) == id);
+    let was = |id: &str| base.is_some_and(|b| b.iter().any(|x| x == id));
+    let mut out: Vec<Entry> = match (mode, remote) {
+        (Mode::Push, _) | (_, None) => local.to_vec(),
+        // the gist's version of each entry it has, in this machine's order where both have it
+        (Mode::Pull, Some(r)) => {
+            let mut out: Vec<Entry> = local.iter().filter_map(|l| r.iter().find(|e| id_of(e) == id_of(l))).cloned().collect();
+            out.extend(r.iter().filter(|e| !has(local, id_of(e))).cloned());
+            out
+        }
+        (Mode::Both, Some(r)) => {
+            // here only: new here, or removed elsewhere since the last sync
+            let mut out: Vec<Entry> = local.iter().filter(|e| has(r, id_of(e)) || !was(id_of(e))).cloned().collect();
+            // there only: new there, or removed here since the last sync
+            out.extend(r.iter().filter(|e| !has(local, id_of(e)) && !was(id_of(e))).cloned());
+            out
+        }
+    };
+    if mode != Mode::Push {
+        for e in extra {
+            if !has(&out, id_of(e)) && !has(local, id_of(e)) && !was(id_of(e)) {
+                out.push(e.clone());
+            }
+        }
+    }
+    out
+}
+
+/// What a sync does with favorites.
+#[derive(Debug, Default, PartialEq)]
+struct FavoritesPlan {
+    /// The new favorites.json here, when it changes.
+    local: Option<String>,
+    /// Gist files to write.
+    push: Vec<(String, String)>,
+    /// The ids of each favorites file the gist has after the sync, for sync.json.
+    ids: BTreeMap<String, Vec<String>>,
+}
+
+/// Merge the local favorites.json (`None`: there is none) with the gist's `favorites.json` and
+/// `favorites-<os>.json`. Portable entries go to the first, this system's to the second, pinned
+/// clips nowhere. Each file merges per entry against the ids it had after the last sync (`base`).
+/// The local list keeps its order and pinned clips, and gets new entries at the end.
+fn merge_favorites(local: Option<&str>, remote: &BTreeMap<String, String>, base: &BTreeMap<String, Vec<String>>, mode: Mode, os: &str) -> Result<FavoritesPlan, String> {
+    let os_name = favorites_os_name(os);
+    let local_items = match local {
+        Some(t) if !t.trim().is_empty() => parse_list(t, FAVORITES)?,
+        _ => Vec::new(),
+    };
+    let remote_list = |name: &str| remote.get(name).map(|t| parse_list(t, &format!("{name} in the gist"))).transpose();
+    let shared = remote_list(FAVORITES)?;
+    let own = remote_list(&os_name)?;
+    // the old layout kept apps in favorites.json: take the ones made on this system
+    let moved: Vec<Entry> = shared
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .filter(|e| class(id_of(e)) == Class::System && made_on(id_of(e)) == Some(os))
+        .cloned()
+        .collect();
+
+    let mut plan = FavoritesPlan::default();
+    let mut merged: Vec<Entry> = Vec::new();
+    for (name, c, remote_all, extra) in [(FAVORITES.to_owned(), Class::Portable, shared, Vec::new()), (os_name, Class::System, own, moved)] {
+        let remote_items = remote_all.as_deref().map(|r| of_class(r, c));
+        let result = merge_class(&of_class(&local_items, c), remote_items.as_deref(), &extra, base.get(&name).map(Vec::as_slice), mode);
+        // compared with everything in the gist's file, so an old layout gets rewritten
+        let differs = remote_all.as_ref() != Some(&result) && (remote_all.is_some() || !result.is_empty());
+        let push = mode != Mode::Pull && differs;
+        if push {
+            plan.push.push((name.clone(), serde_json::to_string_pretty(&result).map_err(|e| e.to_string())?));
+        }
+        if push || remote_all.is_some() {
+            plan.ids.insert(name, result.iter().map(|e| id_of(e).to_owned()).collect());
+        }
+        merged.extend(result);
+    }
+    // this machine's order, then what's new; pinned clips stay where they are
+    let mut out: Vec<Entry> = Vec::new();
+    for e in &local_items {
+        if class(id_of(e)) == Class::Local {
+            out.push(e.clone());
+        } else if let Some(i) = merged.iter().position(|m| id_of(m) == id_of(e)) {
+            out.push(merged.remove(i));
+        }
+    }
+    out.extend(merged);
+    if out != local_items {
+        plan.local = Some(serde_json::to_string_pretty(&out).map_err(|e| e.to_string())?);
+    }
+    Ok(plan)
+}
+
 pub fn sync(mode: Mode) -> Result<Outcome, String> {
     if !crate::config::get().sync {
         return Err("sync is off (`sync = false` in config.toml)".into());
@@ -475,6 +643,7 @@ pub fn sync(mode: Mode) -> Result<Outcome, String> {
     let root = root();
     let mut out = Outcome { ok: true, ..Outcome::default() };
     let mut push = serde_json::Map::new();
+    sync_favorites(&root, &remote, &mut state, mode, &mut out, &mut push);
     for (m, text, step) in plan(&root, &remote, remote_at, &state.files, mode) {
         match step {
             Step::Same => {
@@ -535,6 +704,41 @@ pub fn sync(mode: Mode) -> Result<Outcome, String> {
         out.lines.push("everything is in sync".into());
     }
     Ok(out)
+}
+
+/// Merge favorites.json and queue its gist files; a local write that fails pushes nothing, so
+/// the ids in sync.json never claim entries this machine doesn't have.
+fn sync_favorites(root: &Path, remote: &BTreeMap<String, String>, state: &mut State, mode: Mode, out: &mut Outcome, push: &mut serde_json::Map<String, serde_json::Value>) {
+    let Some(m) = local_for(root, FAVORITES) else { return };
+    let local = fs::read_to_string(&m.path).ok();
+    let plan = match merge_favorites(local.as_deref(), remote, &state.favorites, mode, std::env::consts::OS) {
+        Ok(plan) => plan,
+        Err(e) => {
+            out.ok = false;
+            out.lines.push(e);
+            return;
+        }
+    };
+    if let Some(text) = &plan.local {
+        if let Err(e) = write_local(&m, text) {
+            out.ok = false;
+            out.lines.push(e);
+            return;
+        }
+        out.pulled = true;
+        out.lines.push(format!("pulled {FAVORITES}"));
+    }
+    for (name, text) in plan.push {
+        out.lines.push(format!("pushed {name}"));
+        push.insert(name, serde_json::json!({ "content": text }));
+    }
+    for name in [FAVORITES.to_owned(), favorites_os_name(std::env::consts::OS)] {
+        state.files.remove(&name);
+        match plan.ids.get(&name) {
+            Some(ids) => state.favorites.insert(name, ids.clone()),
+            None => state.favorites.remove(&name),
+        };
+    }
 }
 
 /// Registry plugins the gist lists that aren't installed here, at the index's current commit.
@@ -720,6 +924,9 @@ mod tests {
         assert_eq!(local_for(root, &binds_name()).unwrap().path, root.join("binds.json"));
         let other = if cfg!(target_os = "linux") { "binds-windows.json" } else { "binds-linux.json" };
         assert!(local_for(root, other).is_none());
+        assert_eq!(local_for(root, &favorites_os_name(std::env::consts::OS)).unwrap().path, root.join("favorites.json"));
+        let other = if cfg!(target_os = "linux") { "favorites-windows.json" } else { "favorites-linux.json" };
+        assert!(local_for(root, other).is_none());
         for bad in ["theme--.css", "theme--../x.css", "theme--a/b.css", "theme--.hidden.css", "theme--x.txt", "readme.md"] {
             assert!(local_for(root, bad).is_none(), "{bad}");
         }
@@ -734,7 +941,7 @@ mod tests {
         fs::write(root.join("themes/notes.txt"), "x").unwrap();
         fs::write(root.join("themes/mine.css.bak"), "x").unwrap();
         let names: Vec<String> = local_files(&root).into_iter().map(|m| m.name).collect();
-        assert_eq!(names, ["favorites.json", "theme--mine.css"]);
+        assert_eq!(names, ["favorites.json".to_owned(), favorites_os_name(std::env::consts::OS), "theme--mine.css".to_owned()]);
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -776,32 +983,151 @@ mod tests {
     #[test]
     fn plan_pulls_new_and_backs_up() {
         let root = tmp("plan");
-        fs::write(root.join("favorites.json"), "[1]").unwrap();
+        fs::create_dir_all(root.join("themes")).unwrap();
+        fs::write(root.join("themes/sea.css"), "a").unwrap();
+        fs::write(root.join("favorites.json"), "[]").unwrap();
         let remote: BTreeMap<String, String> =
-            [("favorites.json", "[2]"), ("theme--sea.css", "@define-color bg #013;\n"), ("binds-plan9.json", "[]")].map(|(k, v)| (k.to_owned(), v.to_owned())).into();
-        let base: BTreeMap<String, String> = [("favorites.json".to_owned(), sha256_hex(b"[1]"))].into();
+            [("theme--sea.css", "b"), ("theme--sky.css", "@define-color bg #013;\n"), ("binds-plan9.json", "[]"), ("favorites.json", "[]")].map(|(k, v)| (k.to_owned(), v.to_owned())).into();
+        let base: BTreeMap<String, String> = [("theme--sea.css".to_owned(), sha256_hex(b"a"))].into();
         let steps: Vec<(String, Step)> = plan(&root, &remote, at(1), &base, Mode::Both).into_iter().map(|(m, _, s)| (m.name, s)).collect();
-        assert_eq!(steps, [("favorites.json".to_owned(), Step::Pull), ("theme--sea.css".to_owned(), Step::Pull)]);
-        let fav = local_for(&root, "favorites.json").unwrap();
-        write_local(&fav, "[2]").unwrap();
-        assert_eq!(fs::read_to_string(&fav.path).unwrap(), "[2]");
-        assert_eq!(fs::read_to_string(bak_path(&fav.path)).unwrap(), "[1]");
+        // favorites go through merge_favorites, not here
+        assert_eq!(steps, [("theme--sea.css".to_owned(), Step::Pull), ("theme--sky.css".to_owned(), Step::Pull)]);
+        let sea = local_for(&root, "theme--sea.css").unwrap();
+        write_local(&sea, "b").unwrap();
+        assert_eq!(fs::read_to_string(&sea.path).unwrap(), "b");
+        assert_eq!(fs::read_to_string(bak_path(&sea.path)).unwrap(), "a");
         fs::remove_dir_all(root).unwrap();
     }
 
-    #[test]
-    fn pinned_clips_never_leave() {
-        let root = tmp("pinned");
-        let m = local_for(&root, "favorites.json").unwrap();
-        fs::write(&m.path, r#"[{"id":"app:firefox"},{"id":"clip:00ff","title":"hunter2"}]"#).unwrap();
-        let text = read_local(&m).unwrap();
-        assert!(text.contains("app:firefox") && !text.contains("clip:") && !text.contains("hunter2"));
+    fn files(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+        pairs.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect()
+    }
 
-        write_local(&m, r#"[{"id":"app:kitty"},{"id":"clip:dead","title":"old secret"}]"#).unwrap();
-        let ids: Vec<String> = split_pinned(&fs::read_to_string(&m.path).unwrap())
-            .map(|(a, b)| a.into_iter().chain(b).map(|i| i["id"].as_str().unwrap().to_owned()).collect())
-            .unwrap();
-        assert_eq!(ids, ["app:kitty", "clip:00ff"]);
+    fn ids(text: &str) -> Vec<String> {
+        parse_list(text, "test").unwrap().iter().map(|e| id_of(e).to_owned()).collect()
+    }
+
+    fn pushed(plan: &FavoritesPlan, name: &str) -> Option<Vec<String>> {
+        plan.push.iter().find(|(n, _)| n == name).map(|(_, t)| ids(t))
+    }
+
+    fn none() -> BTreeMap<String, Vec<String>> {
+        BTreeMap::new()
+    }
+
+    #[test]
+    fn classifies_favorite_ids() {
+        for id in ["cmd:settings", "plugin:wifi", "plugin:github:My PRs", "web:rust", "ai:hi", "emoji:fire"] {
+            assert_eq!(class(id), Class::Portable, "{id}");
+        }
+        for id in ["app:firefox.desktop", r"app:C:\Users\me\Zen.lnk", "app:/Applications/Zen.app", "file:/home/me/a.txt", "sys:Lock", "new:thing"] {
+            assert_eq!(class(id), Class::System, "{id}");
+        }
+        assert_eq!(class("clip:00ff"), Class::Local);
+        assert_eq!(class(""), Class::Local);
+        assert_eq!(made_on("app:firefox.desktop"), Some("linux"));
+        assert_eq!(made_on(r"app:C:\ProgramData\Microsoft\Windows\Start Menu\Zen.lnk"), Some("windows"));
+        assert_eq!(made_on("app:/Applications/Zen Browser.app"), Some("macos"));
+        assert_eq!(made_on(r"file:D:\notes.txt"), Some("windows"));
+        assert_eq!(made_on("file:/Users/me/notes.txt"), Some("macos"));
+        assert_eq!(made_on("file:/home/me/notes.txt"), Some("linux"));
+        assert_eq!(made_on("sys:Lock"), None);
+    }
+
+    #[test]
+    fn favorites_split_by_kind() {
+        let local = r#"[{"id":"app:kitty.desktop"},{"id":"cmd:settings"},{"id":"clip:00ff","title":"hunter2"},{"id":"plugin:wifi"},{"id":"file:/home/me/a.txt"}]"#;
+        let plan = merge_favorites(Some(local), &BTreeMap::new(), &none(), Mode::Both, "linux").unwrap();
+        assert_eq!(pushed(&plan, "favorites.json").unwrap(), ["cmd:settings", "plugin:wifi"]);
+        assert_eq!(pushed(&plan, "favorites-linux.json").unwrap(), ["app:kitty.desktop", "file:/home/me/a.txt"]);
+        assert!(plan.push.iter().all(|(_, t)| !t.contains("clip:") && !t.contains("hunter2")));
+        assert_eq!(plan.local, None);
+        assert_eq!(plan.ids.len(), 2);
+        // nothing new on either side: nothing to do
+        let remote = files(&[("favorites.json", &plan.push[0].1), ("favorites-linux.json", &plan.push[1].1)]);
+        let again = merge_favorites(Some(local), &remote, &plan.ids, Mode::Both, "linux").unwrap();
+        assert_eq!((again.local, again.push), (None, Vec::new()));
+    }
+
+    #[test]
+    fn favorites_merge_per_entry() {
+        let local = r#"[{"id":"cmd:theme"},{"id":"clip:00ff"},{"id":"plugin:wifi"},{"id":"app:kitty.desktop"}]"#;
+        let remote = files(&[
+            ("favorites.json", r#"[{"id":"web:rust"},{"id":"cmd:theme"},{"id":"cmd:settings"}]"#),
+            ("favorites-linux.json", r#"[{"id":"app:zen.desktop"}]"#),
+            ("favorites-windows.json", r#"[{"id":"app:C:\\Zen.lnk"}]"#),
+        ]);
+        let plan = merge_favorites(Some(local), &remote, &none(), Mode::Both, "linux").unwrap();
+        // local order, pinned clip in place, the new ones at the end; nothing from Windows
+        assert_eq!(ids(plan.local.as_deref().unwrap()), ["cmd:theme", "clip:00ff", "plugin:wifi", "app:kitty.desktop", "web:rust", "cmd:settings", "app:zen.desktop"]);
+        assert_eq!(pushed(&plan, "favorites.json").unwrap(), ["cmd:theme", "plugin:wifi", "web:rust", "cmd:settings"]);
+        assert_eq!(pushed(&plan, "favorites-linux.json").unwrap(), ["app:kitty.desktop", "app:zen.desktop"]);
+        assert!(pushed(&plan, "favorites-windows.json").is_none());
+    }
+
+    #[test]
+    fn favorite_removals_sync_once_known() {
+        let base: BTreeMap<String, Vec<String>> = [("favorites.json".to_owned(), vec!["cmd:theme".to_owned(), "cmd:settings".to_owned(), "web:rust".to_owned()])].into();
+        // removed here: cmd:settings; removed elsewhere: web:rust; new elsewhere: emoji:fire
+        let local = r#"[{"id":"cmd:theme"},{"id":"web:rust"}]"#;
+        let remote = files(&[("favorites.json", r#"[{"id":"cmd:theme"},{"id":"cmd:settings"},{"id":"emoji:fire"}]"#)]);
+        let plan = merge_favorites(Some(local), &remote, &base, Mode::Both, "linux").unwrap();
+        assert_eq!(ids(plan.local.as_deref().unwrap()), ["cmd:theme", "emoji:fire"]);
+        assert_eq!(pushed(&plan, "favorites.json").unwrap(), ["cmd:theme", "emoji:fire"]);
+        // without the ids of the last sync nothing is removed
+        let plan = merge_favorites(Some(local), &remote, &none(), Mode::Both, "linux").unwrap();
+        assert_eq!(ids(plan.local.as_deref().unwrap()), ["cmd:theme", "web:rust", "cmd:settings", "emoji:fire"]);
+    }
+
+    #[test]
+    fn favorites_forced_modes() {
+        let local = r#"[{"id":"cmd:theme","title":"mine"},{"id":"plugin:wifi"}]"#;
+        let remote = files(&[("favorites.json", r#"[{"id":"emoji:fire"},{"id":"cmd:theme","title":"theirs"}]"#)]);
+        let pull = merge_favorites(Some(local), &remote, &none(), Mode::Pull, "linux").unwrap();
+        assert!(pull.push.is_empty());
+        let text = pull.local.unwrap();
+        assert_eq!(ids(&text), ["cmd:theme", "emoji:fire"]);
+        assert!(text.contains("theirs"));
+        let push = merge_favorites(Some(local), &remote, &none(), Mode::Push, "linux").unwrap();
+        assert_eq!(push.local, None);
+        assert_eq!(pushed(&push, "favorites.json").unwrap(), ["cmd:theme", "plugin:wifi"]);
+    }
+
+    #[test]
+    fn old_gist_favorites_migrate() {
+        // the old layout: everything in favorites.json, whoever pushed last
+        let old = r#"[{"id":"cmd:theme"},{"id":"app:C:\\Users\\me\\Zen.lnk","icon":"C:\\zunder\\icons\\zen.png"},{"id":"app:zen.desktop"},{"id":"sys:Lock"},{"id":"clip:dead","title":"old secret"}]"#;
+        let remote = files(&[("favorites.json", old)]);
+        let plan = merge_favorites(Some(r#"[{"id":"app:kitty.desktop"}]"#), &remote, &none(), Mode::Both, "linux").unwrap();
+        // the Linux app comes over, the Windows one, the unknown system command and the clip don't
+        assert_eq!(ids(plan.local.as_deref().unwrap()), ["app:kitty.desktop", "cmd:theme", "app:zen.desktop"]);
+        // the next layout goes up right away
+        assert_eq!(pushed(&plan, "favorites.json").unwrap(), ["cmd:theme"]);
+        assert_eq!(pushed(&plan, "favorites-linux.json").unwrap(), ["app:kitty.desktop", "app:zen.desktop"]);
+        let win = merge_favorites(None, &remote, &none(), Mode::Both, "windows").unwrap();
+        assert_eq!(ids(win.local.as_deref().unwrap()), ["cmd:theme", r"app:C:\Users\me\Zen.lnk"]);
+    }
+
+    #[test]
+    fn favorites_sync_writes_and_backs_up() {
+        let root = tmp("favsync");
+        let path = root.join("favorites.json");
+        fs::write(&path, r#"[{"id":"clip:00ff","title":"hunter2"}]"#).unwrap();
+        let remote = files(&[("favorites.json", r#"[{"id":"cmd:theme"}]"#)]);
+        let mut state = State::default();
+        let mut out = Outcome { ok: true, ..Outcome::default() };
+        let mut push = serde_json::Map::new();
+        sync_favorites(&root, &remote, &mut state, Mode::Both, &mut out, &mut push);
+        assert!(out.ok && out.pulled);
+        assert_eq!(ids(&fs::read_to_string(&path).unwrap()), ["clip:00ff", "cmd:theme"]);
+        assert!(fs::read_to_string(bak_path(&path)).unwrap().contains("hunter2"));
+        assert!(push.is_empty());
+        assert_eq!(state.favorites.get("favorites.json"), Some(&vec!["cmd:theme".to_owned()]));
+        // a gist file that isn't a list touches nothing
+        let bad = files(&[("favorites.json", "{}")]);
+        let mut out = Outcome { ok: true, ..Outcome::default() };
+        sync_favorites(&root, &bad, &mut state, Mode::Both, &mut out, &mut push);
+        assert!(!out.ok && push.is_empty());
         fs::remove_dir_all(root).unwrap();
     }
 }
