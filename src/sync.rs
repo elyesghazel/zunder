@@ -70,6 +70,8 @@ enum Kind {
     Plugins,
     /// binds.json; a pull reinstalls the shortcuts.
     Binds,
+    /// favorites.json without pinned clips: they can hold secrets and stay on this machine.
+    Favorites,
 }
 
 /// One synced file: its name in the gist and where it lives here.
@@ -93,7 +95,7 @@ fn valid_theme(name: &str) -> bool {
 fn local_for(root: &Path, name: &str) -> Option<Mapped> {
     let (path, kind) = match name {
         "config.toml" => (root.join("config.toml"), Kind::Config),
-        "favorites.json" => (root.join("favorites.json"), Kind::Plain),
+        "favorites.json" => (root.join("favorites.json"), Kind::Favorites),
         "plugins.json" => (root.join("plugins").join(".installed.json"), Kind::Plugins),
         n if n == binds_name() => (root.join("binds.json"), Kind::Binds),
         n => {
@@ -130,6 +132,13 @@ fn read_local(m: &Mapped) -> Option<String> {
     let bytes = fs::read(&m.path).ok()?;
     let text = match m.kind {
         Kind::Plain | Kind::Binds => String::from_utf8(bytes).ok()?,
+        Kind::Favorites => {
+            let text = String::from_utf8(bytes).ok()?;
+            match split_pinned(&text) {
+                Some((rest, pinned)) if !pinned.is_empty() => serde_json::to_string_pretty(&rest).ok()?,
+                _ => text,
+            }
+        }
         Kind::Config => {
             let text = String::from_utf8(bytes).ok()?;
             match text.parse::<toml::Table>() {
@@ -147,6 +156,12 @@ fn read_local(m: &Mapped) -> Option<String> {
         }
     };
     (!text.trim().is_empty()).then_some(text)
+}
+
+/// A favorites list split into (everything else, pinned clips). `None` if it isn't a JSON list.
+fn split_pinned(text: &str) -> Option<(Vec<serde_json::Value>, Vec<serde_json::Value>)> {
+    let items: Vec<serde_json::Value> = serde_json::from_str(text).ok()?;
+    Some(items.into_iter().partition(|i| !i.get("id").and_then(|id| id.as_str()).is_some_and(|id| id.starts_with(crate::providers::clipboard::PINNED))))
 }
 
 fn mtime(path: &Path) -> Option<SystemTime> {
@@ -167,6 +182,17 @@ fn write_local(m: &Mapped, text: &str) -> Result<(), String> {
             }
             None => text.to_owned(),
         },
+        // pinned clips stay as they are here, and the gist's (old gists may have some) are dropped
+        Kind::Favorites => {
+            let local = fs::read_to_string(&m.path).ok().and_then(|t| split_pinned(&t)).map(|(_, pinned)| pinned).unwrap_or_default();
+            let (mut items, remote) = split_pinned(text).ok_or("favorites.json in the gist isn't a list")?;
+            if local.is_empty() && remote.is_empty() {
+                text.to_owned()
+            } else {
+                items.extend(local);
+                serde_json::to_string_pretty(&items).map_err(|e| e.to_string())?
+            }
+        }
         Kind::Plain | Kind::Binds => text.to_owned(),
     };
     if let Some(dir) = m.path.parent() {
@@ -760,6 +786,22 @@ mod tests {
         write_local(&fav, "[2]").unwrap();
         assert_eq!(fs::read_to_string(&fav.path).unwrap(), "[2]");
         assert_eq!(fs::read_to_string(bak_path(&fav.path)).unwrap(), "[1]");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn pinned_clips_never_leave() {
+        let root = tmp("pinned");
+        let m = local_for(&root, "favorites.json").unwrap();
+        fs::write(&m.path, r#"[{"id":"app:firefox"},{"id":"clip:00ff","title":"hunter2"}]"#).unwrap();
+        let text = read_local(&m).unwrap();
+        assert!(text.contains("app:firefox") && !text.contains("clip:") && !text.contains("hunter2"));
+
+        write_local(&m, r#"[{"id":"app:kitty"},{"id":"clip:dead","title":"old secret"}]"#).unwrap();
+        let ids: Vec<String> = split_pinned(&fs::read_to_string(&m.path).unwrap())
+            .map(|(a, b)| a.into_iter().chain(b).map(|i| i["id"].as_str().unwrap().to_owned()).collect())
+            .unwrap();
+        assert_eq!(ids, ["app:kitty", "clip:00ff"]);
         fs::remove_dir_all(root).unwrap();
     }
 }
