@@ -20,6 +20,9 @@ pub struct Item {
     pub tint: String,
     /// Icon theme name or absolute path; replaces the glyph when it resolves.
     pub icon: String,
+    /// The app a window belongs to, e.g. `Firefox`: the switcher tiles' headline.
+    #[serde(skip)]
+    pub app: String,
     /// Hyprland `stableId` of a window to show a live preview of.
     #[serde(skip)]
     pub preview: Option<String>,

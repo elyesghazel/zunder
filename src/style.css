@@ -115,10 +115,13 @@ flowbox.tiles > flowboxchild.tile:hover    { background: @hover; }
 flowbox.tiles > flowboxchild.tile.selected { background: @sel; border-color: @accent; }
 .thumb picture { border-radius: 6px; }
 .tile-glyph    { color: @faint; font-size: 32pt; }
-.caption       { margin-top: 8px; }
-.caption .icon { margin-right: 6px; }
-.tile-title    { color: @muted; font-size: 0.9em; }
-flowboxchild.tile.selected .tile-title { color: @fg; font-weight: bold; }
+.caption        { margin-top: 8px; }
+.caption > image,
+.tile-app-glyph { margin-right: 8px; }
+.tile-app-glyph { color: @muted; font-size: 20pt; min-width: 32px; }
+.tile-app       { color: @fg; font-weight: bold; font-size: 1.1em; }
+.tile-title     { color: @muted; font-size: 0.85em; }
+flowboxchild.tile.selected .tile-title { color: @fg; }
 
 /* × on a tile, shown on hover and on the selected one */
 button.tile-close {

@@ -45,8 +45,8 @@ pub fn list() -> Vec<Client> {
 }
 
 pub struct Windows {
-    /// lowercase window class → icon, from the desktop files
-    icons: HashMap<String, String>,
+    /// lowercase window class → (icon, app name), from the desktop files
+    icons: HashMap<String, (String, String)>,
 }
 
 impl Windows {
@@ -56,12 +56,23 @@ impl Windows {
         w
     }
 
-    fn icon_for(&self, class: &str) -> String {
-        let class = class.to_lowercase();
+    /// The icon and app name for a window class; without a desktop file the class itself.
+    fn app_for(&self, class: &str) -> (String, String) {
+        let lower = class.to_lowercase();
         // org.gnome.Nautilus → nautilus as a last resort
-        let short = class.rsplit('.').next().unwrap_or(&class).to_owned();
-        self.icons.get(&class).or_else(|| self.icons.get(&short)).cloned().unwrap_or(class)
+        let short = lower.rsplit('.').next().unwrap_or(&lower).to_owned();
+        match self.icons.get(&lower).or_else(|| self.icons.get(&short)) {
+            Some((icon, name)) => (icon.clone(), name.clone()),
+            None => (lower, pretty_class(class)),
+        }
     }
+}
+
+/// `org.gnome.Nautilus` → `Nautilus`, `kitty` → `Kitty`.
+fn pretty_class(class: &str) -> String {
+    let short = class.rsplit('.').next().unwrap_or(class);
+    let mut chars = short.chars();
+    chars.next().map_or_else(String::new, |c| c.to_uppercase().chain(chars).collect())
 }
 
 impl Provider for Windows {
@@ -76,7 +87,7 @@ impl Provider for Windows {
             let short = id.rsplit('.').next().unwrap_or(&id).to_owned();
             for key in [app.wm_class.to_lowercase(), id, short, app.name.to_lowercase()] {
                 if !key.is_empty() {
-                    self.icons.entry(key).or_insert_with(|| app.icon.clone());
+                    self.icons.entry(key).or_insert_with(|| (app.icon.clone(), app.name.clone()));
                 }
             }
         }
@@ -96,12 +107,14 @@ impl Provider for Windows {
                     cx.score(&format!("{} {}", c.title, c.class))? + 20
                 };
                 let ws = c.workspace.name.trim_start_matches("special:");
+                let (icon, app) = self.app_for(&c.class);
                 Some(Item {
                     title: if c.title.is_empty() { c.class.clone() } else { c.title.clone() },
                     subtitle: c.class.clone(),
                     hint: if c.focus == 0 { "focused".into() } else { format!("ws {ws}") },
                     glyph: "\u{f2d0}".into(),
-                    icon: self.icon_for(&c.class),
+                    icon,
+                    app,
                     preview: (!c.stable_id.is_empty()).then(|| c.stable_id.clone()),
                     action: Action::Focus(c.address.clone()),
                     score,

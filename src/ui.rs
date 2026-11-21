@@ -31,6 +31,8 @@ const ICON_SIZE: i32 = 20;
 const TILE_WIDTH: i32 = 280;
 const TILE_HEIGHT: i32 = 175;
 const TILE_COLUMNS: usize = 5;
+/// The app icon next to a tile's name; the overview's is a bit smaller.
+const TILE_ICON_SIZE: i32 = 32;
 /// The overview's thumbnails are smaller: every workspace has to fit next to each other.
 const OVERVIEW_TILE: (i32, i32) = (220, 138);
 const OVERVIEW_GROUPS_PER_LINE: u32 = 6;
@@ -1273,17 +1275,39 @@ fn tile(ui: &Rc<Ui>, item: &Item, size: (i32, i32)) -> Tile {
         thumb.add_overlay(&close);
     }
 
+    // the app first, big, so a tile reads at a glance; the window title below it, dimmer
+    let small = size.0 < TILE_WIDTH;
     let caption = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     caption.add_css_class("caption");
-    caption.set_halign(gtk::Align::Center);
-    if let Some(image) = icon(item) {
-        image.set_pixel_size(16);
-        caption.append(&image);
+    match icon(item) {
+        Some(image) => {
+            image.set_pixel_size(if small { TILE_ICON_SIZE - 6 } else { TILE_ICON_SIZE });
+            image.set_valign(gtk::Align::Center);
+            caption.append(&image);
+        }
+        None => {
+            let glyph = label(&item.glyph, "tile-app-glyph");
+            glyph.set_valign(gtk::Align::Center);
+            caption.append(&glyph);
+        }
     }
-    let title = label(&item.title, "tile-title");
-    title.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    title.set_max_width_chars(if size.0 < TILE_WIDTH { 18 } else { 24 });
-    caption.append(&title);
+    let app = if item.app.is_empty() { &item.title } else { &item.app };
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    text.set_valign(gtk::Align::Center);
+    text.set_hexpand(true);
+    let chars = if small { 16 } else { 22 };
+    let name = label(app, "tile-app");
+    name.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    name.set_max_width_chars(chars);
+    text.append(&name);
+    if &item.title != app {
+        let title = label(&item.title, "tile-title");
+        title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        title.set_max_width_chars(chars + 4);
+        title.set_tooltip_text(Some(&item.title));
+        text.append(&title);
+    }
+    caption.append(&text);
 
     let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
     b.append(&thumb);
