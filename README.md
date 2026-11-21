@@ -29,19 +29,24 @@
 
 ---
 
-![zunder demo](assets/demo.gif)
+![zunder: launcher with apps, math, currency, time zones and a theme switch](assets/demo.gif)
 
-Most Hyprland setups glue together a launcher, a clipboard script and a separate ALT+TAB tool.
-zunder is all of it in one small Rust daemon: one terminal-style prompt for apps, windows, files,
-math, currencies, time zones and clipboard history, and an ALT+TAB that shows live thumbnails of
-every window on every workspace. Extending it means dropping a script that prints lines into a
-folder.
+**zunder is a launcher, an ALT+TAB switcher and a clipboard history in one small Rust daemon.**
+
+Made for Hyprland users who glue together rofi or wofi, a separate ALT+TAB tool and a clipboard script.
+
+- **Launcher:** apps, windows, files and commands in one terminal-style prompt, fuzzy matched
+- **ALT+TAB:** a grid with live thumbnails of every window on every workspace
+- **Quick answers:** math, units, currencies and time zones (`2^10/3`, `100 usd in chf`, `3pm ny in zurich`)
+- **Clipboard history:** type `clip`, pin what you want to keep
+- **Themes:** 12 color schemes, switched live with `theme`
+- **Plugins and sync:** any script that prints lines is a plugin, and settings sync through a private GitHub gist
+
+![zunder ALT+TAB: a grid of window thumbnails across workspaces](assets/switcher.gif)
 
 You can [try it in the browser](https://elyesghazel.tech/zunder/) before installing.
 
 ## Install
-
-**Linux (Hyprland)**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/elyesghazel/zunder/main/get.sh | sh
@@ -51,16 +56,15 @@ On Arch it installs the release package, elsewhere the binary goes to `~/.local/
 `zunder setup` (or `setup` inside zunder) sets up the keybinds, autostart and theme. If you used
 vicinae, rofi or wofi, it takes over from them.
 
-**Windows:** run [zunder-windows-setup.exe](https://github.com/elyesghazel/zunder/releases/latest/download/zunder-windows-setup.exe).
-It installs for your user, no admin needed. ALT+SPACE opens zunder. [Code signing policy](docs/code-signing.md).
-
-**macOS (Apple Silicon):** the `.dmg` from the [latest release](https://github.com/elyesghazel/zunder/releases/latest).
-Drag it to Applications, then right-click → Open the first time.
-
 New versions show up on zunder's start screen, and Enter installs them (Ctrl+K shows what's new).
-Type `update` to check right away, `changelog` for every release and what changed. More ways to
-install, and what works on which system:
-[docs/installation.md](docs/installation.md).
+Type `update` to check right away, `changelog` for every release and what changed.
+
+**Windows and macOS** get the launcher, themes and plugins, without the window switcher.
+
+- Windows: [zunder-windows-setup.exe](https://github.com/elyesghazel/zunder/releases/latest/download/zunder-windows-setup.exe), no admin needed, ALT+SPACE opens it. The builds aren't signed yet, so SmartScreen may warn: More info, then Run anyway.
+- macOS (Apple Silicon): the `.dmg` from the [latest release](https://github.com/elyesghazel/zunder/releases/latest). Drag it to Applications, then right-click, Open the first time.
+
+More ways to install, and what works on which system: [docs/installation.md](docs/installation.md).
 
 ## A quick tour
 
