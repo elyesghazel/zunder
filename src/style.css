@@ -124,13 +124,21 @@ flowbox.tiles { background: none; }
 flowbox.tiles > flowboxchild.tile {
   background: none;
   padding: 8px;
-  border-radius: 10px;
-  border: 2px solid transparent;
+  border-radius: 8px;
+  border: 1px solid transparent;
   outline: none;
 }
 flowbox.tiles > flowboxchild.tile:hover    { background: @hover; }
 flowbox.tiles > flowboxchild.tile.selected { background: @sel; border-color: @accent; }
 .thumb picture { border-radius: 6px; }
+.tile-ws {
+  margin: 6px;
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: alpha(@bg, 0.8);
+  color: @muted;
+  font-size: 0.8em;
+}
 .tile-glyph    { color: @faint; font-size: 32pt; }
 .caption        { margin-top: 8px; }
 .caption > image,

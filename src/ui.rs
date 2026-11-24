@@ -1297,6 +1297,16 @@ fn tile(ui: &Rc<Ui>, item: &Item, size: (i32, i32)) -> Tile {
         close.connect_clicked(move |_| ui.window_action(&address, &crate::item::WindowOp::Close));
         thumb.add_overlay(&close);
     }
+    // the grid mixes workspaces: a small badge says where each window lives (the overview
+    // groups by workspace already)
+    if size.0 >= TILE_WIDTH
+        && let Some(ws) = item.hint.strip_prefix("ws ")
+    {
+        let badge = label(ws, "tile-ws");
+        badge.set_halign(gtk::Align::Start);
+        badge.set_valign(gtk::Align::Start);
+        thumb.add_overlay(&badge);
+    }
 
     // the app first, big, so a tile reads at a glance; the window title below it, dimmer
     let small = size.0 < TILE_WIDTH;
