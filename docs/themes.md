@@ -8,7 +8,7 @@ so you can step through them. The Theme dropdown in the settings (or `theme = "n
 
 Built in: `graphite` (the default), `catppuccin-mocha`, `catppuccin-latte` (light), `rose-pine`,
 `rose-pine-dawn` (light), `gruvbox-dark`, `tokyo-night`, `nord`, `everforest-dark`, `dracula`,
-`kanagawa` and `one-dark`.
+`kanagawa`, `one-dark` and `ember`.
 
 Your own theme is a file in `~/.config/zunder/themes/`, named after the theme, with one
 `@define-color` line per color. It shows up in the list next to the built-ins, and a file with a
