@@ -154,7 +154,7 @@ flowbox.tiles > flowboxchild.tile.selected { background: @sel; border-color: @ac
 .tile-app-glyph { margin-right: 8px; }
 .tile-app-glyph { color: @muted; font-size: 20pt; min-width: 32px; }
 .tile-app       { color: @fg; font-weight: bold; font-size: 1.1em; }
-.tile-title     { color: @muted; font-size: 0.85em; }
+.tile-title     { color: @faint; font-size: 0.9em; }
 flowboxchild.tile.selected .tile-title { color: @fg; }
 
 /* × on a tile, shown on hover and on the selected one */

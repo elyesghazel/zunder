@@ -1353,7 +1353,8 @@ fn tile(ui: &Rc<Ui>, item: &Item, size: (i32, i32)) -> Tile {
         }
     }
     let app = if item.app.is_empty() { &item.title } else { &item.app };
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    // app and window title on one line: "ghostty  ~/src/zunder"
+    let text = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     text.set_valign(gtk::Align::Center);
     text.set_hexpand(true);
     let chars = if small { 16 } else { 22 };
