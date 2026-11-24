@@ -100,6 +100,7 @@ struct Ui {
     status: gtk::Label,
     /// Which provider took over the prompt: `calc`, `time`, `clip` …; hidden otherwise.
     chip: gtk::Label,
+    footer: gtk::Box,
     preview: Preview,
     switcher: gtk::Box,
     /// The grid, or one titled grid per workspace in the overview.
@@ -321,10 +322,7 @@ impl Ui {
 
         let footer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         footer.add_css_class("footer");
-        for (key, desc) in [("↵", "open"), ("^K", "actions"), ("^F", "favorite"), ("^B", "keybind"), ("^,", "settings"), ("esc", "close")] {
-            footer.append(&label(key, "key"));
-            footer.append(&label(desc, "desc"));
-        }
+        fill_footer(&footer, KEYS);
 
         let preview = Preview::new();
         let body = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -373,6 +371,7 @@ impl Ui {
             scroll,
             status,
             chip,
+            footer: footer.clone(),
             preview,
             switcher,
             groups,
@@ -504,6 +503,16 @@ impl Ui {
                     ui.leave_strip(&c.to_string());
                     return glib::Propagation::Stop;
                 }
+            }
+            // the clipboard's numbered rows: Alt+1…9 pastes one straight away
+            if mods.contains(gdk::ModifierType::ALT_MASK)
+                && ui.list.has_css_class("clip")
+                && let Some(n) = key.to_unicode().and_then(|c| c.to_digit(10)).filter(|n| (1..=9).contains(n))
+            {
+                if (n as usize) <= ui.state.borrow().items.len() {
+                    ui.activate(n as usize - 1);
+                }
+                return glib::Propagation::Stop;
             }
             match key {
                 gdk::Key::Escape => ui.hide(),
@@ -804,12 +813,23 @@ impl Ui {
         let t = std::time::Instant::now();
         let mut items = Vec::new();
         let mut rows = Vec::new();
-        let chip = sections.first().map(|s| mode(&s.title)).unwrap_or_default();
+        // the clipboard history gets its own row style: numbers, pin dots, matched letters
+        let query = self.entry.text();
+        let clip = self.state.borrow().menu.is_none() && (query == "clip" || query.starts_with("clip "));
+        let query_rest = if clip { query["clip".len()..].trim().to_owned() } else { String::new() };
+        if clip {
+            self.list.add_css_class("clip");
+        } else {
+            self.list.remove_css_class("clip");
+        }
+        fill_footer(&self.footer, if clip { CLIP_KEYS } else { KEYS });
+        let chip = if clip { "clip" } else { sections.first().map(|s| mode(&s.title)).unwrap_or_default() };
         self.chip.set_text(chip);
         self.chip.set_visible(!chip.is_empty());
         for (n, section) in sections.into_iter().enumerate() {
             // a quick answer (math, a conversion, a time) on top leads as a card, the rest stay rows
             let answer = n == 0 && is_answer(&section);
+            let count = section.items.len();
             let mut rest = section.items.into_iter().peekable();
             if answer && let Some(item) = rest.next() {
                 let (row, marker) = answer_row(&item);
@@ -819,12 +839,14 @@ impl Ui {
                 if rest.peek().is_some() {
                     self.list.append(&heading("also", section.busy));
                 }
+            } else if clip {
+                self.list.append(&count_heading(&section.title.to_lowercase(), count, section.busy));
             } else {
                 self.list.append(&heading(&section.title, section.busy));
             }
             for item in rest {
                 let t = std::time::Instant::now();
-                let (row, marker) = item_row(&item);
+                let (row, marker) = if clip { clip_row(&item, items.len(), &query_rest) } else { item_row(&item) };
                 self.list.append(&row);
                 if timing_on() && t.elapsed() > Duration::from_millis(5) {
                     timing(&format!("    row {:?}", item.title.chars().take(24).collect::<String>()), t);
@@ -1084,8 +1106,14 @@ impl Ui {
             self.preview.text_scroll.vadjustment().set_value(0.0);
             self.preview.picture.set_visible(false);
             self.preview.text_scroll.set_visible(true);
-            self.preview.title.set_text(&format!("{} {}", lines, if lines == 1 { "line" } else { "lines" }));
-            self.preview.meta.set_text(&format!("{} characters", body.chars().count()));
+            if let Some(when) = copied(item) {
+                self.preview.title.set_text(&when);
+                let s = if lines == 1 { "line" } else { "lines" };
+                self.preview.meta.set_text(&format!("{} characters · {lines} {s}", body.chars().count()));
+            } else {
+                self.preview.title.set_text(&format!("{} {}", lines, if lines == 1 { "line" } else { "lines" }));
+                self.preview.meta.set_text(&format!("{} characters", body.chars().count()));
+            }
             self.preview.pane.set_visible(true);
             return;
         }
@@ -1819,6 +1847,90 @@ fn alt_held(window: &gtk::ApplicationWindow) -> bool {
         .is_some_and(|kb| kb.modifier_state().contains(gdk::ModifierType::ALT_MASK))
 }
 
+const KEYS: &[(&str, &str)] =
+    &[("↵", "open"), ("^K", "actions"), ("^F", "favorite"), ("^B", "keybind"), ("^,", "settings"), ("esc", "close")];
+const CLIP_KEYS: &[(&str, &str)] = &[("↵", "paste"), ("^F", "pin"), ("^K", "actions"), ("alt 1-9", "jump"), ("esc", "close")];
+
+fn fill_footer(footer: &gtk::Box, keys: &[(&str, &str)]) {
+    clear(footer);
+    for (key, desc) in keys {
+        footer.append(&label(key, "key"));
+        footer.append(&label(desc, "desc"));
+    }
+}
+
+/// When a clipboard entry was copied, for the preview pane: "copied today 08:12", "pinned".
+fn copied(item: &Item) -> Option<String> {
+    if item.id.starts_with(crate::providers::clipboard::PINNED) {
+        return Some("pinned".into());
+    }
+    item.pin.as_ref()?;
+    Some(match (item.group.as_str(), item.hint.as_str()) {
+        (_, "") => "copied".into(),
+        ("Today", at) => format!("copied today {at}"),
+        (_, at) => format!("copied {at}"),
+    })
+}
+
+/// `text` as Pango markup with the letters `pattern` matched in the accent colour, bold.
+fn highlight(text: &str, pattern: &str) -> String {
+    use fuzzy_matcher::FuzzyMatcher;
+    let hits = if pattern.is_empty() {
+        Vec::new()
+    } else {
+        fuzzy_matcher::skim::SkimMatcherV2::default().fuzzy_indices(text, pattern).map(|(_, i)| i).unwrap_or_default()
+    };
+    let accent = crate::theme::color(&config::get().theme, "accent").unwrap_or_else(|| "#b4befe".into());
+    let mut out = String::new();
+    for (i, c) in text.chars().enumerate() {
+        let esc = glib::markup_escape_text(&c.to_string());
+        if hits.contains(&i) {
+            out.push_str(&format!("<span foreground=\"{accent}\" weight=\"bold\">{esc}</span>"));
+        } else {
+            out.push_str(&esc);
+        }
+    }
+    out
+}
+
+/// A lowercase section label with its size, no rule: `today 3`.
+fn count_heading(title: &str, count: usize, busy: bool) -> gtk::ListBoxRow {
+    let b = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    b.add_css_class("heading");
+    b.add_css_class("compact");
+    b.append(&label(title, "heading-title"));
+    b.append(&label(&count.to_string(), "heading-count"));
+    if busy {
+        b.append(&label("…", "heading-busy"));
+    }
+    gtk::ListBoxRow::builder().selectable(false).activatable(false).child(&b).build()
+}
+
+/// A clipboard entry: its Alt+number, a pin dot, the text with the matched letters lit.
+fn clip_row(item: &Item, index: usize, pattern: &str) -> (gtk::ListBoxRow, gtk::Label) {
+    let b = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    b.add_css_class("item");
+    let marker = label("▏", "marker");
+    let num = label(&if index < 9 { (index + 1).to_string() } else { String::new() }, "num");
+    num.set_xalign(1.0);
+    let pinned = item.id.starts_with(crate::providers::clipboard::PINNED);
+    let dot = label(if pinned { "●" } else { "○" }, "pin");
+    if pinned {
+        dot.add_css_class("on");
+    }
+    let title = label("", "title");
+    title.set_markup(&highlight(&item.title, pattern));
+    title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    title.set_hexpand(true);
+    // pinned clips are favorites: the engine prefixes their hint with ★
+    let hint = item.hint.trim_start_matches("★ ");
+    let hint = label(if hint == "pinned" { "" } else { hint }, "hint");
+    for w in [&marker, &num, &dot, &title, &hint] {
+        b.append(w);
+    }
+    (gtk::ListBoxRow::builder().child(&b).build(), marker)
+}
+
 /// Short name of the provider behind a section, for the prompt's mode chip.
 fn mode(section: &str) -> &'static str {
     match section {
@@ -1903,6 +2015,16 @@ fn item_row(item: &Item) -> (gtk::ListBoxRow, gtk::Label) {
 mod tests {
     use super::{combo, gdk};
     use gdk::ModifierType as M;
+
+    #[test]
+    fn says_when_a_clip_was_copied() {
+        use super::{Item, copied};
+        let clip = |group: &str, hint: &str| Item { pin: Some("1\tx".into()), group: group.into(), hint: hint.into(), ..Default::default() };
+        assert_eq!(copied(&clip("Today", "08:12")).as_deref(), Some("copied today 08:12"));
+        assert_eq!(copied(&clip("Yesterday", "Mon 22:04")).as_deref(), Some("copied Mon 22:04"));
+        assert_eq!(copied(&Item { id: "clip:00ff".into(), ..Default::default() }).as_deref(), Some("pinned"));
+        assert_eq!(copied(&Item::default()), None);
+    }
 
     #[test]
     fn builds_hyprland_combos() {
