@@ -33,6 +33,7 @@ const BUILTIN: &[Builtin] = &[
     Builtin { name: "dracula",          colors: ["#282a36", "#f8f8f2", "#bfc4de", "#6272a4", "#44475a", "#bd93f9", "#50fa7b", "#44475a", "#343746"] },
     Builtin { name: "kanagawa",         colors: ["#1f1f28", "#dcd7ba", "#c8c093", "#727169", "#54546d", "#7e9cd8", "#98bb6c", "#2d4f67", "#2a2a37"] },
     Builtin { name: "one-dark",         colors: ["#282c34", "#abb2bf", "#828997", "#5c6370", "#4b5263", "#61afef", "#98c379", "#3e4451", "#2c313c"] },
+    Builtin { name: "ember",            colors: ["#0b0b0b", "#ededed", "#a6a6a6", "#6e6e6e", "#262626", "#d4705f", "#8fc79a", "#1d1514", "#151515"] },
 ];
 
 /// `~/.config/zunder/themes/`, one `<name>.css` per theme.

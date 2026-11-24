@@ -39,7 +39,7 @@ Made for Hyprland users who glue together rofi or wofi, a separate ALT+TAB tool 
 - **ALT+TAB:** a grid with live thumbnails of every window on every workspace
 - **Quick answers:** math, units, currencies and time zones (`2^10/3`, `100 usd in chf`, `3pm ny in zurich`)
 - **Clipboard history:** type `clip`, pin what you want to keep
-- **Themes:** 12 color schemes, switched live with `theme`
+- **Themes:** 13 color schemes, switched live with `theme`
 - **Plugins and sync:** any script that prints lines is a plugin, and settings sync through a private GitHub gist
 
 ![zunder ALT+TAB: a grid of window thumbnails across workspaces](assets/switcher.gif)
@@ -75,7 +75,7 @@ More ways to install, and what works on which system: [docs/installation.md](doc
 | `3pm ny in zurich` | time zones |
 | `clip` | clipboard history; `Ctrl+F` pins an entry for good |
 | `> htop` | a shell command |
-| `theme` | 12 color schemes, applied live |
+| `theme` | 13 color schemes, applied live |
 | `history` | everything you ever launched |
 
 | Key | Does |
