@@ -98,6 +98,8 @@ struct Ui {
     list: gtk::ListBox,
     scroll: gtk::ScrolledWindow,
     status: gtk::Label,
+    /// Which provider took over the prompt: `calc`, `time`, `clip` …; hidden otherwise.
+    chip: gtk::Label,
     preview: Preview,
     switcher: gtk::Box,
     /// The grid, or one titled grid per workspace in the overview.
@@ -301,8 +303,12 @@ impl Ui {
         entry.set_hexpand(true);
         entry.set_placeholder_text(Some(PLACEHOLDER));
         let status = label("", "status");
+        let chip = label("", "chip");
+        chip.set_valign(gtk::Align::Center);
+        chip.set_visible(false);
         prompt.append(&label("❯", "caret"));
         prompt.append(&entry);
+        prompt.append(&chip);
         prompt.append(&status);
 
         let list = gtk::ListBox::new();
@@ -366,6 +372,7 @@ impl Ui {
             list,
             scroll,
             status,
+            chip,
             preview,
             switcher,
             groups,
@@ -797,9 +804,25 @@ impl Ui {
         let t = std::time::Instant::now();
         let mut items = Vec::new();
         let mut rows = Vec::new();
-        for section in sections {
-            self.list.append(&heading(&section.title, section.busy));
-            for item in section.items {
+        let chip = sections.first().map(|s| mode(&s.title)).unwrap_or_default();
+        self.chip.set_text(chip);
+        self.chip.set_visible(!chip.is_empty());
+        for (n, section) in sections.into_iter().enumerate() {
+            // a quick answer (math, a conversion, a time) on top leads as a card, the rest stay rows
+            let answer = n == 0 && is_answer(&section);
+            let mut rest = section.items.into_iter().peekable();
+            if answer && let Some(item) = rest.next() {
+                let (row, marker) = answer_row(&item);
+                self.list.append(&row);
+                rows.push((row, marker));
+                items.push(item);
+                if rest.peek().is_some() {
+                    self.list.append(&heading("also", section.busy));
+                }
+            } else {
+                self.list.append(&heading(&section.title, section.busy));
+            }
+            for item in rest {
                 let t = std::time::Instant::now();
                 let (row, marker) = item_row(&item);
                 self.list.append(&row);
@@ -1784,6 +1807,40 @@ fn alt_held(window: &gtk::ApplicationWindow) -> bool {
         .default_seat()
         .and_then(|seat| seat.keyboard())
         .is_some_and(|kb| kb.modifier_state().contains(gdk::ModifierType::ALT_MASK))
+}
+
+/// Short name of the provider behind a section, for the prompt's mode chip.
+fn mode(section: &str) -> &'static str {
+    match section {
+        "Calculator" => "calc",
+        "Convert" => "convert",
+        "Time" => "time",
+        "Clipboard" => "clip",
+        _ => "",
+    }
+}
+
+/// A section whose first result is a ready answer to copy.
+fn is_answer(section: &Section) -> bool {
+    matches!(section.title.as_str(), "Calculator" | "Convert" | "Time")
+        && section.items.first().is_some_and(|i| matches!(i.action, crate::item::Action::Copy(_)))
+}
+
+/// A quick answer as a card: the value big, what it was computed from below.
+fn answer_row(item: &Item) -> (gtk::ListBoxRow, gtk::Label) {
+    let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    b.add_css_class("answer");
+    let value = label(item.title.trim_start_matches("= "), "answer-value");
+    value.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    b.append(&value);
+    if !item.subtitle.is_empty() {
+        let meta = label(&item.subtitle, "answer-meta");
+        meta.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        b.append(&meta);
+    }
+    b.append(&label("↵ copy", "answer-hint"));
+    // not shown: the card marks its selection with CSS, `select` still sets this
+    (gtk::ListBoxRow::builder().child(&b).build(), gtk::Label::new(None))
 }
 
 fn heading(title: &str, busy: bool) -> gtk::ListBoxRow {

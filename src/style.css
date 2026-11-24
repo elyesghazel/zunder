@@ -30,6 +30,15 @@
 .prompt { padding: 0 24px 14px; }
 .caret  { color: @accent; font-weight: bold; margin-right: 12px; }
 .status { color: @faint; margin-left: 12px; }
+/* which provider took over: calc, convert, time, clip */
+.chip {
+  color: @accent;
+  border: 1px solid alpha(@accent, 0.45);
+  border-radius: 2px;
+  padding: 1px 7px;
+  margin-left: 12px;
+  font-size: 0.85em;
+}
 
 entry.query,
 entry.query:focus-within {
@@ -71,6 +80,14 @@ list.results > row:selected            { background: @sel; }
 .sub    { color: @faint; }
 .hint   { color: @faint; margin-left: 14px; }
 .empty  { color: @muted; padding: 14px 24px; }
+
+/* ── quick answer card (math, conversions, time) ── */
+.answer       { padding: 14px 24px 16px; border-left: 2px solid transparent; }
+.answer-value { color: @fg; font-size: 2em; font-weight: bold; }
+.answer-meta  { color: @faint; margin-top: 8px; }
+.answer-hint  { color: @faint; margin-top: 4px; font-size: 0.9em; }
+row:selected .answer      { border-left-color: @accent; }
+row:selected .answer-hint { color: @muted; }
 
 row:selected .marker { color: @accent; }
 row:selected .glyph  { color: @accent; }
