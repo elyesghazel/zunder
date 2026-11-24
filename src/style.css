@@ -81,6 +81,15 @@ list.results > row:selected            { background: @sel; }
 .hint   { color: @faint; margin-left: 14px; }
 .empty  { color: @muted; padding: 14px 24px; }
 
+/* ── clipboard history rows ───────────── */
+.heading.compact .heading-title { color: @muted; font-weight: normal; margin-right: 0; }
+.heading-count { color: @faint; margin-left: 8px; }
+.num  { color: @ghost; min-width: 14px; margin-right: 10px; font-size: 0.85em; }
+.pin  { color: @ghost; margin-right: 10px; font-size: 0.8em; }
+.pin.on { color: @accent; }
+row:selected .num { color: @faint; }
+list.results.clip > row:selected .title { font-weight: normal; }
+
 /* ── quick answer card (math, conversions, time) ── */
 .answer       { padding: 14px 24px 16px; border-left: 2px solid transparent; }
 .answer-value { color: @fg; font-size: 2em; font-weight: bold; }
@@ -145,7 +154,7 @@ flowbox.tiles > flowboxchild.tile.selected { background: @sel; border-color: @ac
 .tile-app-glyph { margin-right: 8px; }
 .tile-app-glyph { color: @muted; font-size: 20pt; min-width: 32px; }
 .tile-app       { color: @fg; font-weight: bold; font-size: 1.1em; }
-.tile-title     { color: @muted; font-size: 0.85em; }
+.tile-title     { color: @faint; font-size: 0.9em; }
 flowboxchild.tile.selected .tile-title { color: @fg; }
 
 /* × on a tile, shown on hover and on the selected one */
